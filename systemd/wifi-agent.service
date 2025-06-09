@@ -1,0 +1,19 @@
+[Unit]
+Description=WiFi Anomaly Detection Agent
+After=network.target postgresql.service redis.service
+Requires=postgresql.service redis.service
+
+[Service]
+Type=simple
+User=mcp_service
+Group=mcp_service
+WorkingDirectory=/opt/mcp_service
+Environment=PYTHONPATH=/opt/mcp_service
+Environment=POSTGRES_PASSWORD=your_postgres_password
+Environment=REDIS_PASSWORD=your_redis_password
+ExecStart=/usr/bin/python3 /opt/mcp_service/cli.py --config /opt/mcp_service/config/agent_config.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 

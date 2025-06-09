@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  mcp_service:
+    build: .
+    ports:
+      - "5555:5555"
+      - "9090:9090"  # Prometheus metrics
+    volumes:
+      - model_storage:/app/models
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=netmonitor_db
+      - DB_USER=netmonitor_user
+      - DB_PASSWORD=netmonitor_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=5555
+      - LOG_LEVEL=INFO
+      - ANALYSIS_INTERVAL=300
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - mcp_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_DB=netmonitor_db
+      - POSTGRES_USER=netmonitor_user
+      - POSTGRES_PASSWORD=netmonitor_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mcp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netmonitor_user -d netmonitor_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:6
+    volumes:
+      - redis_data:/data
+    networks:
+      - mcp_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  mcp_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  model_storage:

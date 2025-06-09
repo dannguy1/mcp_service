@@ -1,0 +1,53 @@
+# WiFi Agent Configuration
+
+# Agent settings
+processing_interval: 60  # seconds between processing cycles
+batch_size: 1000        # number of logs to process in each cycle
+lookback_window: 30     # minutes of historical data to consider
+
+# Model settings
+model_path: "models/wifi_anomaly_detector.joblib"
+
+# Database settings
+database:
+  host: "localhost"
+  port: 5432
+  name: "mcp_service"
+  user: "postgres"
+  password: "${POSTGRES_PASSWORD}"  # Use environment variable
+
+# Redis settings
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: "${REDIS_PASSWORD}"  # Use environment variable
+
+# Prometheus settings
+prometheus:
+  host: "localhost"
+  port: 9090
+  path: "/metrics"
+
+# Logging settings
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/wifi_agent.log"
+
+# Alert thresholds
+thresholds:
+  signal_strength: -70    # dBm
+  packet_loss_rate: 0.1   # 10%
+  retry_rate: 0.2         # 20%
+  data_rate: 24          # Mbps
+
+# Resource monitoring
+resource_monitoring:
+  enabled: true
+  check_interval: 60     # seconds
+  thresholds:
+    cpu: 80              # percentage
+    memory: 85           # percentage
+    disk: 90             # percentage
+    network: 1000000     # bytes per second 
