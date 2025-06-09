@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AnalyzerMCPServer...")
     await data_service.initialize()
+    await data_service.run_analysis_cycle()
     yield
     # Shutdown
     logger.info("Shutting down AnalyzerMCPServer...")

@@ -2,12 +2,14 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 from functools import wraps
+import pickle
 
 import asyncpg
 import redis.asyncio as redis
 from prometheus_client import Counter, Gauge, Histogram
 from tenacity import retry, stop_after_attempt, wait_exponential
 from pybreaker import CircuitBreaker
+import aioredis
 
 from config import settings
 
@@ -54,30 +56,28 @@ DB_CIRCUIT_BREAKER = CircuitBreaker(
 class DataService:
     def __init__(self):
         self.pool: Optional[asyncpg.Pool] = None
-        self.redis: Optional[redis.Redis] = None
+        self.redis: Optional[aioredis.Redis] = None
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Initialize database and cache connections."""
+        """Initialize database and Redis connections."""
         if self._initialized:
             return
 
         try:
             # Initialize PostgreSQL connection pool
             self.pool = await asyncpg.create_pool(
-                dsn=str(settings.postgres_dsn),
-                min_size=settings.POSTGRES_POOL_MIN,
-                max_size=settings.POSTGRES_POOL_MAX,
+                host=settings.db_host,
+                port=settings.db_port,
+                database=settings.db_name,
+                user=settings.db_user,
+                password=settings.db_pass
             )
             DB_CONNECTION_GAUGE.set(settings.POSTGRES_POOL_MIN)
 
             # Initialize Redis connection
-            self.redis = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                password=settings.REDIS_PASSWORD,
-                decode_responses=True,
+            self.redis = await aioredis.create_redis_pool(
+                f'redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}'
             )
 
             self._initialized = True
@@ -91,7 +91,8 @@ class DataService:
         if self.pool:
             await self.pool.close()
         if self.redis:
-            await self.redis.close()
+            self.redis.close()
+            await self.redis.wait_closed()
         self._initialized = False
         logger.info("DataService connections closed")
 
@@ -180,20 +181,20 @@ class DataService:
             logger.error(f"Error fetching rows: {str(e)}")
             raise
 
-    async def get_cached(self, key: str) -> Optional[str]:
+    async def get_cached(self, key: str) -> Optional[Any]:
         """Get a value from cache with metrics tracking."""
         if not self._initialized:
             raise RuntimeError("DataService not initialized")
 
         start_time = asyncio.get_event_loop().time()
         try:
-            value = await self.redis.get(key)
+            data = await self.redis.get(key)
             
             duration = asyncio.get_event_loop().time() - start_time
             REDIS_OPERATION_DURATION.labels(operation='get').observe(duration)
             REDIS_OPERATION_COUNT.labels(operation='get', status='success').inc()
             
-            return value
+            return pickle.loads(data) if data else None
             
         except Exception as e:
             duration = asyncio.get_event_loop().time() - start_time
@@ -202,12 +203,20 @@ class DataService:
             logger.error(f"Error getting cache: {str(e)}")
             raise
 
-    async def set_cached(self, key: str, value: str, ttl: Optional[int] = None) -> None:
+    async def set_cached(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set a value in cache with optional TTL."""
         if not self._initialized:
             raise RuntimeError("DataService not initialized")
 
-        await self.redis.set(key, value, ex=ttl or settings.REDIS_TTL)
+        try:
+            data = pickle.dumps(value)
+            if ttl:
+                await self.redis.setex(key, ttl, data)
+            else:
+                await self.redis.set(key, data)
+        except Exception as e:
+            logger.error(f"Error setting cached value: {e}")
+            raise
 
 # Create global instance
 data_service = DataService()

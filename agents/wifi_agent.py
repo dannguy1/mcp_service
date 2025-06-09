@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
+import aiosmtplib
 from aiohttp import web
 from prometheus_client import Counter, Histogram, Gauge
 
@@ -102,6 +103,7 @@ class WiFiAgent(BaseAgent):
         self.lookback_window = config.get('lookback_window', 30)  # minutes
         
         # State
+        self.last_processed_ts_key = f"agent:{self.agent_name}:last_ts"
         self.last_processed_timestamp: Optional[datetime] = None
         self.active_devices: Dict[str, datetime] = {}
         
@@ -307,6 +309,13 @@ class WiFiAgent(BaseAgent):
             return
         
         try:
+            # Load last processed timestamp from Redis
+            last_ts_str = await data_service.redis.get(self.last_processed_ts_key)
+            if last_ts_str:
+                self.last_processed_timestamp = datetime.fromisoformat(last_ts_str.decode())
+            else:
+                self.last_processed_timestamp = datetime.now() - timedelta(minutes=self.lookback_window)
+            
             # Start web server for health checks
             await self.runner.setup()
             site = web.TCPSite(self.runner, 'localhost', 8080)
@@ -380,6 +389,15 @@ class WiFiAgent(BaseAgent):
                 if alert:
                     ALERTS_GENERATED.labels(severity=alert['severity']).inc()
                     logger.info("Generated alert: %s", str(alert))
+            
+            # Update last processed timestamp in Redis
+            if logs:
+                latest_log_ts = max(log['timestamp'] for log in logs)
+                self.last_processed_timestamp = latest_log_ts
+                await data_service.redis.set(
+                    self.last_processed_ts_key,
+                    latest_log_ts.isoformat()
+                )
             
             # Update metrics
             duration = time.time() - start_time
@@ -483,3 +501,23 @@ class WiFiAgent(BaseAgent):
             'lookback_window': self.lookback_window,
             'timestamp': time.time()
         })
+
+    async def _send_email_alert(self, anomalies: List[Dict[str, Any]]) -> None:
+        """Send email alerts for detected anomalies."""
+        try:
+            # Build message body
+            msg = self._build_email_message(anomalies)
+            
+            # Send email asynchronously
+            await aiosmtplib.send(
+                msg,
+                hostname=self.config['smtp_server'],
+                port=self.config['smtp_port'],
+                username=self.config['smtp_user'],
+                password=self.config['smtp_pass'],
+                start_tls=True
+            )
+            self.logger.info("Successfully sent email alert via aiosmtplib")
+        except Exception as e:
+            self.logger.error(f"Failed to send async email alert: {e}")
+            raise

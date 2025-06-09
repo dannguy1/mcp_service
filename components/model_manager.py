@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -43,8 +44,8 @@ class ModelManager:
         self._model_dir = Path(settings.MODEL_DIR)
         self._model_dir.mkdir(parents=True, exist_ok=True)
     
-    def load_model(self, model_type: str, version: str) -> bool:
-        """Load a model from disk."""
+    async def load_model(self, model_type: str, version: str) -> bool:
+        """Load a model from disk asynchronously."""
         try:
             with MODEL_LOAD_TIME.time():
                 model_path = self._model_dir / f"{model_type}_{version}.joblib"
@@ -52,7 +53,10 @@ class ModelManager:
                     logger.error(f"Model file not found: {model_path}")
                     return False
                 
-                model = joblib.load(model_path)
+                # Run file I/O in thread pool
+                loop = asyncio.get_running_loop()
+                model = await loop.run_in_executor(None, joblib.load, model_path)
+                
                 self._models[model_type] = model
                 self._model_versions[model_type] = version
                 MODEL_VERSION.labels(model_type).set(float(version))
@@ -62,14 +66,17 @@ class ModelManager:
             logger.error(f"Error loading model: {e}")
             return False
     
-    def save_model(self, model_type: str, model: IsolationForest, version: str) -> bool:
-        """Save a model to disk."""
+    async def save_model(self, model_type: str, model: IsolationForest, version: str) -> bool:
+        """Save a model to disk asynchronously."""
         try:
             model_path = self._model_dir / f"{model_type}_{version}.joblib"
-            joblib.dump(model, model_path)
+            
+            # Run file I/O in thread pool
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, joblib.dump, model, model_path)
             
             # Update database
-            self._update_model_version(model_type, version)
+            await self._update_model_version(model_type, version)
             
             logger.info(f"Saved {model_type} model version {version}")
             return True
