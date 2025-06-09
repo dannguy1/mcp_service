@@ -9,7 +9,8 @@ This guide provides comprehensive information about testing the WiFi Anomaly Det
 4. [Test Configuration](#test-configuration)
 5. [Test Suites](#test-suites)
 6. [Test Reports](#test-reports)
-7. [Troubleshooting](#troubleshooting)
+7. [Data Source Verification](#data-source-verification)
+8. [Troubleshooting](#troubleshooting)
 
 ## Prerequisites
 
@@ -172,6 +173,163 @@ test_results/
 3. **JSON Results**
    - Detailed test results
    - Machine-readable format
+
+## Data Source Verification
+
+Before running the model server, it's crucial to verify connectivity and data access with the external data source. The system includes a verification script to ensure all requirements are met.
+
+### Configuration
+
+The data source configuration is managed in `config/data_source_config.yaml`:
+
+```yaml
+database:
+  host: "localhost"  # Replace with your data source host
+  port: 5432        # Replace with your data source port
+  name: "wifi_logs" # Replace with your database name
+  user: "reader"    # Replace with your read-only user
+  password: ""      # Replace with your password or use environment variable
+
+query:
+  batch_size: 1000
+  max_retries: 3
+  timeout: 30
+  pool_size: 5
+
+validation:
+  required_columns:
+    - timestamp
+    - device_id
+    - signal_strength
+    - latency
+    - packet_loss
+    - connection_duration
+```
+
+### Running Verification
+
+To verify data source connectivity:
+
+```bash
+# Basic verification
+python scripts/verify_data_source.py
+
+# With custom configuration
+python scripts/verify_data_source.py --config custom_config.yaml
+
+# With specific parameters
+python scripts/verify_data_source.py --hours 48 --sample-size 2000
+```
+
+### Verification Steps
+
+The script performs the following checks:
+
+1. **Connection Verification**
+   - Establishes connection to the database
+   - Verifies credentials and permissions
+   - Tests connection pool settings
+
+2. **Schema Verification**
+   - Checks for required tables
+   - Validates column existence
+   - Verifies data types
+   - Ensures indexes are present
+
+3. **Data Access Verification**
+   - Confirms access to recent data
+   - Verifies data freshness
+   - Checks data volume
+   - Validates data quality
+
+4. **Performance Verification**
+   - Tests query execution time
+   - Measures data retrieval speed
+   - Verifies connection pool performance
+   - Checks resource utilization
+
+### Expected Output
+
+Successful verification will show:
+```
+INFO - Starting data source verification...
+INFO - Successfully connected to the data source database
+INFO - Database schema verification successful
+INFO - Found X records
+INFO - Data range: YYYY-MM-DD HH:MM:SS to YYYY-MM-DD HH:MM:SS
+INFO - Query execution plan: [details]
+INFO - All verification steps completed successfully
+```
+
+### Common Issues
+
+1. **Connection Failures**
+   - Check database host and port
+   - Verify credentials
+   - Ensure network connectivity
+   - Check firewall settings
+
+2. **Schema Issues**
+   - Verify table names
+   - Check column names and types
+   - Ensure required indexes exist
+   - Validate permissions
+
+3. **Data Access Problems**
+   - Check data freshness
+   - Verify data volume
+   - Ensure data quality
+   - Validate permissions
+
+4. **Performance Issues**
+   - Check query execution time
+   - Verify connection pool settings
+   - Monitor resource usage
+   - Optimize indexes if needed
+
+### Best Practices
+
+1. **Configuration**
+   - Use environment variables for sensitive data
+   - Keep configuration files in version control
+   - Document all configuration options
+   - Use separate configs for different environments
+
+2. **Verification**
+   - Run verification before starting the server
+   - Schedule regular verification checks
+   - Monitor verification results
+   - Set up alerts for failures
+
+3. **Security**
+   - Use read-only database user
+   - Implement connection pooling
+   - Set appropriate timeouts
+   - Monitor access patterns
+
+4. **Maintenance**
+   - Regularly update verification rules
+   - Monitor data source changes
+   - Update configuration as needed
+   - Document any changes
+
+### Integration with Testing
+
+The data source verification can be integrated into the test suite:
+
+```python
+def test_data_source_verification():
+    verifier = DataSourceVerifier("config/data_source_config.yaml")
+    assert verifier.run_verification(), "Data source verification failed"
+```
+
+### Monitoring
+
+The verification results can be monitored through:
+- Log files
+- Prometheus metrics
+- Grafana dashboards
+- Alert notifications
 
 ## Troubleshooting
 

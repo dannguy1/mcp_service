@@ -5,66 +5,22 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=mcp_service
-      - DB_USER=mcp_service
-      - DB_PASSWORD=mcp_service
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=mcp_service
-      - MODEL_DIR=/app/models
-      - LOG_LEVEL=INFO
     volumes:
       - ./models:/app/models
       - ./logs:/app/logs
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  postgres:
-    image: postgres:12
     environment:
-      - POSTGRES_USER=mcp_service
-      - POSTGRES_PASSWORD=mcp_service
-      - POSTGRES_DB=mcp_service
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcp_service"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:6
-    command: redis-server --requirepass mcp_service
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "mcp_service", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - PYTHONPATH=/app
+    command: python scripts/run_model_server.py
+    restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:v2.45.0
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
+    image: prom/prometheus:latest
     ports:
       - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus_rules.yml:/etc/prometheus/prometheus_rules.yml
+      - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -73,21 +29,18 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:9.5.2
-    volumes:
-      - ./monitoring/grafana_dashboard.json:/etc/grafana/provisioning/dashboards/dashboard.json
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=mcp_service
-      - GF_USERS_ALLOW_SIGN_UP=false
+    image: grafana/grafana:latest
     ports:
       - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
     depends_on:
       - prometheus
     restart: unless-stopped
 
 volumes:
-  postgres_data:
-  redis_data:
   prometheus_data:
   grafana_data:
