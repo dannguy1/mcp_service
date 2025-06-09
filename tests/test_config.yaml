@@ -1,0 +1,16 @@
+database:
+  url: "postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
+  pool_size: 5
+  max_overflow: 10
+  timeout: 30
+
+test:
+  hours: 24
+  sample_size: 1000
+  anomaly_threshold: 2.0  # Standard deviations for anomaly detection
+
+output:
+  directory: "test_results"
+  log_file: "test_data_access.log"
+  save_samples: true
+  sample_size: 100 

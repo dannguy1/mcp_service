@@ -22,51 +22,45 @@ wheels/
 
 # Virtual Environment
 venv/
-env/
 ENV/
+env/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
-# Test Results
-test_results/
-*.log
-*.csv
-*.json
-!tests/config/*.json
-!tests/config/*.yaml
-
-# Model Files
-models/*.pkl
-models/*.joblib
-models/*.h5
-
-# Environment Variables
-.env
-.env.*
-
-# OS
 .DS_Store
-Thumbs.db
 
 # Logs
-logs/
 *.log
+logs/
+log/
 
-# Coverage
+# Test results
+test_results/
 .coverage
 htmlcov/
-coverage.xml
+.pytest_cache/
+.tox/
 
-# Documentation
-docs/_build/
+# Runtime files
+*.db
+*.sqlite3
+*.sqlite
+.env
+.env.*
+!.env.example
+
+# Model files
+models/*.pkl
+models/*.h5
+models/*.joblib
+models/checkpoints/
 
 # Docker
 .docker/
 
-# Database
-*.db
-*.sqlite3 
+# System
+.DS_Store
+Thumbs.db 

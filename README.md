@@ -1,64 +1,99 @@
-# WiFi Anomaly Detection Model Server
+# MCP Service
 
-A FastAPI-based server for serving WiFi anomaly detection models with monitoring and metrics.
+A service for monitoring and analyzing WiFi logs using machine learning.
 
-## Features
+## Data Source Configuration
 
-- Model serving via REST API
-- Real-time anomaly detection
-- Model versioning and management
-- Performance monitoring with Prometheus
-- Visualization with Grafana
-- Automatic model retraining
-- Health checks and metrics
-- Docker support
+The service connects to a PostgreSQL database for log data. Configure the data source in one of these locations:
 
-## Prerequisites
+1. **Primary Configuration** (`config/data_source_config.yaml`):
+```yaml
+database:
+  url: "postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
+  pool_size: 5
+  max_overflow: 10
+  timeout: 30
+```
 
-- Python 3.8+
-- Docker and Docker Compose
-- PostgreSQL 12+
-- Redis 6+
+2. **Environment Variable**:
+```bash
+export DATABASE_URL="postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
+```
 
-## Quick Start
+### Required Database Schema
+
+The service expects the following tables:
+
+1. **log_entries** (Required):
+   - `device_id` (character varying)
+   - `message` (text)
+   - `raw_message` (text)
+   - `timestamp` (timestamp without time zone)
+
+2. **anomaly_records** (Optional):
+   - `device_id` (character varying)
+   - `anomaly_type` (character varying)
+   - `severity` (integer)
+   - `details` (jsonb)
+   - `timestamp` (timestamp without time zone)
+
+## Verifying Data Source
+
+To verify the data source configuration and connectivity:
+
+1. **Run the Verification Script**:
+```bash
+python3 scripts/verify_data_source.py
+```
+
+This script will:
+- Test database connectivity
+- Verify schema and required tables
+- Check data access and quality
+- Test query performance
+- Generate a test report
+
+2. **Check Test Results**:
+The verification script creates a `test_results` directory containing:
+- `log_entries_sample.csv`: Sample of log entries
+- `log_patterns.json`: Analyzed patterns
+- `mock_anomaly.json`: Generated mock anomaly
+
+3. **View Logs**:
+- Check `test_data_access.log` for detailed verification results
+- Look for any warnings or errors in the verification process
+
+## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/mcp_service.git
+git clone <repository-url>
 cd mcp_service
 ```
 
-2. Create a virtual environment and install dependencies:
+2. Install dependencies:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables:
+3. Configure the data source (see above)
+
+4. Verify the setup:
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+python3 scripts/verify_data_source.py
 ```
 
-4. Run with Docker Compose:
+## Usage
+
+1. Start the service:
 ```bash
-docker-compose up -d
+python mcp_service.py
 ```
 
-The services will be available at:
-- Model Server API: http://localhost:8000
-- Prometheus: http://localhost:9090
-- Grafana: http://localhost:3000 (admin/mcp_service)
-
-## API Endpoints
-
-- `GET /health`: Health check endpoint
-- `POST /predict`: Make predictions
-- `GET /models`: List available models
-- `GET /models/{version}`: Get model information
-- `POST /train`: Train a new model
-- `GET /metrics`: Prometheus metrics
+2. Monitor logs:
+```bash
+tail -f logs/mcp_service.log
+```
 
 ## Development
 
@@ -71,36 +106,6 @@ pip install -r requirements-dev.txt
 ```bash
 python run_tests.py
 ```
-
-3. Run linters:
-```bash
-black .
-flake8 .
-isort .
-mypy .
-```
-
-## Monitoring
-
-The server exposes Prometheus metrics at `/metrics`. Key metrics include:
-
-- `model_predictions_total`: Total number of predictions
-- `model_anomalies_detected`: Number of anomalies detected
-- `model_prediction_latency_seconds`: Prediction latency
-- `model_feature_drift`: Feature drift metrics
-- `model_data_quality`: Data quality metrics
-
-## Deployment
-
-See [deployment documentation](docs/deployment.md) for detailed instructions.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
 
 ## License
 

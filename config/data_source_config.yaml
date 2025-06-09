@@ -1,0 +1,51 @@
+# Data Source Configuration
+
+database:
+  url: "postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
+  pool_size: 5
+  max_overflow: 10
+  timeout: 30
+
+# Query Configuration
+query:
+  batch_size: 1000
+  timeout: 30
+
+# Data Validation
+validation:
+  required_tables:
+    - name: log_entries
+      data_types:
+        timestamp: "timestamp without time zone"
+        device_id: "character varying"
+        message: "text"
+        raw_message: "text"
+      indexes:
+        - "log_entries_timestamp_idx"
+        - "log_entries_device_id_idx"
+
+  optional_tables:
+    - name: anomaly_records
+      data_types:
+        timestamp: "timestamp without time zone"
+        device_id: "character varying"
+        anomaly_type: "character varying"
+        severity: "integer"
+        details: "jsonb"
+      indexes:
+        - "anomaly_records_timestamp_idx"
+        - "anomaly_records_device_id_idx"
+
+    - name: anomaly_patterns
+      data_types:
+        pattern_id: "character varying"
+        pattern_type: "character varying"
+        description: "text"
+        created_at: "timestamp without time zone"
+      indexes:
+        - "anomaly_patterns_pattern_id_idx"
+
+# Performance Thresholds
+performance:
+  max_query_time: 5.0  # seconds
+  min_rows_per_second: 1000 
