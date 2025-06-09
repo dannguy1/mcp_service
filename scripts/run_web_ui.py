@@ -14,7 +14,7 @@ import uvicorn
 # Add project root to Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from config.config import Config
+from config.config import settings
 from utils.logger import setup_logger
 
 app = FastAPI(title="MCP Service Web UI")
@@ -106,9 +106,8 @@ async def get_recent_anomalies():
 def main():
     """Main entry point."""
     try:
-        config = Config()
-        host = config.get("web_ui", {}).get("host", "0.0.0.0")
-        port = config.get("web_ui", {}).get("port", 8080)
+        host = settings.SERVICE_HOST
+        port = settings.SERVICE_PORT
         
         logger.info(f"Starting web UI on {host}:{port}")
         uvicorn.run(app, host=host, port=port)

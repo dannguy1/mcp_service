@@ -17,29 +17,49 @@ A modular AI processing service designed to analyze OpenWRT network logs for ano
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Docker and Docker Compose
 - Git
 
-### Quick Installation
+### Installation
 
-1. Clone and setup:
+1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/dannguy1/mcp_service.git
 cd mcp_service
-cp .env.example .env
-# Edit .env with your configuration
+```
+
+2. Set up virtual environment:
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+# On Linux/Mac:
+source venv/bin/activate
+# On Windows:
+.\venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-2. Start the system:
+3. Configure environment:
 ```bash
-docker-compose up -d
+# Copy example environment file
+cp example.env .env
+
+# Edit .env with your configuration
+nano .env  # or use your preferred editor
 ```
 
-3. Verify services:
+4. Run the system:
 ```bash
-docker-compose ps
+# Using Docker Compose (recommended)
+docker-compose up -d
+
+# Or run manually
+python scripts/run_web_ui.py
 ```
 
 For detailed installation instructions, see [Deployment Guide](docs/Implementation/AnalyzerMCPServer-IP-Deployment.md).
