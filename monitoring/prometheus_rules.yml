@@ -1,0 +1,92 @@
+groups:
+  - name: model_alerts
+    rules:
+      - alert: HighModelDrift
+        expr: model_feature_drift > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model drift detected"
+          description: "Model drift has exceeded threshold of 0.1 for 5 minutes"
+
+      - alert: HighPredictionLatency
+        expr: histogram_quantile(0.95, rate(model_prediction_latency_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High prediction latency"
+          description: "95th percentile of prediction latency is above 1 second"
+
+      - alert: HighAnomalyRate
+        expr: rate(model_anomalies_detected[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High anomaly detection rate"
+          description: "Anomaly detection rate is above 10% for 5 minutes"
+
+      - alert: ModelMemoryUsage
+        expr: model_memory_usage_bytes > 1e9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model memory usage"
+          description: "Model memory usage is above 1GB"
+
+      - alert: ModelCPUUsage
+        expr: rate(model_cpu_usage_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model CPU usage"
+          description: "Model CPU usage is above 80%"
+
+      - alert: DataQualityIssues
+        expr: model_data_quality_score < 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data quality issues detected"
+          description: "Data quality score has dropped below 0.8"
+
+      - alert: ModelVersionMismatch
+        expr: model_version_info != 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model version mismatch"
+          description: "Multiple model versions are being served"
+
+      - alert: HighErrorRate
+        expr: rate(model_errors_total[5m]) / rate(model_predictions_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate"
+          description: "Error rate is above 5% for 5 minutes"
+
+      - alert: ModelStaleness
+        expr: time() - model_last_training_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model is stale"
+          description: "Model has not been retrained in the last 24 hours"
+
+      - alert: ResourceExhaustion
+        expr: model_resource_usage > 0.9
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Resource exhaustion"
+          description: "Model is using more than 90% of available resources" 

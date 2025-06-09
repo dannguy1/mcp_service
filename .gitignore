@@ -31,28 +31,35 @@ ENV/
 *.swp
 *.swo
 
-# Logs
+# Test Results
+test_results/
 *.log
-logs/
+*.csv
+*.json
+!tests/config/*.json
+!tests/config/*.yaml
 
-# Local development
+# Model Files
+models/*.pkl
+models/*.joblib
+models/*.h5
+
+# Environment Variables
 .env
-.env.local
-.env.*.local
+.env.*
 
-# Test coverage
-.coverage
-htmlcov/
-.pytest_cache/
-
-# System
+# OS
 .DS_Store
 Thumbs.db
 
-# Model files
-models/*.pkl
-models/*.h5
-models/*.joblib
+# Logs
+logs/
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
 
 # Documentation
 docs/_build/

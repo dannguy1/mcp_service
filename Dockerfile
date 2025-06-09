@@ -1,40 +1,38 @@
-# Build stage
-FROM python:3.9-slim as builder
+# Use Python 3.8 slim image
+FROM python:3.8-slim
 
+# Set working directory
 WORKDIR /app
 
-# Install build dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
-    gcc \
-    python3-dev \
+    build-essential \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
 
 # Install Python dependencies
-COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Runtime stage
-FROM python:3.9-slim
-
-WORKDIR /app
-
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.9/site-packages/ /usr/local/lib/python3.9/site-packages/
 
 # Copy application code
 COPY . .
 
-# Create volume for model storage
-VOLUME /app/models
+# Create necessary directories
+RUN mkdir -p models logs
 
 # Set environment variables
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Run the service
-CMD ["python", "mcp_service.py"]
+# Expose port
+EXPOSE 8000
+
+# Create non-root user
+RUN useradd -m -u 1000 mcp_service
+RUN chown -R mcp_service:mcp_service /app
+USER mcp_service
+
+# Run the application
+CMD ["python", "scripts/run_model_server.py"]

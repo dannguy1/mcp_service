@@ -1,126 +1,98 @@
-# WiFi Network Monitoring Service
+# WiFi Anomaly Detection Model Server
 
-A real-time WiFi network monitoring service that analyzes logs, detects anomalies, and generates alerts using machine learning.
+A FastAPI-based server for serving WiFi anomaly detection models with monitoring and metrics.
 
 ## Features
 
-- Real-time log analysis and anomaly detection
-- Machine learning-based anomaly classification
-- Automatic alert generation and management
-- Resource monitoring and health checks
-- Prometheus metrics integration
-- Configurable thresholds and parameters
-- Active device tracking
+- Model serving via REST API
+- Real-time anomaly detection
+- Model versioning and management
+- Performance monitoring with Prometheus
+- Visualization with Grafana
+- Automatic model retraining
+- Health checks and metrics
+- Docker support
 
 ## Prerequisites
 
 - Python 3.8+
+- Docker and Docker Compose
 - PostgreSQL 12+
 - Redis 6+
-- Prometheus (optional, for metrics)
 
-## Installation
+## Quick Start
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/wifi-monitoring-service.git
-cd wifi-monitoring-service
+git clone https://github.com/your-org/mcp_service.git
+cd mcp_service
 ```
 
-2. Create and activate a virtual environment:
+2. Create a virtual environment and install dependencies:
 ```bash
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
-.\venv\Scripts\activate  # Windows
-```
-
-3. Install dependencies:
-```bash
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Set up environment variables:
+3. Set up environment variables:
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
-5. Initialize the database:
+4. Run with Docker Compose:
 ```bash
-python init_db.py
+docker-compose up -d
 ```
 
-## Configuration
+The services will be available at:
+- Model Server API: http://localhost:8000
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3000 (admin/mcp_service)
 
-The service is configured through environment variables and YAML configuration files:
+## API Endpoints
 
-- `.env`: Database credentials and sensitive information
-- `config/agent_config.yaml`: Agent settings and thresholds
-- `config/model_config.yaml`: Model parameters and paths
-
-## Usage
-
-### Running as a Service
-
-1. Install the systemd service:
-```bash
-sudo cp systemd/wifi-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable wifi-agent
-sudo systemctl start wifi-agent
-```
-
-2. Check service status:
-```bash
-sudo systemctl status wifi-agent
-```
-
-### Running Manually
-
-```bash
-python cli.py --config config/agent_config.yaml
-```
-
-### Health Checks
-
-The service exposes several endpoints for monitoring:
-
-- `http://localhost:8080/health`: Service health status
-- `http://localhost:8080/metrics`: Prometheus metrics
-- `http://localhost:8080/status`: Service status and configuration
+- `GET /health`: Health check endpoint
+- `POST /predict`: Make predictions
+- `GET /models`: List available models
+- `GET /models/{version}`: Get model information
+- `POST /train`: Train a new model
+- `GET /metrics`: Prometheus metrics
 
 ## Development
 
-### Running Tests
-
+1. Install development dependencies:
 ```bash
-pytest tests/
+pip install -r requirements-dev.txt
 ```
 
-### Code Style
+2. Run tests:
+```bash
+python run_tests.py
+```
 
-The project follows PEP 8 style guidelines. Use `black` for code formatting:
-
+3. Run linters:
 ```bash
 black .
+flake8 .
+isort .
+mypy .
 ```
 
-## Project Structure
+## Monitoring
 
-```
-.
-├── agents/              # Agent implementations
-├── components/          # Core components
-├── config/             # Configuration files
-├── models/             # ML models and utilities
-├── systemd/            # Service files
-├── tests/              # Test suite
-├── cli.py              # Command-line interface
-├── data_service.py     # Database and cache service
-├── init_db.py          # Database initialization
-└── requirements.txt    # Python dependencies
-```
+The server exposes Prometheus metrics at `/metrics`. Key metrics include:
+
+- `model_predictions_total`: Total number of predictions
+- `model_anomalies_detected`: Number of anomalies detected
+- `model_prediction_latency_seconds`: Prediction latency
+- `model_feature_drift`: Feature drift metrics
+- `model_data_quality`: Data quality metrics
+
+## Deployment
+
+See [deployment documentation](docs/deployment.md) for detailed instructions.
 
 ## Contributing
 
@@ -132,4 +104,4 @@ black .
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 

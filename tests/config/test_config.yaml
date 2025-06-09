@@ -1,0 +1,83 @@
+# Test Configuration
+
+# General Settings
+test_environment: "development"  # development, staging, production
+base_url: "http://localhost:8000"
+output_dir: "test_results"
+
+# Performance Test Settings
+performance:
+  basic_load:
+    requests: 1000
+    concurrency: 50
+    endpoint: "/predict"
+  high_concurrency:
+    requests: 5000
+    concurrency: 200
+    endpoint: "/predict"
+  endurance:
+    requests: 10000
+    concurrency: 100
+    endpoint: "/predict"
+  mixed_workload:
+    requests: 3000
+    concurrency: 100
+    endpoints:
+      - "/predict"
+      - "/health"
+      - "/metrics"
+
+# Security Test Settings
+security:
+  rate_limit:
+    requests_per_minute: 100
+    burst_limit: 150
+  authentication:
+    valid_api_key: "your-api-key-here"
+    invalid_api_keys:
+      - "invalid_key_1"
+      - "invalid_key_2"
+  cors:
+    allowed_origins:
+      - "http://localhost:3000"
+      - "https://trusted-site.com"
+    blocked_origins:
+      - "http://malicious-site.com"
+      - "https://untrusted-site.com"
+
+# Test Data Settings
+test_data:
+  wifi_logs:
+    count: 1000
+    anomaly_ratio: 0.1
+  model_training:
+    samples: 10000
+    features: 20
+  performance:
+    batch_size: 100
+    max_concurrent: 200
+  security:
+    malicious_inputs: 50
+    sql_injection_attempts: 20
+    xss_attempts: 20
+
+# Test Metrics Thresholds
+metrics:
+  performance:
+    max_latency_ms: 500
+    min_success_rate: 0.95
+    max_error_rate: 0.05
+  security:
+    min_auth_success_rate: 1.0
+    max_auth_failure_rate: 0.0
+    min_input_validation_rate: 1.0
+
+# Test Reporting
+reporting:
+  save_results: true
+  generate_plots: true
+  detailed_logging: true
+  formats:
+    - "json"
+    - "html"
+    - "csv" 
