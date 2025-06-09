@@ -1,0 +1,182 @@
+prometheus:
+  metrics:
+    system:
+      - name: cpu_usage_percent
+        type: gauge
+        description: "CPU usage percentage"
+        threshold: 70
+      - name: memory_usage_bytes
+        type: gauge
+        description: "Memory usage in bytes"
+        threshold: 2147483648  # 2GB
+      - name: disk_usage_percent
+        type: gauge
+        description: "Disk usage percentage"
+        threshold: 80
+
+    service:
+      - name: request_latency_seconds
+        type: histogram
+        description: "Request latency in seconds"
+        buckets: [0.1, 0.5, 1.0, 2.0, 5.0]
+      - name: requests_total
+        type: counter
+        description: "Total number of requests"
+      - name: request_errors_total
+        type: counter
+        description: "Total number of request errors"
+
+    model:
+      - name: model_inference_latency_seconds
+        type: histogram
+        description: "Model inference latency in seconds"
+        buckets: [0.1, 0.5, 1.0, 2.0, 5.0]
+      - name: model_accuracy
+        type: gauge
+        description: "Model accuracy percentage"
+        threshold: 95
+      - name: false_positive_rate
+        type: gauge
+        description: "False positive rate percentage"
+        threshold: 1
+      - name: false_negative_rate
+        type: gauge
+        description: "False negative rate percentage"
+        threshold: 5
+
+    database:
+      - name: db_connection_pool_size
+        type: gauge
+        description: "Database connection pool size"
+      - name: db_query_latency_seconds
+        type: histogram
+        description: "Database query latency in seconds"
+        buckets: [0.1, 0.5, 1.0, 2.0, 5.0]
+      - name: db_errors_total
+        type: counter
+        description: "Total number of database errors"
+
+  alerting:
+    rules:
+      - name: high_cpu_usage
+        condition: "cpu_usage_percent > 70"
+        duration: "5m"
+        severity: warning
+        description: "CPU usage is above 70% for 5 minutes"
+
+      - name: high_memory_usage
+        condition: "memory_usage_bytes > 2147483648"
+        duration: "5m"
+        severity: warning
+        description: "Memory usage is above 2GB for 5 minutes"
+
+      - name: high_disk_usage
+        condition: "disk_usage_percent > 80"
+        duration: "5m"
+        severity: warning
+        description: "Disk usage is above 80% for 5 minutes"
+
+      - name: high_latency
+        condition: "request_latency_seconds > 1"
+        duration: "5m"
+        severity: warning
+        description: "Request latency is above 1 second for 5 minutes"
+
+      - name: high_error_rate
+        condition: "rate(request_errors_total[5m]) / rate(requests_total[5m]) > 0.01"
+        duration: "5m"
+        severity: critical
+        description: "Error rate is above 1% for 5 minutes"
+
+      - name: low_model_accuracy
+        condition: "model_accuracy < 95"
+        duration: "15m"
+        severity: warning
+        description: "Model accuracy is below 95% for 15 minutes"
+
+      - name: high_false_positive_rate
+        condition: "false_positive_rate > 1"
+        duration: "15m"
+        severity: warning
+        description: "False positive rate is above 1% for 15 minutes"
+
+      - name: high_false_negative_rate
+        condition: "false_negative_rate > 5"
+        duration: "15m"
+        severity: warning
+        description: "False negative rate is above 5% for 15 minutes"
+
+      - name: database_errors
+        condition: "rate(db_errors_total[5m]) > 0"
+        duration: "5m"
+        severity: critical
+        description: "Database errors detected in the last 5 minutes"
+
+grafana:
+  dashboards:
+    system:
+      title: "System Overview"
+      panels:
+        - title: "CPU Usage"
+          type: graph
+          metrics: ["cpu_usage_percent"]
+        - title: "Memory Usage"
+          type: graph
+          metrics: ["memory_usage_bytes"]
+        - title: "Disk Usage"
+          type: graph
+          metrics: ["disk_usage_percent"]
+
+    service:
+      title: "Service Performance"
+      panels:
+        - title: "Request Latency"
+          type: graph
+          metrics: ["request_latency_seconds"]
+        - title: "Request Rate"
+          type: graph
+          metrics: ["rate(requests_total[5m])"]
+        - title: "Error Rate"
+          type: graph
+          metrics: ["rate(request_errors_total[5m])"]
+
+    model:
+      title: "Model Performance"
+      panels:
+        - title: "Model Accuracy"
+          type: gauge
+          metrics: ["model_accuracy"]
+        - title: "False Positive Rate"
+          type: gauge
+          metrics: ["false_positive_rate"]
+        - title: "False Negative Rate"
+          type: gauge
+          metrics: ["false_negative_rate"]
+        - title: "Inference Latency"
+          type: graph
+          metrics: ["model_inference_latency_seconds"]
+
+    database:
+      title: "Database Performance"
+      panels:
+        - title: "Query Latency"
+          type: graph
+          metrics: ["db_query_latency_seconds"]
+        - title: "Connection Pool"
+          type: gauge
+          metrics: ["db_connection_pool_size"]
+        - title: "Database Errors"
+          type: graph
+          metrics: ["rate(db_errors_total[5m])"]
+
+logging:
+  retention:
+    days: 30
+  rotation:
+    max_size: 100MB
+    backup_count: 10
+  levels:
+    default: INFO
+    prometheus: INFO
+    model: DEBUG
+    database: INFO 

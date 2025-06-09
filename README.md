@@ -1,112 +1,207 @@
 # MCP Service
 
-A service for monitoring and analyzing WiFi logs using machine learning.
+A modular AI processing service designed to analyze OpenWRT network logs for anomaly detection within the Log Monitor framework.
 
-## Data Source Configuration
+## Table of Contents
 
-The service connects to a PostgreSQL database for log data. Configure the data source in one of these locations:
+1. [Getting Started](#getting-started)
+2. [System Architecture](#system-architecture)
+3. [User Interfaces](#user-interfaces)
+4. [Configuration](#configuration)
+5. [Monitoring & Maintenance](#monitoring--maintenance)
+6. [Development](#development)
+7. [Troubleshooting](#troubleshooting)
+8. [Support](#support)
 
-1. **Primary Configuration** (`config/data_source_config.yaml`):
-```yaml
-database:
-  url: "postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
-  pool_size: 5
-  max_overflow: 10
-  timeout: 30
-```
+## Getting Started
 
-2. **Environment Variable**:
-```bash
-export DATABASE_URL="postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
-```
+### Prerequisites
 
-### Required Database Schema
+- Python 3.8 or higher
+- Docker and Docker Compose
+- Git
 
-The service expects the following tables:
+### Quick Installation
 
-1. **log_entries** (Required):
-   - `device_id` (character varying)
-   - `message` (text)
-   - `raw_message` (text)
-   - `timestamp` (timestamp without time zone)
-
-2. **anomaly_records** (Optional):
-   - `device_id` (character varying)
-   - `anomaly_type` (character varying)
-   - `severity` (integer)
-   - `details` (jsonb)
-   - `timestamp` (timestamp without time zone)
-
-## Verifying Data Source
-
-To verify the data source configuration and connectivity:
-
-1. **Run the Verification Script**:
-```bash
-python3 scripts/verify_data_source.py
-```
-
-This script will:
-- Test database connectivity
-- Verify schema and required tables
-- Check data access and quality
-- Test query performance
-- Generate a test report
-
-2. **Check Test Results**:
-The verification script creates a `test_results` directory containing:
-- `log_entries_sample.csv`: Sample of log entries
-- `log_patterns.json`: Analyzed patterns
-- `mock_anomaly.json`: Generated mock anomaly
-
-3. **View Logs**:
-- Check `test_data_access.log` for detailed verification results
-- Look for any warnings or errors in the verification process
-
-## Installation
-
-1. Clone the repository:
+1. Clone and setup:
 ```bash
 git clone <repository-url>
 cd mcp_service
-```
-
-2. Install dependencies:
-```bash
+cp .env.example .env
+# Edit .env with your configuration
 pip install -r requirements.txt
 ```
 
-3. Configure the data source (see above)
-
-4. Verify the setup:
+2. Start the system:
 ```bash
-python3 scripts/verify_data_source.py
+docker-compose up -d
 ```
 
-## Usage
-
-1. Start the service:
+3. Verify services:
 ```bash
-python mcp_service.py
+docker-compose ps
 ```
 
-2. Monitor logs:
-```bash
-tail -f logs/mcp_service.log
+For detailed installation instructions, see [Deployment Guide](docs/Implementation/AnalyzerMCPServer-IP-Deployment.md).
+
+## System Architecture
+
+The MCP Service consists of several components:
+
+- **Model Server**: Core service for anomaly detection
+- **Database**: PostgreSQL for data storage
+- **Cache**: Redis for performance optimization
+- **Monitoring**: Prometheus and Grafana
+- **Web UI**: Real-time monitoring interface
+
+For detailed architecture information, see [Implementation Overview](docs/Implementation/AnalyzerMCPServer-IP-Overview.md).
+
+## User Interfaces
+
+### 1. MCP Service Web UI
+- **URL**: http://localhost:8080
+- **Purpose**: Real-time monitoring and management
+- **Features**:
+  - System status dashboard
+  - Performance metrics
+  - Anomaly detection results
+  - Real-time charts
+
+### 2. Grafana Dashboards
+- **URL**: http://localhost:3000
+- **Default Credentials**: admin/admin
+- **Dashboards**:
+  - System Overview
+  - Service Performance
+  - Model Performance
+  - Database Performance
+
+### 3. Prometheus UI
+- **URL**: http://localhost:9090
+- **Purpose**: Raw metrics and alert management
+
+For detailed UI documentation, see [Monitoring Quick Start Guide](docs/monitoring_quickstart.md).
+
+## Configuration
+
+### Environment Variables
+Key variables in `.env`:
+```env
+# Database
+POSTGRES_USER=your_user
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=mcp_service
+
+# Grafana
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=your_secure_password
+
+# Web UI
+WEB_UI_HOST=0.0.0.0
+WEB_UI_PORT=8080
 ```
+
+### Configuration Files
+- `config/monitoring_config.yaml`: Monitoring setup
+- `config/server_config.yaml`: Server settings
+- `config/data_source_config.yaml`: Data source configuration
+
+For detailed configuration information, see [Server Implementation](docs/Implementation/AnalyzerMCPServer-IP-Server.md).
+
+## Monitoring & Maintenance
+
+### Automated Tasks
+- Daily backups (2 AM)
+- Log rotation
+- Database optimization
+- Performance monitoring
+
+### Manual Maintenance
+```bash
+python scripts/maintenance.py
+```
+
+For detailed monitoring and maintenance information, see [Monitoring and Maintenance Guide](docs/monitoring_and_maintenance.md).
 
 ## Development
 
-1. Install development dependencies:
-```bash
-pip install -r requirements-dev.txt
+### Project Structure
+```
+mcp_service/
+├── config/                 # Configuration files
+├── docs/                   # Documentation
+├── monitoring/            # Monitoring setup
+├── scripts/               # Utility scripts
+├── static/               # Web UI static files
+├── templates/            # Web UI templates
+├── tests/                # Test suite
+└── utils/                # Utility modules
 ```
 
-2. Run tests:
+### Running Tests
 ```bash
-python run_tests.py
+# All tests
+pytest
+
+# Specific categories
+pytest tests/unit/
+pytest tests/integration/
+pytest tests/performance/
 ```
+
+For development guidelines, see [Testing Implementation](docs/Implementation/AnalyzerMCPServer-IP-Testing.md).
+
+## Troubleshooting
+
+### Quick Checks
+
+1. **Service Status**
+```bash
+docker-compose ps
+docker-compose logs <service-name>
+```
+
+2. **Health Check**
+```bash
+curl http://localhost:8000/health
+```
+
+3. **Metrics**
+```bash
+curl http://localhost:9090/api/v1/targets
+```
+
+### Common Issues
+
+1. **Service Not Starting**
+   - Check logs: `docker-compose logs <service-name>`
+   - Verify environment variables
+   - Check port availability
+
+2. **Metrics Not Showing**
+   - Verify Prometheus targets
+   - Check service health
+   - Review network connectivity
+
+3. **Web UI Issues**
+   - Check web UI logs
+   - Verify port configuration
+   - Clear browser cache
+
+For detailed troubleshooting, see [Monitoring and Maintenance Guide](docs/monitoring_and_maintenance.md).
+
+## Support
+
+### Documentation
+- [API Documentation](docs/api_documentation.md)
+- [Monitoring Guide](docs/monitoring_and_maintenance.md)
+- [Quick Start Guide](docs/monitoring_quickstart.md)
+
+### Getting Help
+1. Check the troubleshooting guide
+2. Review log files in `logs/`
+3. Contact system administrator
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+[Your License Here] 
