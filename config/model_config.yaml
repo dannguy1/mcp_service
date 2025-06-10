@@ -33,7 +33,7 @@ training:
 
 # Model storage
 storage:
-  model_dir: models
+  directory: models
   version_format: "%Y%m%d_%H%M%S"
   keep_last_n_versions: 5
 

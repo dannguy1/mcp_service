@@ -2,33 +2,70 @@
 import os
 import sys
 import yaml
-import asyncio
 import logging
 import argparse
-from datetime import datetime, timedelta
 from pathlib import Path
+from datetime import datetime
+from dotenv import load_dotenv
 
 # Add project root to Python path
 project_root = str(Path(__file__).parent.parent)
 sys.path.append(project_root)
 
 from models.training import ModelTrainer
+from models.config import ModelConfig
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+def setup_logging(debug: bool = False):
+    """Set up logging configuration."""
+    # Create logs directory in user's home directory
+    log_dir = Path.home() / '.mcp_service' / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_file = log_dir / 'training.log'
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.DEBUG if debug else logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_file)
+        ]
+    )
+    return logging.getLogger(__name__)
 
-def load_config(config_path: str) -> dict:
-    """Load configuration from YAML file."""
+logger = setup_logging()
+
+def setup_environment():
+    """Set up the environment for training."""
+    # Load environment variables from .env file
+    env_path = Path(project_root) / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        logger.warning("No .env file found, using default environment variables")
+    
+    # Create necessary directories
+    os.makedirs('models', exist_ok=True)
+    
+    # Set PYTHONPATH
+    os.environ['PYTHONPATH'] = project_root
+
+def load_config(config_path: str) -> ModelConfig:
+    """Load model configuration from YAML file."""
     try:
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+        config_file = Path(project_root) / config_path
+        if not config_file.exists():
+            logger.warning(f"Config file {config_path} not found, using defaults")
+            return ModelConfig()
+            
+        with open(config_file, 'r') as f:
+            config_dict = yaml.safe_load(f)
+            return ModelConfig(**config_dict)
     except Exception as e:
         logger.error(f"Error loading config from {config_path}: {e}")
-        sys.exit(1)
+        return ModelConfig()
 
 def parse_args():
     """Parse command line arguments."""
@@ -40,49 +77,59 @@ def parse_args():
         help='Path to model configuration file'
     )
     parser.add_argument(
-        '--days',
-        type=int,
-        default=30,
-        help='Number of days of historical data to use for training'
+        '--start-date',
+        type=str,
+        help='Start date for training data (YYYY-MM-DD)'
     )
     parser.add_argument(
-        '--model-dir',
+        '--end-date',
         type=str,
-        default='models',
-        help='Directory to save trained models'
+        help='End date for training data (YYYY-MM-DD)'
+    )
+    parser.add_argument(
+        '--debug',
+        action='store_true',
+        help='Enable debug logging'
     )
     return parser.parse_args()
 
-async def main():
-    """Main training function."""
-    # Parse arguments
-    args = parse_args()
-    
-    # Load configuration
-    config = load_config(args.config)
-    
-    # Update model directory in config
-    config['model_dir'] = args.model_dir
-    
-    # Calculate date range
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=args.days)
-    
-    logger.info(f"Training model on data from {start_date} to {end_date}")
-    
+def main():
+    """Main function to train the model."""
     try:
-        # Initialize trainer
-        trainer = ModelTrainer(config)
+        # Parse arguments
+        args = parse_args()
         
-        # Train and save model
-        model_path = await trainer.train_and_save(start_date, end_date)
+        # Set up environment
+        setup_environment()
+        
+        # Set log level
+        if args.debug:
+            logger.setLevel(logging.DEBUG)
+        
+        # Load configuration
+        model_config = load_config(args.config)
+        
+        # Parse dates if provided
+        start_date = datetime.fromisoformat(args.start_date) if args.start_date else None
+        end_date = datetime.fromisoformat(args.end_date) if args.end_date else None
+        
+        logger.info("Starting model training")
+        logger.info(f"Configuration: {model_config.dict()}")
+        if start_date and end_date:
+            logger.info(f"Training period: {start_date} to {end_date}")
+        
+        # Initialize trainer
+        trainer = ModelTrainer(model_config)
+        
+        # Train model
+        model_path = trainer.train_and_save(start_date, end_date)
         
         logger.info(f"Model training completed successfully")
         logger.info(f"Model saved to: {model_path}")
         
     except Exception as e:
-        logger.error(f"Error during model training: {e}")
+        logger.error(f"Failed to train model: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == '__main__':
-    asyncio.run(main()) 
+    main() 

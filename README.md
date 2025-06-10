@@ -12,6 +12,7 @@ A modular AI processing service designed to analyze OpenWRT network logs for ano
 6. [Development](#development)
 7. [Troubleshooting](#troubleshooting)
 8. [Support](#support)
+9. [Running Components Natively](#running-components-natively)
 
 ## Getting Started
 
@@ -224,4 +225,79 @@ For detailed troubleshooting, see [Monitoring and Maintenance Guide](docs/monito
 
 ## License
 
-[Your License Here] 
+[Your License Here]
+
+## Running Components Natively
+
+While the system is designed to run in Docker containers, you can also run individual components natively for development and debugging purposes. The `scripts` directory contains several utility scripts for this purpose.
+
+### Model Server
+
+Run the FastAPI model server with:
+```bash
+python scripts/run_model_server.py [options]
+
+Options:
+  --config CONFIG     Path to server configuration file (default: config/server_config.yaml)
+  --host HOST        Host to bind the server to (default: 0.0.0.0)
+  --port PORT        Port to bind the server to (default: 8000)
+  --workers WORKERS  Number of worker processes (default: 4)
+  --reload          Enable auto-reload on code changes
+  --debug           Enable debug logging
+```
+
+### Model Training
+
+Train the anomaly detection model with:
+```bash
+python scripts/train_model.py [options]
+
+Options:
+  --config CONFIG     Path to model configuration file (default: config/model_config.yaml)
+  --start-date DATE  Start date for training data (YYYY-MM-DD)
+  --end-date DATE    End date for training data (YYYY-MM-DD)
+  --debug           Enable debug logging
+```
+
+### Model Monitoring
+
+Monitor model performance and drift with:
+```bash
+python scripts/monitor_model.py [options]
+
+Options:
+  --config CONFIG       Path to model configuration file (default: config/model_config.yaml)
+  --model-version VER   Model version to monitor (default: latest)
+  --interval SECONDS    Monitoring interval in seconds (default: 300)
+  --debug              Enable debug logging
+```
+
+### Features
+
+Each script provides:
+- Automatic environment setup
+- Configuration management
+- Detailed logging (both console and file)
+- Error handling and recovery
+- Debug mode for troubleshooting
+
+### Logs
+
+Logs are stored in the `~/.mcp_service/logs` directory:
+- `~/.mcp_service/logs/model_server.log`: Model server logs
+- `~/.mcp_service/logs/training.log`: Model training logs
+- `~/.mcp_service/logs/monitoring.log`: Model monitoring logs
+
+The logs directory is automatically created in your home directory to avoid permission issues. Each script will create its own log file with appropriate permissions.
+
+### Environment Setup
+
+The scripts automatically:
+1. Set up the Python path
+2. Load environment variables from `.env`
+3. Create necessary directories
+4. Configure logging
+
+### Debug Mode
+
+Use the `--debug` flag to enable detailed logging and troubleshooting information. This is particularly useful during development and when investigating issues. 

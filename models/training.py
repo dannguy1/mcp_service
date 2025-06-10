@@ -12,7 +12,8 @@ from sklearn.metrics import precision_recall_curve, average_precision_score
 import joblib
 
 from components.feature_extractor import FeatureExtractor
-from data_service import data_service
+from components.data_service import DataService
+from models.config import ModelConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -21,16 +22,17 @@ logger = logging.getLogger(__name__)
 class ModelTrainer:
     """Handles model training, evaluation, and persistence."""
     
-    def __init__(self, config: Dict):
+    def __init__(self, config: ModelConfig):
         """Initialize the model trainer.
         
         Args:
-            config: Configuration dictionary containing training parameters
+            config: Model configuration
         """
         self.config = config
-        self.model_dir = config.get('model_dir', 'models')
+        self.model_dir = config.model_dir
         self.feature_extractor = FeatureExtractor()
         self.scaler = StandardScaler()
+        self.data_service = DataService()
         
         # Create model directory if it doesn't exist
         os.makedirs(self.model_dir, exist_ok=True)
@@ -52,7 +54,7 @@ class ModelTrainer:
             WHERE timestamp BETWEEN $1 AND $2
             ORDER BY timestamp
         """
-        logs = await data_service.fetch_all(query, start_date, end_date)
+        logs = await self.data_service.fetch_all(query, start_date, end_date)
         
         if not logs:
             raise ValueError("No training data available for the specified period")
@@ -82,13 +84,7 @@ class ModelTrainer:
         df = pd.DataFrame(features)
         
         # Select numeric features
-        numeric_features = [
-            'signal_strength',
-            'channel',
-            'data_rate',
-            'packet_loss_rate',
-            'retry_rate'
-        ]
+        numeric_features = self.config.feature_columns
         
         # Extract numeric features
         X = df[numeric_features].values
@@ -110,15 +106,16 @@ class ModelTrainer:
         """
         # Split data into train and validation sets
         X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X, y, test_size=self.config.train_test_split,
+            random_state=self.config.random_state
         )
         
         # Initialize model
         model = IsolationForest(
-            n_estimators=self.config.get('n_estimators', 100),
-            max_samples=self.config.get('max_samples', 'auto'),
-            contamination=self.config.get('contamination', 0.1),
-            random_state=42
+            n_estimators=self.config.n_estimators,
+            max_samples=self.config.max_samples,
+            contamination=self.config.contamination,
+            random_state=self.config.random_state
         )
         
         # Train model
@@ -184,21 +181,14 @@ class ModelTrainer:
         metadata = {
             'version': version,
             'timestamp': datetime.now().isoformat(),
-            'config': self.config,
-            'feature_names': [
-                'signal_strength',
-                'channel',
-                'data_rate',
-                'packet_loss_rate',
-                'retry_rate'
-            ]
+            'config': self.config.dict(),
+            'feature_names': self.config.feature_columns
         }
         
         metadata_path = os.path.join(version_dir, 'metadata.json')
         with open(metadata_path, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        logger.info(f"Model saved to {version_dir}")
         return version_dir
     
     async def train_and_save(self, start_date: Optional[datetime] = None,

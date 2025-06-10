@@ -1,23 +1,27 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import logging
 import asyncio
 from datetime import datetime
 import json
 import os
 import shutil
-from prometheus_client import Counter, Histogram, Gauge
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from prometheus_client.openmetrics.exposition import generate_latest as generate_latest_openmetrics
 import numpy as np
+import yaml
+from pathlib import Path
 
 from models.model_loader import ModelLoader
 from models.training import ModelTrainer
 from models.monitoring import ModelMonitor
 from models.config import ModelConfig
-from data_service import data_service
 from components.data_service import DataService
 from components.resource_monitor import ResourceMonitor
+from components.feature_extractor import FeatureExtractor
+from config import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -39,298 +43,320 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize model loader
-model_loader = ModelLoader()
+# Load configuration
+config = ModelConfig.from_yaml("config/model_config.yaml")
+
+# Initialize components
+model_loader = ModelLoader(config)
+model_monitor = ModelMonitor()
 
 # Pydantic models for request/response
 class PredictionRequest(BaseModel):
-    logs: List[Dict]
-    model_version: Optional[str] = None
+    """Request model for prediction endpoint."""
+    data: List[Dict]
 
 class PredictionResponse(BaseModel):
-    predictions: List[int]
-    scores: List[float]
-    model_version: str
-    timestamp: str
-
-class ModelInfo(BaseModel):
-    version: str
-    timestamp: str
-    config: Dict
-    feature_names: List[str]
+    """Response model for prediction endpoint."""
+    predictions: List[float]
+    anomalies: List[bool]
+    confidence: List[float]
 
 class TrainingRequest(BaseModel):
+    """Request model for training endpoint."""
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    config_path: Optional[str] = None
 
 class TrainingResponse(BaseModel):
-    model_path: str
-    version: str
-    timestamp: str
+    """Response model for training endpoint."""
+    status: str
+    message: str
+    model_version: Optional[str] = None
 
 class ModelVersion(BaseModel):
+    """Model for model version information."""
     version: str
-    created_at: datetime
+    created_at: str
     metrics: Dict[str, float]
-    features: List[str]
-    status: str
 
 class ModelRollback(BaseModel):
+    """Request model for rollback endpoint."""
     version: str
-    reason: str
+
+class ModelCompare(BaseModel):
+    """Request model for model comparison."""
+    version1: str
+    version2: str
 
 # Background task for model training
-async def train_model_task(start_date: Optional[str], end_date: Optional[str], config_path: Optional[str]):
+async def train_model_task(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    """Background task for model training."""
     try:
         # Load configuration
-        if config_path:
-            with open(config_path, 'r') as f:
-                config = yaml.safe_load(f)
-        else:
-            config = {}  # Use default config
+        model_config = ModelConfig()
         
         # Initialize trainer
-        trainer = ModelTrainer(config)
-        
-        # Convert dates if provided
-        start = datetime.fromisoformat(start_date) if start_date else None
-        end = datetime.fromisoformat(end_date) if end_date else None
+        trainer = ModelTrainer(model_config)
         
         # Train model
-        model_path = await trainer.train_and_save(start, end)
-        logger.info(f"Model training completed: {model_path}")
+        model, metrics = await trainer.train(start_date, end_date)
         
+        # Save model
+        if model_loader.save_model(model, model_config, {
+            "version": model_config.model_version,
+            "type": model_config.model_type,
+            "created_at": datetime.now().isoformat(),
+            "metrics": metrics
+        }):
+            logger.info(f"Model training completed successfully. Version: {model_config.model_version}")
+        else:
+            logger.error("Failed to save trained model")
+            
     except Exception as e:
-        logger.error(f"Error in model training: {e}")
+        logger.error(f"Error in model training task: {e}")
 
 @app.on_event("startup")
 async def startup_event():
-    """Load the latest model on startup."""
+    """Initialize components on startup."""
     try:
-        model_loader.load_model()
-        logger.info("Model loaded successfully")
+        # Load latest model
+        if not model_loader.load_latest_model():
+            logger.warning("No model loaded. Please train a model first.")
+            
+        # Initialize monitoring
+        await model_monitor.initialize()
+        
     except Exception as e:
-        logger.error(f"Error loading model: {e}")
+        logger.error(f"Error during startup: {e}")
+        raise
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "model_loaded": model_loader.model is not None}
+    return {
+        "status": "healthy",
+        "model_loaded": model_loader.model is not None,
+        "monitoring_active": model_monitor.is_initialized()
+    }
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(request: PredictionRequest):
-    """Make predictions on new data."""
+    """Make predictions using the loaded model."""
     try:
-        # Load specified model version if provided
-        if request.model_version:
-            model_loader.load_model(request.model_version)
+        if model_loader.model is None:
+            raise HTTPException(
+                status_code=503,
+                detail="No model loaded. Please train a model first."
+            )
+            
+        # Extract features
+        features = await model_loader.predict_new_data(request.data)
         
         # Make predictions
-        predictions, scores = await model_loader.predict(request.logs)
+        predictions = model_loader.predict(features)
+        
+        # Convert predictions to anomaly scores and labels
+        anomaly_scores = 1 - predictions  # Convert to anomaly scores
+        anomalies = anomaly_scores > 0.5  # Threshold for anomaly detection
+        
+        # Update monitoring metrics
+        await model_monitor.update_metrics(predictions)
         
         return PredictionResponse(
-            predictions=predictions.tolist(),
-            scores=scores.tolist(),
-            model_version=model_loader.metadata['version'],
-            timestamp=datetime.now().isoformat()
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/models", response_model=List[str])
-async def list_models():
-    """List available model versions."""
-    return model_loader.list_models()
-
-@app.get("/models/{version}", response_model=ModelInfo)
-async def get_model_info(version: str):
-    """Get information about a specific model version."""
-    try:
-        model_loader.load_model(version)
-        return model_loader.get_model_info()
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-@app.post("/train", response_model=TrainingResponse)
-async def train_model(request: TrainingRequest, background_tasks: BackgroundTasks):
-    """Start model training in background."""
-    try:
-        # Start training in background
-        background_tasks.add_task(
-            train_model_task,
-            request.start_date,
-            request.end_date,
-            request.config_path
+            predictions=anomaly_scores.tolist(),
+            anomalies=anomalies.tolist(),
+            confidence=[1.0 - abs(score - 0.5) * 2 for score in anomaly_scores]  # Confidence based on distance from threshold
         )
         
-        return TrainingResponse(
-            model_path="Training started in background",
-            version="pending",
-            timestamp=datetime.now().isoformat()
-        )
     except Exception as e:
+        logger.error(f"Error making predictions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/metrics")
-async def get_metrics():
-    """Get model performance metrics."""
+@app.post("/train")
+async def train_model(
+    request: Request,
+    background_tasks: BackgroundTasks
+) -> Dict[str, Any]:
+    """Train a new model version."""
     try:
-        # Get metrics from Prometheus
-        metrics = {
-            "predictions_total": data_service.metrics['predictions_total']._value.get(),
-            "anomalies_detected": data_service.metrics['anomalies_detected']._value.get(),
-            "prediction_latency": data_service.metrics['prediction_latency']._value.get(),
-            "model_load_time": data_service.metrics['model_load_time']._value.get()
+        # Initialize trainer
+        trainer = ModelTrainer(config)
+        
+        # Train model in background
+        background_tasks.add_task(train_model_async, trainer, config)
+        
+        return {
+            "status": "training_started",
+            "message": "Model training started in background",
+            "config": config.model_dump()
         }
-        return metrics
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error starting model training: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error starting model training: {str(e)}"
+        )
 
-@app.get("/models/versions", response_model=List[ModelVersion])
-async def list_model_versions():
-    """List all available model versions with their metadata."""
+async def train_model_async(trainer: ModelTrainer, config: ModelConfig):
+    """Background task for model training."""
+    try:
+        # Train model
+        model = await trainer.train()
+        
+        # Save model
+        if model_loader.save_model(model):
+            logger.info("Model training completed successfully")
+        else:
+            logger.error("Failed to save trained model")
+            
+    except Exception as e:
+        logger.error(f"Error in model training: {e}")
+
+@app.get("/models", response_model=List[ModelVersion])
+async def list_models():
+    """List available model versions."""
     try:
         versions = []
-        model_dir = os.path.join(config.model_dir, "versions")
+        model_dir = os.path.join(config.MODEL_DIR, "versions")
         if not os.path.exists(model_dir):
             return []
             
         for version in os.listdir(model_dir):
-            version_path = os.path.join(model_dir, version)
-            if os.path.isdir(version_path):
-                metadata_path = os.path.join(version_path, "metadata.json")
+            if version.endswith('.joblib'):
+                metadata_path = os.path.join(model_dir, f"{version[:-7]}_metadata.yaml")
                 if os.path.exists(metadata_path):
                     with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
+                        metadata = yaml.safe_load(f)
                         versions.append(ModelVersion(
-                            version=version,
-                            created_at=datetime.fromisoformat(metadata['created_at']),
-                            metrics=metadata['metrics'],
-                            features=metadata['features'],
-                            status=metadata['status']
+                            version=metadata['version'],
+                            created_at=metadata['created_at'],
+                            metrics=metadata['metrics']
                         ))
+        
         return sorted(versions, key=lambda x: x.created_at, reverse=True)
+        
     except Exception as e:
-        logger.error(f"Error listing model versions: {str(e)}")
+        logger.error(f"Error listing models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/models/versions/{version}", response_model=ModelVersion)
-async def get_model_version(version: str):
+@app.get("/models/{version}", response_model=ModelVersion)
+async def get_model_info(version: str):
     """Get detailed information about a specific model version."""
     try:
-        version_path = os.path.join(config.model_dir, "versions", version)
+        version_path = os.path.join(config.MODEL_DIR, "versions", version)
         if not os.path.exists(version_path):
             raise HTTPException(status_code=404, detail="Model version not found")
             
-        metadata_path = os.path.join(version_path, "metadata.json")
+        metadata_path = os.path.join(config.MODEL_DIR, "versions", f"{version}_metadata.yaml")
         if not os.path.exists(metadata_path):
             raise HTTPException(status_code=404, detail="Model metadata not found")
             
         with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
+            metadata = yaml.safe_load(f)
             return ModelVersion(
-                version=version,
-                created_at=datetime.fromisoformat(metadata['created_at']),
-                metrics=metadata['metrics'],
-                features=metadata['features'],
-                status=metadata['status']
+                version=metadata['version'],
+                created_at=metadata['created_at'],
+                metrics=metadata['metrics']
             )
-    except HTTPException:
-        raise
+            
     except Exception as e:
-        logger.error(f"Error getting model version: {str(e)}")
+        logger.error(f"Error getting model info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/models/rollback")
-async def rollback_model(rollback: ModelRollback, background_tasks: BackgroundTasks):
+@app.post("/models/rollback", response_model=TrainingResponse)
+async def rollback_model(rollback: ModelRollback):
     """Rollback to a previous model version."""
     try:
-        version_path = os.path.join(config.model_dir, "versions", rollback.version)
+        version_path = os.path.join(config.MODEL_DIR, "versions", rollback.version)
         if not os.path.exists(version_path):
             raise HTTPException(status_code=404, detail="Model version not found")
             
         # Create backup of current model
-        current_model_path = os.path.join(config.model_dir, "current")
-        backup_path = os.path.join(config.model_dir, "backups", f"backup_{datetime.now().isoformat()}")
+        current_model_path = os.path.join(config.MODEL_DIR, "current")
+        backup_path = os.path.join(config.MODEL_DIR, "backups", f"backup_{datetime.now().isoformat()}")
         if os.path.exists(current_model_path):
             shutil.copytree(current_model_path, backup_path)
             
         # Copy selected version to current
-        shutil.copytree(version_path, current_model_path, dirs_exist_ok=True)
+        shutil.copytree(version_path, current_model_path)
         
-        # Update metadata
-        metadata_path = os.path.join(current_model_path, "metadata.json")
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-        metadata['rollback_info'] = {
-            'from_version': config.current_version,
-            'to_version': rollback.version,
-            'reason': rollback.reason,
-            'timestamp': datetime.now().isoformat()
-        }
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
+        # Reload model
+        if not model_loader.load_model(Path(version_path)):
+            raise HTTPException(status_code=500, detail="Failed to load rolled back model")
             
-        # Reload model in background
-        background_tasks.add_task(reload_model)
+        return TrainingResponse(
+            status="success",
+            message=f"Successfully rolled back to version {rollback.version}",
+            model_version=rollback.version
+        )
         
-        return {"message": f"Successfully rolled back to version {rollback.version}"}
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error rolling back model: {str(e)}")
+        logger.error(f"Error rolling back model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/models/compare/{version1}/{version2}")
-async def compare_models(version1: str, version2: str):
+@app.post("/models/compare")
+async def compare_models(compare: ModelCompare):
     """Compare two model versions."""
     try:
-        v1_path = os.path.join(config.model_dir, "versions", version1)
-        v2_path = os.path.join(config.model_dir, "versions", version2)
+        v1_path = os.path.join(config.MODEL_DIR, "versions", compare.version1)
+        v2_path = os.path.join(config.MODEL_DIR, "versions", compare.version2)
         
         if not os.path.exists(v1_path) or not os.path.exists(v2_path):
             raise HTTPException(status_code=404, detail="One or both model versions not found")
             
         # Load metadata for both versions
-        with open(os.path.join(v1_path, "metadata.json"), 'r') as f:
-            v1_metadata = json.load(f)
-        with open(os.path.join(v2_path, "metadata.json"), 'r') as f:
-            v2_metadata = json.load(f)
-            
+        v1_metadata = {}
+        v2_metadata = {}
+        
+        v1_metadata_path = os.path.join(config.MODEL_DIR, "versions", f"{compare.version1}_metadata.yaml")
+        v2_metadata_path = os.path.join(config.MODEL_DIR, "versions", f"{compare.version2}_metadata.yaml")
+        
+        if os.path.exists(v1_metadata_path):
+            with open(v1_metadata_path, 'r') as f:
+                v1_metadata = yaml.safe_load(f)
+                
+        if os.path.exists(v2_metadata_path):
+            with open(v2_metadata_path, 'r') as f:
+                v2_metadata = yaml.safe_load(f)
+                
         # Compare metrics
-        metrics_diff = {}
-        for metric in set(v1_metadata['metrics'].keys()) | set(v2_metadata['metrics'].keys()):
-            v1_value = v1_metadata['metrics'].get(metric, 0)
-            v2_value = v2_metadata['metrics'].get(metric, 0)
-            metrics_diff[metric] = {
-                'version1': v1_value,
-                'version2': v2_value,
-                'difference': v2_value - v1_value
-            }
-            
-        # Compare features
-        features_diff = {
-            'common': list(set(v1_metadata['features']) & set(v2_metadata['features'])),
-            'only_in_v1': list(set(v1_metadata['features']) - set(v2_metadata['features'])),
-            'only_in_v2': list(set(v2_metadata['features']) - set(v1_metadata['features']))
+        comparison = {
+            "version1": {
+                "version": compare.version1,
+                "created_at": v1_metadata.get("created_at", "unknown"),
+                "metrics": v1_metadata.get("metrics", {})
+            },
+            "version2": {
+                "version": compare.version2,
+                "created_at": v2_metadata.get("created_at", "unknown"),
+                "metrics": v2_metadata.get("metrics", {})
+            },
+            "differences": {}
         }
         
-        return {
-            "version1": version1,
-            "version2": version2,
-            "metrics_comparison": metrics_diff,
-            "features_comparison": features_diff,
-            "created_at_diff": {
-                "version1": v1_metadata['created_at'],
-                "version2": v2_metadata['created_at']
-            }
-        }
-    except HTTPException:
-        raise
+        # Calculate metric differences
+        for metric in set(v1_metadata.get("metrics", {}).keys()) | set(v2_metadata.get("metrics", {}).keys()):
+            v1_value = v1_metadata.get("metrics", {}).get(metric, 0)
+            v2_value = v2_metadata.get("metrics", {}).get(metric, 0)
+            comparison["differences"][metric] = v2_value - v1_value
+            
+        return comparison
+        
     except Exception as e:
-        logger.error(f"Error comparing models: {str(e)}")
+        logger.error(f"Error comparing models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/metrics")
+async def get_metrics() -> Dict[str, Any]:
+    """Get current monitoring metrics."""
+    try:
+        return await model_monitor.get_metrics()
+    except Exception as e:
+        logger.error(f"Error getting metrics: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting metrics: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

@@ -2,9 +2,13 @@ import os
 import json
 import logging
 import numpy as np
+import pandas as pd
 import joblib
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime
+from pathlib import Path
+import yaml
+from .config import ModelConfig
 
 from components.feature_extractor import FeatureExtractor
 
@@ -15,20 +19,132 @@ logger = logging.getLogger(__name__)
 class ModelLoader:
     """Handles model loading and inference."""
     
-    def __init__(self, model_dir: str = 'models'):
-        """Initialize the model loader.
+    def __init__(self, config: ModelConfig):
+        """Initialize the model loader with configuration."""
+        self.config = config
+        self.model = None
+        self.metadata = {}
+        
+        # Create necessary directories
+        self.model_dir = Path(self.config.storage.directory)
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+        (self.model_dir / "versions").mkdir(exist_ok=True)
+        (self.model_dir / "backups").mkdir(exist_ok=True)
+        
+        # Try to load the latest model
+        self.load_latest_model()
+    
+    def load_latest_model(self) -> bool:
+        """Load the latest model version.
+        
+        Returns:
+            bool: True if model was loaded successfully, False otherwise
+        """
+        try:
+            # Get the latest model version
+            versions_dir = self.model_dir / "versions"
+            if not versions_dir.exists():
+                logger.warning("No versions directory found")
+                return False
+                
+            model_files = list(versions_dir.glob("model_*.joblib"))
+            if not model_files:
+                logger.warning("No model files found")
+                return False
+                
+            latest_model = max(model_files, key=lambda x: x.stat().st_mtime)
+            return self.load_model(latest_model)
+            
+        except Exception as e:
+            logger.error(f"Error loading latest model: {e}")
+            return False
+    
+    def load_model(self, model_path: Path) -> bool:
+        """Load a specific model version.
         
         Args:
-            model_dir: Directory containing model versions
+            model_path: Path to the model file
+            
+        Returns:
+            bool: True if model was loaded successfully, False otherwise
         """
-        self.model_dir = model_dir
-        self.feature_extractor = FeatureExtractor()
-        self.model = None
-        self.scaler = None
-        self.metadata = None
+        try:
+            if not model_path.exists():
+                logger.warning(f"Model file not found: {model_path}")
+                return False
+                
+            # Load the model
+            self.model = joblib.load(model_path)
+            
+            # Load metadata if available
+            metadata_path = model_path.with_suffix('.yaml')
+            if metadata_path.exists():
+                with open(metadata_path, 'r') as f:
+                    self.metadata = yaml.safe_load(f)
+            
+            logger.info(f"Loaded model from {model_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading model: {e}")
+            return False
+    
+    def save_model(self, model: Any, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """Save model and metadata."""
+        try:
+            # Create versions directory if it doesn't exist
+            versions_dir = self.model_dir / "versions"
+            versions_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Generate version string
+            version = datetime.now().strftime(self.config.storage.version_format)
+            
+            # Save model
+            model_path = versions_dir / f"model_{version}.joblib"
+            joblib.dump(model, model_path)
+            
+            # Save metadata
+            if metadata:
+                metadata_path = model_path.with_suffix('.yaml')
+                with open(metadata_path, 'w') as f:
+                    yaml.dump(metadata, f)
+            
+            logger.info(f"Saved model to {model_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error saving model: {e}")
+            return False
+    
+    def predict(self, data: Any) -> Any:
+        """Make predictions using the loaded model.
         
-        # Create model directory if it doesn't exist
-        os.makedirs(model_dir, exist_ok=True)
+        Args:
+            data: Input data
+            
+        Returns:
+            Any: Model predictions
+            
+        Raises:
+            RuntimeError: If no model is loaded
+        """
+        if self.model is None:
+            raise RuntimeError("No model loaded")
+        return self.model.predict(data)
+    
+    def get_model_info(self) -> Dict[str, Any]:
+        """Get information about the loaded model.
+        
+        Returns:
+            Dict[str, Any]: Model information including version and metadata
+        """
+        return {
+            "version": self.metadata.get("version", "unknown"),
+            "type": self.metadata.get("type", "unknown"),
+            "created_at": self.metadata.get("created_at", "unknown"),
+            "metrics": self.metadata.get("metrics", {}),
+            "config": self.metadata.get("config", {})
+        }
     
     def list_models(self) -> List[str]:
         """List available model versions.
@@ -36,11 +152,10 @@ class ModelLoader:
         Returns:
             List of model version directories
         """
-        if not os.path.exists(self.model_dir):
+        if not self.model_dir.exists():
             return []
         
-        return [d for d in os.listdir(self.model_dir)
-                if os.path.isdir(os.path.join(self.model_dir, d))]
+        return [d.name for d in self.model_dir.glob("*") if d.is_dir()]
     
     def get_latest_model(self) -> Optional[str]:
         """Get the latest model version.
@@ -54,38 +169,9 @@ class ModelLoader:
         
         # Sort versions by timestamp (they are named with timestamps)
         versions.sort(reverse=True)
-        return os.path.join(self.model_dir, versions[0])
+        return self.model_dir / versions[0]
     
-    def load_model(self, version: Optional[str] = None) -> None:
-        """Load a specific model version or the latest one.
-        
-        Args:
-            version: Model version to load (if None, loads latest)
-        """
-        if version is None:
-            model_path = self.get_latest_model()
-        else:
-            model_path = os.path.join(self.model_dir, version)
-        
-        if not model_path or not os.path.exists(model_path):
-            raise ValueError(f"No model found at {model_path}")
-        
-        # Load model
-        model_file = os.path.join(model_path, 'model.joblib')
-        self.model = joblib.load(model_file)
-        
-        # Load scaler
-        scaler_file = os.path.join(model_path, 'scaler.joblib')
-        self.scaler = joblib.load(scaler_file)
-        
-        # Load metadata
-        metadata_file = os.path.join(model_path, 'metadata.json')
-        with open(metadata_file, 'r') as f:
-            self.metadata = json.load(f)
-        
-        logger.info(f"Loaded model version {self.metadata['version']}")
-    
-    async def predict(self, logs: List[Dict]) -> Tuple[np.ndarray, np.ndarray]:
+    async def predict_new_data(self, logs: List[Dict]) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions on new data.
         
         Args:
@@ -132,20 +218,4 @@ class ModelLoader:
         # Scale features
         X = self.scaler.transform(X)
         
-        return X
-    
-    def get_model_info(self) -> Dict:
-        """Get information about the loaded model.
-        
-        Returns:
-            Dictionary containing model information
-        """
-        if self.metadata is None:
-            raise ValueError("No model loaded. Call load_model() first.")
-        
-        return {
-            'version': self.metadata['version'],
-            'timestamp': self.metadata['timestamp'],
-            'config': self.metadata['config'],
-            'feature_names': self.metadata['feature_names']
-        } 
+        return X 

@@ -4,23 +4,27 @@ import psutil
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-from prometheus_client import Gauge, Counter
-
-from config import settings
+from .base_monitor import BaseMonitor
 
 logger = logging.getLogger(__name__)
 
-# Prometheus metrics
-CPU_USAGE = Gauge('system_cpu_usage_percent', 'CPU usage percentage')
-MEMORY_USAGE = Gauge('system_memory_usage_percent', 'Memory usage percentage')
-DISK_USAGE = Gauge('system_disk_usage_percent', 'Disk usage percentage')
-NETWORK_IO = Gauge('system_network_io_bytes', 'Network I/O in bytes', ['direction'])
-ALERT_COUNTER = Counter('system_alerts_total', 'Number of system alerts', ['severity'])
-
-class ResourceMonitor:
+class ResourceMonitor(BaseMonitor):
     """Component for monitoring system resources and generating alerts."""
     
     def __init__(self):
+        """Initialize the resource monitor."""
+        super().__init__('system')
+        
+        # Initialize metrics
+        self.metrics.update({
+            'cpu_usage': self._create_gauge('cpu_usage_percent', 'CPU usage percentage'),
+            'memory_usage': self._create_gauge('memory_usage_percent', 'Memory usage percentage'),
+            'disk_usage': self._create_gauge('disk_usage_percent', 'Disk usage percentage'),
+            'network_io': self._create_gauge('network_io_bytes', 'Network I/O in bytes', ['direction']),
+            'alerts_total': self._create_counter('alerts_total', 'Number of system alerts', ['severity'])
+        })
+        
+        # Set thresholds
         self._thresholds = {
             'cpu': 80.0,      # 80% CPU usage
             'memory': 85.0,   # 85% memory usage
@@ -32,22 +36,21 @@ class ResourceMonitor:
             'bytes_sent': 0,
             'bytes_recv': 0
         }
-        self._last_check = datetime.utcnow()
     
     def check_resources(self) -> Dict[str, float]:
         """Check current system resource usage."""
         try:
             # CPU usage
             cpu_percent = psutil.cpu_percent(interval=1)
-            CPU_USAGE.set(cpu_percent)
+            self.metrics['cpu_usage'].set(cpu_percent)
             
             # Memory usage
             memory = psutil.virtual_memory()
-            MEMORY_USAGE.set(memory.percent)
+            self.metrics['memory_usage'].set(memory.percent)
             
             # Disk usage
             disk = psutil.disk_usage('/')
-            DISK_USAGE.set(disk.percent)
+            self.metrics['disk_usage'].set(disk.percent)
             
             # Network I/O
             net_io = psutil.net_io_counters()
@@ -58,8 +61,8 @@ class ResourceMonitor:
                 bytes_sent_rate = (net_io.bytes_sent - self._last_network_io['bytes_sent']) / time_diff
                 bytes_recv_rate = (net_io.bytes_recv - self._last_network_io['bytes_recv']) / time_diff
                 
-                NETWORK_IO.labels(direction='sent').set(bytes_sent_rate)
-                NETWORK_IO.labels(direction='received').set(bytes_recv_rate)
+                self.metrics['network_io'].labels(direction='sent').set(bytes_sent_rate)
+                self.metrics['network_io'].labels(direction='received').set(bytes_recv_rate)
             
             self._last_network_io = {
                 'bytes_sent': net_io.bytes_sent,
@@ -117,16 +120,6 @@ class ResourceMonitor:
             ))
         
         return alerts
-    
-    def _create_alert(self, alert_type: str, severity: str, message: str) -> Dict[str, Any]:
-        """Create an alert dictionary."""
-        ALERT_COUNTER.labels(severity=severity).inc()
-        return {
-            'type': alert_type,
-            'severity': severity,
-            'message': message,
-            'timestamp': datetime.utcnow().isoformat()
-        }
     
     def get_thresholds(self) -> Dict[str, float]:
         """Get current resource thresholds."""

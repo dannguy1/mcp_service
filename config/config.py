@@ -3,7 +3,7 @@ from typing import Optional, List
 from pydantic import PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings
 
-class Settings(BaseSettings):
+class Config(BaseSettings):
     # Environment
     ENV: str = "development"
     DEBUG: bool = True
@@ -80,6 +80,15 @@ class Settings(BaseSettings):
     BACKUP_RETENTION: int = 30
     BACKUP_SCHEDULE: str = "0 0 * * *"
     
+    # SMTP Configuration
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    
+    # Analysis Configuration
+    ANALYSIS_INTERVAL: int = 300
+    
     @property
     def postgres_dsn(self) -> PostgresDsn:
         return PostgresDsn.build(
@@ -113,5 +122,5 @@ class Settings(BaseSettings):
                 return [host.strip() for host in raw_val.split(",")]
             return raw_val
 
-# Create global settings instance
-settings = Settings()
+# Create global config instance
+config = Config()

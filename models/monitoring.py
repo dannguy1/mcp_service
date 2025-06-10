@@ -2,60 +2,64 @@ import logging
 import numpy as np
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
-from prometheus_client import Counter, Gauge, Histogram
+from prometheus_client import Counter, Gauge, Histogram, CollectorRegistry
 from sklearn.metrics import precision_recall_curve, average_precision_score
 
-from data_service import data_service
+from components.base_monitor import BaseMonitor
+from components.data_service import DataService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class ModelMonitor:
+class ModelMonitor(BaseMonitor):
     """Monitors model performance and drift."""
     
     def __init__(self):
         """Initialize the model monitor."""
-        # Initialize Prometheus metrics
-        self.metrics = {
-            'predictions_total': Counter(
-                'model_predictions_total',
-                'Total number of predictions made'
-            ),
-            'anomalies_detected': Counter(
-                'model_anomalies_detected',
-                'Total number of anomalies detected'
-            ),
-            'prediction_latency': Histogram(
-                'model_prediction_latency_seconds',
+        super().__init__('model')
+        
+        # Initialize metrics
+        self.metrics.update({
+            'predictions_total': self._create_counter('predictions_total', 'Total number of predictions made'),
+            'anomalies_detected': self._create_counter('anomalies_detected', 'Total number of anomalies detected'),
+            'prediction_latency': self._create_histogram(
+                'prediction_latency_seconds',
                 'Time taken for predictions',
                 buckets=[0.1, 0.5, 1.0, 2.0, 5.0]
             ),
-            'model_load_time': Histogram(
-                'model_load_time_seconds',
+            'model_load_time': self._create_histogram(
+                'load_time_seconds',
                 'Time taken to load model',
                 buckets=[1.0, 5.0, 10.0, 30.0, 60.0]
             ),
-            'feature_drift': Gauge(
-                'model_feature_drift',
-                'Feature drift score',
-                ['feature']
-            ),
-            'prediction_drift': Gauge(
-                'model_prediction_drift',
-                'Prediction drift score'
-            ),
-            'data_quality': Gauge(
-                'model_data_quality',
-                'Data quality score',
-                ['metric']
-            )
-        }
+            'feature_drift': self._create_gauge('feature_drift', 'Feature drift score', ['feature']),
+            'prediction_drift': self._create_gauge('prediction_drift', 'Prediction drift score'),
+            'data_quality': self._create_gauge('data_quality', 'Data quality score', ['metric'])
+        })
         
         # Initialize drift detection parameters
         self.drift_threshold = 0.1
         self.window_size = 1000
         self.reference_data = None
+        self.data_service = DataService()
+        self.data_service.set_metrics(self.metrics)  # Pass metrics to DataService
+        self._initialized = False
+    
+    async def initialize(self) -> None:
+        """Initialize the model monitor asynchronously."""
+        try:
+            # Initialize data service
+            await self.data_service.initialize()
+            self._initialized = True
+            logger.info("Model monitor initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing model monitor: {e}")
+            raise
+    
+    def is_initialized(self) -> bool:
+        """Check if the monitor is initialized."""
+        return self._initialized
     
     async def update_metrics(self, predictions: np.ndarray, scores: np.ndarray,
                            features: Dict, latency: float) -> None:
@@ -185,12 +189,12 @@ class ModelMonitor:
             FROM predictions
             WHERE timestamp BETWEEN $1 AND $2
         """
-        results = await data_service.fetch_all(query, start_time, end_time)
+        results = await self.data_service.fetch_all(query, start_time, end_time)
         
         if not results:
             return {}
         
-        # Calculate metrics
+        # Calculate performance metrics
         predictions = np.array([r['prediction'] for r in results])
         scores = np.array([r['score'] for r in results])
         actual = np.array([r['is_anomaly'] for r in results])
@@ -203,10 +207,7 @@ class ModelMonitor:
             'average_precision': avg_precision,
             'precision': precision.tolist(),
             'recall': recall.tolist(),
-            'thresholds': thresholds.tolist(),
-            'predictions_total': len(predictions),
-            'anomalies_detected': np.sum(predictions == -1),
-            'true_anomalies': np.sum(actual == 1)
+            'thresholds': thresholds.tolist()
         }
 
 # Initialize global monitor instance
