@@ -1,13 +1,13 @@
-# Use Python 3.9 slim image
-FROM python:3.9-slim
+# Use Python 3.10 slim image
+FROM python:3.10-slim
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
+    gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
@@ -17,22 +17,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY mcp_service/ mcp_service/
+COPY README.md .
 
 # Create necessary directories
-RUN mkdir -p models logs
+RUN mkdir -p /app/data /app/models
 
 # Set environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+# Initialize SQLite database
+RUN python -m mcp_service.init_local_db
+
 # Expose port
-EXPOSE 8000
+EXPOSE 5555
 
-# Create non-root user
-RUN useradd -m -u 1000 mcp_service
-RUN chown -R mcp_service:mcp_service /app
-USER mcp_service
-
-# Run the application
-CMD ["python", "scripts/run_model_server.py"]
+# Run the service
+CMD ["python", "-m", "mcp_service.mcp_service"]

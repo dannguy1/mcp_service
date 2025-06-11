@@ -1,10 +1,10 @@
 # Data Source Configuration
 
-database:
-  url: "postgresql://netmonitor_user:netmonitor_password@192.168.10.14:5432/netmonitor_db"
-  pool_size: 5
-  max_overflow: 10
-  timeout: 30
+host: 192.168.10.14
+port: 5432
+database: netmonitor_db
+user: netmonitor_user
+password: netmonitor_password
 
 # Query Configuration
 query:

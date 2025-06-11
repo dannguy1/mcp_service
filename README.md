@@ -1,303 +1,165 @@
-# MCP Service
+# Modular AI Processing Service
 
-A modular AI processing service designed to analyze OpenWRT network logs for anomaly detection within the Log Monitor framework.
+A modular, extensible AI processing service for analyzing OpenWRT network logs and detecting anomalies. The service operates independently from the log collector, fetches logs from a PostgreSQL database, and stores anomalies in a local SQLite database.
 
-## Table of Contents
+## Features
 
-1. [Getting Started](#getting-started)
-2. [System Architecture](#system-architecture)
-3. [User Interfaces](#user-interfaces)
-4. [Configuration](#configuration)
-5. [Monitoring & Maintenance](#monitoring--maintenance)
-6. [Development](#development)
-7. [Troubleshooting](#troubleshooting)
-8. [Support](#support)
-9. [Running Components Natively](#running-components-natively)
+- **Modular Architecture**: Plug-and-play agent system for different types of analysis
+- **Efficient Resource Usage**: Optimized for Raspberry Pi 5 (4-8GB RAM)
+- **Local Storage**: SQLite database for anomaly storage
+- **Remote Operation**: Support for remote PostgreSQL database access
+- **Health Monitoring**: Resource usage monitoring and health check endpoint
+- **Extensible**: Easy to add new analysis agents
 
-## Getting Started
+## Components
 
-### Prerequisites
+- **DataService**: Centralized data access layer for PostgreSQL and SQLite
+- **BaseAgent**: Abstract base class for all analysis agents
+- **WiFiAgent**: Agent for WiFi anomaly detection
+- **FeatureExtractor**: Extracts features from logs
+- **ModelManager**: Manages ML models
+- **AnomalyClassifier**: Classifies anomalies using ML models
+- **ResourceMonitor**: Monitors system resources
 
-- Python 3.10 or higher
-- Docker and Docker Compose
-- Git
-
-### Installation
+## Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/dannguy1/mcp_service.git
-cd mcp_service
-```
+   ```bash
+   git clone https://github.com/yourusername/mcp_service.git
+   cd mcp_service
+   ```
 
-2. Set up virtual environment:
-```bash
-# Create virtual environment
-python3 -m venv venv
+2. Create a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   # or
+   .\venv\Scripts\activate  # Windows
+   ```
 
-# Activate virtual environment
-# On Linux/Mac:
-source venv/bin/activate
-# On Windows:
-.\venv\Scripts\activate
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-# Install dependencies
-pip install -r requirements.txt
-```
-
-3. Configure environment:
-```bash
-# Copy example environment file
-cp example.env .env
-
-# Edit .env with your configuration
-nano .env  # or use your preferred editor
-```
-
-4. Run the system:
-```bash
-# Using Docker Compose (recommended)
-docker-compose up -d
-
-# Or run manually
-python scripts/run_web_ui.py
-```
-
-For detailed installation instructions, see [Deployment Guide](docs/Implementation/AnalyzerMCPServer-IP-Deployment.md).
-
-## System Architecture
-
-The MCP Service consists of several components:
-
-- **Model Server**: Core service for anomaly detection
-- **Database**: PostgreSQL for data storage
-- **Cache**: Redis for performance optimization
-- **Monitoring**: Prometheus and Grafana
-- **Web UI**: Real-time monitoring interface
-
-For detailed architecture information, see [Implementation Overview](docs/Implementation/AnalyzerMCPServer-IP-Overview.md).
-
-## User Interfaces
-
-### 1. MCP Service Web UI
-- **URL**: http://localhost:8080
-- **Purpose**: Real-time monitoring and management
-- **Features**:
-  - System status dashboard
-  - Performance metrics
-  - Anomaly detection results
-  - Real-time charts
-
-### 2. Grafana Dashboards
-- **URL**: http://localhost:3000
-- **Default Credentials**: admin/admin
-- **Dashboards**:
-  - System Overview
-  - Service Performance
-  - Model Performance
-  - Database Performance
-
-### 3. Prometheus UI
-- **URL**: http://localhost:9090
-- **Purpose**: Raw metrics and alert management
-
-For detailed UI documentation, see [Monitoring Quick Start Guide](docs/monitoring_quickstart.md).
+4. Initialize the SQLite database:
+   ```bash
+   python -m mcp_service.init_local_db
+   ```
 
 ## Configuration
 
-### Environment Variables
-Key variables in `.env`:
-```env
-# Database
-POSTGRES_USER=your_user
-POSTGRES_PASSWORD=your_password
-POSTGRES_DB=mcp_service
+The service is configured using environment variables:
 
-# Grafana
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=your_secure_password
+```ini
+# Database Configuration (PostgreSQL - Read Only)
+DB_HOST=192.168.10.14
+DB_PORT=5432
+DB_NAME=netmonitor_db
+DB_USER=netmonitor_user
+DB_PASSWORD=netmonitor_password
 
-# Web UI
-WEB_UI_HOST=0.0.0.0
-WEB_UI_PORT=8080
+# SQLite Configuration
+SQLITE_DB_PATH=/app/data/mcp_anomalies.db
+SQLITE_JOURNAL_MODE=WAL
+SQLITE_SYNCHRONOUS=NORMAL
+SQLITE_CACHE_SIZE=-2000
+SQLITE_TEMP_STORE=MEMORY
+SQLITE_MMAP_SIZE=30000000000
+
+# Redis Configuration
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+
+# Service Configuration
+SERVICE_HOST=0.0.0.0
+SERVICE_PORT=5555
+LOG_LEVEL=INFO
+ANALYSIS_INTERVAL=300
 ```
 
-### Configuration Files
-- `config/monitoring_config.yaml`: Monitoring setup
-- `config/server_config.yaml`: Server settings
-- `config/data_source_config.yaml`: Data source configuration
+## Usage
 
-For detailed configuration information, see [Server Implementation](docs/Implementation/AnalyzerMCPServer-IP-Server.md).
+1. Start the service:
+   ```bash
+   python -m mcp_service.mcp_service
+   ```
 
-## Monitoring & Maintenance
+2. The service will:
+   - Connect to PostgreSQL and SQLite databases
+   - Start the WiFi agent
+   - Begin monitoring logs for anomalies
+   - Expose health check endpoint at `/health`
+   - Expose anomalies API at `/api/v1/anomalies`
 
-### Automated Tasks
-- Daily backups (2 AM)
-- Log rotation
-- Database optimization
-- Performance monitoring
+## API Endpoints
 
-### Manual Maintenance
-```bash
-python scripts/maintenance.py
+### Health Check
 ```
+GET /health
+```
+Returns the health status of the service and its components.
 
-For detailed monitoring and maintenance information, see [Monitoring and Maintenance Guide](docs/monitoring_and_maintenance.md).
+### Get Anomalies
+```
+GET /api/v1/anomalies?limit=100&offset=0&agent_name=WiFiAgent&status=new&resolution_status=open
+```
+Returns a list of anomalies with optional filtering.
+
+### Update Anomaly Status
+```
+POST /api/v1/anomalies/{anomaly_id}/status
+{
+    "status": "acknowledged",
+    "resolution_status": "resolved",
+    "resolution_notes": "Fixed by restarting the access point"
+}
+```
+Updates the status and resolution of an anomaly.
 
 ## Development
 
-### Project Structure
-```
-mcp_service/
-├── config/                 # Configuration files
-├── docs/                   # Documentation
-├── monitoring/            # Monitoring setup
-├── scripts/               # Utility scripts
-├── static/               # Web UI static files
-├── templates/            # Web UI templates
-├── tests/                # Test suite
-└── utils/                # Utility modules
-```
+### Adding a New Agent
+
+1. Create a new agent class that inherits from `BaseAgent`:
+   ```python
+   from mcp_service.agents.base_agent import BaseAgent
+
+   class NewAgent(BaseAgent):
+       def __init__(self, config, data_service):
+           super().__init__(config, data_service)
+           # Initialize agent-specific components
+
+       async def start(self):
+           # Start agent-specific components
+           pass
+
+       async def stop(self):
+           # Stop agent-specific components
+           pass
+
+       async def run_analysis_cycle(self):
+           # Implement analysis logic
+           pass
+   ```
+
+2. Add the agent to the main service:
+   ```python
+   from mcp_service.agents.new_agent import NewAgent
+
+   class MCPService:
+       def __init__(self):
+           # ...
+           self.new_agent = NewAgent(self.config, self.data_service)
+   ```
 
 ### Running Tests
+
 ```bash
-# All tests
 pytest
-
-# Specific categories
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/performance/
 ```
-
-For development guidelines, see [Testing Implementation](docs/Implementation/AnalyzerMCPServer-IP-Testing.md).
-
-## Troubleshooting
-
-### Quick Checks
-
-1. **Service Status**
-```bash
-docker-compose ps
-docker-compose logs <service-name>
-```
-
-2. **Health Check**
-```bash
-curl http://localhost:8000/health
-```
-
-3. **Metrics**
-```bash
-curl http://localhost:9090/api/v1/targets
-```
-
-### Common Issues
-
-1. **Service Not Starting**
-   - Check logs: `docker-compose logs <service-name>`
-   - Verify environment variables
-   - Check port availability
-
-2. **Metrics Not Showing**
-   - Verify Prometheus targets
-   - Check service health
-   - Review network connectivity
-
-3. **Web UI Issues**
-   - Check web UI logs
-   - Verify port configuration
-   - Clear browser cache
-
-For detailed troubleshooting, see [Monitoring and Maintenance Guide](docs/monitoring_and_maintenance.md).
-
-## Support
-
-### Documentation
-- [API Documentation](docs/api_documentation.md)
-- [Monitoring Guide](docs/monitoring_and_maintenance.md)
-- [Quick Start Guide](docs/monitoring_quickstart.md)
-
-### Getting Help
-1. Check the troubleshooting guide
-2. Review log files in `logs/`
-3. Contact system administrator
 
 ## License
 
-[Your License Here]
-
-## Running Components Natively
-
-While the system is designed to run in Docker containers, you can also run individual components natively for development and debugging purposes. The `scripts` directory contains several utility scripts for this purpose.
-
-### Model Server
-
-Run the FastAPI model server with:
-```bash
-python scripts/run_model_server.py [options]
-
-Options:
-  --config CONFIG     Path to server configuration file (default: config/server_config.yaml)
-  --host HOST        Host to bind the server to (default: 0.0.0.0)
-  --port PORT        Port to bind the server to (default: 8000)
-  --workers WORKERS  Number of worker processes (default: 4)
-  --reload          Enable auto-reload on code changes
-  --debug           Enable debug logging
-```
-
-### Model Training
-
-Train the anomaly detection model with:
-```bash
-python scripts/train_model.py [options]
-
-Options:
-  --config CONFIG     Path to model configuration file (default: config/model_config.yaml)
-  --start-date DATE  Start date for training data (YYYY-MM-DD)
-  --end-date DATE    End date for training data (YYYY-MM-DD)
-  --debug           Enable debug logging
-```
-
-### Model Monitoring
-
-Monitor model performance and drift with:
-```bash
-python scripts/monitor_model.py [options]
-
-Options:
-  --config CONFIG       Path to model configuration file (default: config/model_config.yaml)
-  --model-version VER   Model version to monitor (default: latest)
-  --interval SECONDS    Monitoring interval in seconds (default: 300)
-  --debug              Enable debug logging
-```
-
-### Features
-
-Each script provides:
-- Automatic environment setup
-- Configuration management
-- Detailed logging (both console and file)
-- Error handling and recovery
-- Debug mode for troubleshooting
-
-### Logs
-
-Logs are stored in the `~/.mcp_service/logs` directory:
-- `~/.mcp_service/logs/model_server.log`: Model server logs
-- `~/.mcp_service/logs/training.log`: Model training logs
-- `~/.mcp_service/logs/monitoring.log`: Model monitoring logs
-
-The logs directory is automatically created in your home directory to avoid permission issues. Each script will create its own log file with appropriate permissions.
-
-### Environment Setup
-
-The scripts automatically:
-1. Set up the Python path
-2. Load environment variables from `.env`
-3. Create necessary directories
-4. Configure logging
-
-### Debug Mode
-
-Use the `--debug` flag to enable detailed logging and troubleshooting information. This is particularly useful during development and when investigating issues. 
+This project is licensed under the MIT License - see the LICENSE file for details. 

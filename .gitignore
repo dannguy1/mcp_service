@@ -24,42 +24,37 @@ wheels/
 venv/
 ENV/
 env/
+.env
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-.DS_Store
 
 # Logs
 *.log
 logs/
-log/
 
-# Test results
-test_results/
-.coverage
-htmlcov/
-.pytest_cache/
-.tox/
-
-# Runtime files
+# Local development
 *.db
 *.sqlite3
 *.sqlite
-.env
-.env.*
-!.env.example
+
+# Docker
+.docker/
 
 # Model files
 models/*.pkl
 models/*.h5
-models/*.joblib
-models/checkpoints/
+models/*.pt
+models/*.pth
 
-# Docker
-.docker/
+# Keep model config
+!models/model_config.json
+
+# Keep example env
+!example.env
 
 # System
 .DS_Store

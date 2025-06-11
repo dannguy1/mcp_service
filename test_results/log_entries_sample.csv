@@ -1,0 +1,101 @@
+device_id,message,raw_message,timestamp
+1,wl1-sta0: Unknown event 37,<29>Jan 13 17:04:08 OpenWrt wpa_supplicant[1431]: wl1-sta0: Unknown event 37,2025-06-09 08:03:57.955044
+1,wl1-sta0: RSN: Group rekeying completed with c4:41:1e:26:30:43 [GTK=CCMP],<29>Jan 13 17:04:08 OpenWrt wpa_supplicant[1431]: wl1-sta0: RSN: Group rekeying completed with c4:41:1e:26:30:43 [GTK=CCMP],2025-06-09 08:03:57.944413
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED c4:41:1e:09:a4:5d,<29>Jan 13 16:19:38 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED c4:41:1e:09:a4:5d,2025-06-09 07:19:28.404870
+1,wl0-ap0: STA c4:41:1e:09:a4:5d WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:19:38 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d WPA: pairwise key handshake completed (RSN),2025-06-09 07:19:28.392817
+1,wl0-ap0: AP-STA-CONNECTED c4:41:1e:09:a4:5d auth_alg=open,<29>Jan 13 16:19:38 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED c4:41:1e:09:a4:5d auth_alg=open,2025-06-09 07:19:28.383092
+1,wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: associated (aid 5),<30>Jan 13 16:19:37 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: associated (aid 5),2025-06-09 07:19:27.342336
+1,wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: authenticated,<30>Jan 13 16:19:37 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: authenticated,2025-06-09 07:19:27.332521
+1,wl0-ap0: AP-STA-DISCONNECTED c4:41:1e:09:a4:5d,<29>Jan 13 16:19:35 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED c4:41:1e:09:a4:5d,2025-06-09 07:19:25.333382
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED c4:41:1e:09:a4:5d,<29>Jan 13 16:19:19 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED c4:41:1e:09:a4:5d,2025-06-09 07:19:09.410265
+1,wl0-ap0: STA c4:41:1e:09:a4:5d WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:19:19 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d WPA: pairwise key handshake completed (RSN),2025-06-09 07:19:09.402744
+1,wl0-ap0: AP-STA-CONNECTED c4:41:1e:09:a4:5d auth_alg=open,<29>Jan 13 16:19:19 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED c4:41:1e:09:a4:5d auth_alg=open,2025-06-09 07:19:09.392425
+1,wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: associated (aid 5),<30>Jan 13 16:19:18 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: associated (aid 5),2025-06-09 07:19:08.345080
+1,wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: authenticated,<30>Jan 13 16:19:18 OpenWrt hostapd: wl0-ap0: STA c4:41:1e:09:a4:5d IEEE 802.11: authenticated,2025-06-09 07:19:08.334497
+1,wl0-ap0: AP-STA-DISCONNECTED c4:41:1e:09:a4:5d,<29>Jan 13 16:19:15 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED c4:41:1e:09:a4:5d,2025-06-09 07:19:05.335620
+1,wl1-sta0: Unknown event 37,<29>Jan 13 16:04:08 OpenWrt wpa_supplicant[1431]: wl1-sta0: Unknown event 37,2025-06-09 07:03:57.954418
+1,wl1-sta0: RSN: Group rekeying completed with c4:41:1e:26:30:43 [GTK=CCMP],<29>Jan 13 16:04:08 OpenWrt wpa_supplicant[1431]: wl1-sta0: RSN: Group rekeying completed with c4:41:1e:26:30:43 [GTK=CCMP],2025-06-09 07:03:57.943933
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:43 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:33.827909
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:43 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:33.820283
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:43 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:33.812428
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:43 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:33.769505
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:43 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:33.759761
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:41 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:31.754002
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:35 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:25.837569
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:35 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:25.830232
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:35 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:25.822512
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:35 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:25.763043
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:35 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:25.753402
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:33 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:23.753741
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:31 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:21.827570
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:31 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:21.819994
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:31 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:21.812328
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:31 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:21.776454
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:31 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:21.751969
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:29 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:19.753751
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:27 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:17.816261
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:27 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:17.809091
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:27 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:17.802137
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:27 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:17.761706
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:27 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:17.751958
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:25 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:15.754582
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:23 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:13.817132
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:23 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:13.809650
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:23 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:13.802285
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:23 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:13.757621
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:23 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:13.747893
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:21 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:11.765565
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:13 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:01:03.834343
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:13 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:01:03.826609
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:13 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:01:03.818681
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:13 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:01:03.757482
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:13 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:01:03.747831
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:11 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:01:01.751754
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:09 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:59.817392
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:09 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:59.810045
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:09 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:59.802368
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:09 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:59.758524
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:09 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:59.748673
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:07 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:57.749532
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:05 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:55.817133
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:05 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:55.809666
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:05 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:55.801860
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:05 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:55.758280
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:05 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:55.748804
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:03 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:53.749314
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:01:01 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:51.827420
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:01:01 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:51.819990
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:01:01 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:51.812117
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:01:01 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:51.757752
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:01:01 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:51.747762
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:59 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:49.749470
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:57 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:47.827771
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:00:57 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:47.820365
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:00:57 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:47.812275
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:00:57 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:47.759142
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:00:57 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:47.749264
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:55 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:45.751348
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:53 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:43.827162
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:00:53 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:43.819945
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:00:53 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:43.812060
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:00:53 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:43.757506
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:00:53 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:43.747669
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:51 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:41.749053
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:49 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:39.827269
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:00:49 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:39.819915
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:00:49 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:39.812035
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:00:49 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:39.757260
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:00:49 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:39.747473
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:47 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:37.751311
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:45 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:35.827244
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:00:45 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:35.819718
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:00:45 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:35.811826
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:00:45 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:35.762234
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:00:45 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:35.752504
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:43 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:33.748986
+1,wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:41 OpenWrt hostapd: wl0-ap0: EAPOL-4WAY-HS-COMPLETED 94:10:3e:d3:4b:81,2025-06-09 07:00:31.848637
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),<30>Jan 13 16:00:41 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 WPA: pairwise key handshake completed (RSN),2025-06-09 07:00:31.841095
+1,wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,<29>Jan 13 16:00:41 OpenWrt hostapd: wl0-ap0: AP-STA-CONNECTED 94:10:3e:d3:4b:81 auth_alg=open,2025-06-09 07:00:31.832099
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),<30>Jan 13 16:00:41 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: associated (aid 1),2025-06-09 07:00:31.757527
+1,wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,<30>Jan 13 16:00:41 OpenWrt hostapd: wl0-ap0: STA 94:10:3e:d3:4b:81 IEEE 802.11: authenticated,2025-06-09 07:00:31.747486
+1,wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,<29>Jan 13 16:00:39 OpenWrt hostapd: wl0-ap0: AP-STA-DISCONNECTED 94:10:3e:d3:4b:81,2025-06-09 07:00:29.748969

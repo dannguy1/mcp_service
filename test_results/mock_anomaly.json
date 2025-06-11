@@ -1,0 +1,12 @@
+{
+  "device_id": 1,
+  "timestamp": "2025-06-09T08:16:39.849904",
+  "anomaly_type": "unusual_activity",
+  "severity": 2,
+  "details": {
+    "pattern": "unusual_message_length",
+    "expected_length": 57.74239844320117,
+    "threshold": 19.208529126237856,
+    "device_activity": 4111
+  }
+}

@@ -1,0 +1,23 @@
+{
+    "model_version": "1.0.0",
+    "model_type": "wifi_anomaly",
+    "model_path": "wifi_anomaly_model.joblib",
+    "model_params": {
+        "threshold": 0.95,
+        "feature_names": [
+            "auth_failures",
+            "deauth_count",
+            "beacon_count",
+            "unique_mac_count",
+            "unique_ssid_count"
+        ],
+        "reason_codes": {
+            "range": [1, 17],
+            "description": "Common WiFi reason codes"
+        },
+        "status_codes": {
+            "range": [1, 17],
+            "description": "Common WiFi status codes"
+        }
+    }
+} 

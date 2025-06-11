@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List
@@ -11,14 +12,20 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import uvicorn
 
-# Add project root to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root to Python path
+project_root = Path(__file__).parent.parent
+sys.path.append(str(project_root))
 
-from config.config import settings
-from utils.logger import setup_logger
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+from config.config import config
 
 app = FastAPI(title="MCP Service Web UI")
-logger = setup_logger("web_ui")
 
 # Set up templates
 templates_dir = Path(__file__).parent.parent / "templates"
@@ -104,15 +111,16 @@ async def get_recent_anomalies():
         return []
 
 def main():
-    """Main entry point."""
+    """Run the web UI server."""
     try:
-        host = settings.SERVICE_HOST
-        port = settings.SERVICE_PORT
-        
-        logger.info(f"Starting web UI on {host}:{port}")
-        uvicorn.run(app, host=host, port=port)
+        uvicorn.run(
+            app,
+            host=config.SERVICE_HOST,
+            port=config.SERVICE_PORT,
+            log_level=config.LOG_LEVEL.lower()
+        )
     except Exception as e:
-        logger.error(f"Web UI failed to start: {e}")
+        logger.error(f"Failed to start web UI: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

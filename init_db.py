@@ -4,8 +4,9 @@ from pathlib import Path
 from datetime import datetime
 
 import asyncpg
-from config import settings
-from data_service import data_service
+import aiosqlite
+import os
+from config import Config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -69,30 +70,62 @@ CREATE INDEX IF NOT EXISTS idx_alerts_device_id ON alerts(device_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
 """
 
-async def init_db():
-    """Initialize the database with schema and initial data."""
+async def init_db(config: Config) -> None:
+    """Initialize database schema.
+    
+    Note: This service only reads from the log_entries table which is
+    managed by the ExternalAIAnalyzer system. Anomalies are stored in
+    a local SQLite database.
+    """
     try:
-        # Connect to PostgreSQL
+        # Connect to PostgreSQL (read-only)
         conn = await asyncpg.connect(
-            host=settings.POSTGRES_HOST,
-            port=settings.POSTGRES_PORT,
-            user=settings.POSTGRES_USER,
-            password=settings.POSTGRES_PASSWORD,
-            database=settings.POSTGRES_DB
+            host=config.db.host,
+            port=config.db.port,
+            user=config.db.user,
+            password=config.db.password,
+            database=config.db.database
         )
-
-        # Create schema
-        await conn.execute(SCHEMA)
-        logger.info("Database schema created successfully")
-
-        # Create models directory if it doesn't exist
-        Path(settings.MODEL_DIR).mkdir(parents=True, exist_ok=True)
-        logger.info("Models directory created successfully")
-
+        
+        # Verify log_entries table exists
+        await conn.execute('SELECT 1 FROM log_entries LIMIT 1')
         await conn.close()
-        logger.info("Database initialization completed successfully")
+        
+        # Initialize SQLite database
+        os.makedirs(os.path.dirname(config.sqlite_db_path), exist_ok=True)
+        async with aiosqlite.connect(config.sqlite_db_path) as db:
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS mcp_anomalies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    agent_name TEXT NOT NULL,
+                    device_id INTEGER,
+                    timestamp TEXT NOT NULL,
+                    anomaly_type TEXT NOT NULL,
+                    severity INTEGER NOT NULL,
+                    confidence REAL NOT NULL,
+                    description TEXT,
+                    features TEXT,  -- Storing JSON as TEXT
+                    status TEXT DEFAULT 'new',
+                    synced INTEGER DEFAULT 0,  -- Track sync status
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT,
+                    resolution_status TEXT DEFAULT 'open',
+                    resolution_notes TEXT
+                );
+
+                -- Indexes for efficient querying
+                CREATE INDEX IF NOT EXISTS idx_anomalies_timestamp ON mcp_anomalies(timestamp);
+                CREATE INDEX IF NOT EXISTS idx_anomalies_agent ON mcp_anomalies(agent_name);
+                CREATE INDEX IF NOT EXISTS idx_anomalies_synced ON mcp_anomalies(synced);
+                CREATE INDEX IF NOT EXISTS idx_anomalies_status ON mcp_anomalies(status);
+                CREATE INDEX IF NOT EXISTS idx_anomalies_resolution ON mcp_anomalies(resolution_status);
+            ''')
+            await db.commit()
+        
+        logging.info("Database initialized successfully")
+        
     except Exception as e:
-        logger.error(f"Database initialization failed: {e}")
+        logging.error(f"Failed to initialize database: {str(e)}")
         raise
 
 if __name__ == "__main__":
