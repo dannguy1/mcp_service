@@ -1,5 +1,5 @@
 import React from "react";
-import { Container, Nav, Offcanvas } from "react-bootstrap";
+import { Container, Nav, Offcanvas, Navbar } from "react-bootstrap";
 import { Link, Outlet, useLocation } from "react-router-dom";
 
 const MainLayout: React.FC = () => {
@@ -19,38 +19,22 @@ const MainLayout: React.FC = () => {
   ];
 
   return (
-    <div className="d-flex">
+    <div className="d-flex flex-column min-vh-100">
+      {/* Top Bar */}
+      <Navbar bg="dark" variant="dark" className="px-3">
+        <Navbar.Brand>
+          <button
+            className="btn btn-dark me-3"
+            onClick={handleShow}
+            style={{ border: 'none' }}
+          >
+            ☰
+          </button>
+          MCP Service
+        </Navbar.Brand>
+      </Navbar>
+
       {/* Sidebar */}
-      <div className="sidebar bg-dark text-light" style={{ width: "250px", minHeight: "100vh" }}>
-        <div className="p-3">
-          <h4 className="text-light mb-4">MCP Service</h4>
-          <Nav className="flex-column">
-            {navItems.map((item) => (
-              <Nav.Link
-                key={item.path}
-                as={Link}
-                to={item.path}
-                className={`text-light mb-2 ${location.pathname === item.path ? "active" : ""}`}
-                onClick={handleClose}
-              >
-                <span className="me-2">{item.icon}</span>
-                {item.label}
-              </Nav.Link>
-            ))}
-          </Nav>
-        </div>
-      </div>
-
-      {/* Mobile Menu Button */}
-      <button
-        className="btn btn-dark d-md-none position-fixed"
-        style={{ top: "10px", left: "10px", zIndex: 1000 }}
-        onClick={handleShow}
-      >
-        ☰
-      </button>
-
-      {/* Mobile Menu */}
       <Offcanvas show={show} onHide={handleClose} className="bg-dark text-light">
         <Offcanvas.Header closeButton closeVariant="white">
           <Offcanvas.Title>MCP Service</Offcanvas.Title>
