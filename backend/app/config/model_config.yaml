@@ -1,0 +1,42 @@
+version: '1.0.0'
+model:
+  type: isolation_forest
+  n_estimators: 100
+  max_samples: auto
+  contamination: 0.1
+  random_state: 42
+features:
+  numeric:
+    - signal_strength
+    - connection_time
+    - packet_loss
+  categorical:
+    - device_type
+    - connection_type
+  temporal:
+    - hour_of_day
+    - day_of_week
+training:
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  n_jobs: -1
+storage:
+  directory: models
+  version_format: '%Y%m%d_%H%M%S'
+  keep_last_n_versions: 5
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+  thresholds:
+    accuracy: 0.8
+    precision: 0.7
+    recall: 0.7
+    f1_score: 0.7
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: logs/model_training.log

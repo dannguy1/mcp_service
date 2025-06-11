@@ -17,6 +17,8 @@ import sys
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Any
+from pathlib import Path
+import argparse
 
 import psycopg2
 import yaml
@@ -25,6 +27,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 import asyncpg
+
+# Add backend directory to Python path
+backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
+sys.path.append(backend_path)
 
 # Configure logging
 logging.basicConfig(
@@ -261,14 +267,33 @@ class DataSourceVerifier:
 
 
 async def main():
-    """Main entry point for the verification script."""
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Verify data source connectivity and access")
-    parser.add_argument("--config", default="config/data_source_config.yaml", help="Path to configuration file")
-    parser.add_argument("--hours", type=int, default=24, help="Hours of data to verify")
-    parser.add_argument("--sample-size", type=int, default=1000, help="Sample size for performance testing")
+    parser = argparse.ArgumentParser(description='Verify data source connectivity and data availability')
+    parser.add_argument('--config', default='backend/app/config/data_source_config.yaml',
+                      help='Path to data source configuration file')
+    parser.add_argument('--days', type=int, default=7,
+                      help='Number of days to check for data')
+    parser.add_argument('--verbose', action='store_true',
+                      help='Enable verbose logging')
     args = parser.parse_args()
+
+    # Set up logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('data_source_verification.log'),
+            logging.StreamHandler()
+        ]
+    )
+    logger = logging.getLogger(__name__)
+
+    # Verify config file exists
+    config_path = Path(args.config)
+    if not config_path.exists():
+        logger.error(f"Configuration file not found: {config_path}")
+        logger.info("Please ensure the config file exists in backend/app/config/")
+        sys.exit(1)
 
     # Load configuration
     with open(args.config, "r") as f:

@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  ui-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:5000/api/ui
+    depends_on:
+      - ui-backend
+
+  ui-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./backend:/app
+      - ./backend/data:/app/data
+      - ./backend/models:/app/models
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_APP=app
+      - FLASK_DEBUG=1
+      - REDIS_URL=redis://redis:6379/0
+      - CORS_ORIGINS=http://localhost:3000
+      - SOCKETIO_MESSAGE_QUEUE=redis://localhost:6379/0
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6.2
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data: 

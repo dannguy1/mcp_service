@@ -1,0 +1,155 @@
+/* Layout Container */
+.layout-container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Top Navigation Bar */
+.top-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.menu-toggle {
+  padding: 0.5rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  background-color: transparent;
+  border: none;
+  border-radius: 0.25rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.menu-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.menu-toggle:focus {
+  box-shadow: none;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px !important;
+  background-color: #f8f9fa;
+  border-right: 1px solid #dee2e6;
+}
+
+.sidebar .offcanvas-header {
+  border-bottom: 1px solid #dee2e6;
+  padding: 1rem;
+}
+
+.sidebar .offcanvas-body {
+  padding: 1rem;
+}
+
+.sidebar .nav-link {
+  color: #495057;
+  padding: 0.75rem 1rem;
+  border-radius: 0.25rem;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s ease-in-out;
+}
+
+.sidebar .nav-link:hover {
+  background-color: #e9ecef;
+  color: #212529;
+}
+
+.sidebar .nav-link.active {
+  background-color: #0d6efd;
+  color: white;
+}
+
+.sidebar .nav-link svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding: 20px;
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 56px); /* Subtract navbar height */
+}
+
+/* Content Wrapper */
+.content-wrapper {
+  flex: 1;
+  display: flex;
+  position: relative;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 15px;
+  }
+  
+  .sidebar {
+    width: 100% !important;
+  }
+}
+
+/* Cards */
+.card {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border: none;
+  margin-bottom: 1.5rem;
+}
+
+.card-header {
+  background-color: #fff;
+  border-bottom: 1px solid #dee2e6;
+  font-weight: 500;
+}
+
+/* Tables */
+.table {
+  margin-bottom: 0;
+}
+
+.table td {
+  vertical-align: middle;
+}
+
+/* Forms */
+.form-control:focus,
+.form-select:focus {
+  border-color: #86b7fe;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Alerts */
+.alert {
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+/* Error Boundary */
+.error-boundary {
+  padding: 2rem;
+  text-align: center;
+}
+
+.error-boundary pre {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+} 

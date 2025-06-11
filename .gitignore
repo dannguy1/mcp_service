@@ -59,3 +59,24 @@ models/*.pth
 # System
 .DS_Store
 Thumbs.db 
+# Python
+__pycache__/
+*.py[cod]
+*.class
+venv/
+*.so
+
+# Logs and test results
+logs/
+test_results/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
