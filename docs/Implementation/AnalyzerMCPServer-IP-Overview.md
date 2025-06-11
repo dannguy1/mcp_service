@@ -317,46 +317,94 @@ For detailed implementation information, refer to the following documents:
 
 ```
 /mcp_service/
-├── mcp_service.py              # Main entrypoint
-├── data_service.py            # Data access layer
-├── config.py                  # Configuration management
-├── init_db.py                # Database initialization
-├── export_logs.py            # Log export for training
-├── train_model.py            # Model training
-├── deploy_model.py           # Model deployment
-├── requirements.txt          # Dependencies
-├── Dockerfile                # Container definition
-├── docker-compose.yml        # Service orchestration
-├── .env.example             # Sample environment file
-├── /agents/                  # Analysis agents
-│   ├── __init__.py
-│   ├── base_agent.py
-│   └── wifi_agent.py
-├── /components/             # Shared components
-│   ├── __init__.py
-│   ├── feature_extractor.py
-│   ├── model_manager.py
-│   └── anomaly_classifier.py
-├── /tests/                  # Test suite
-│   ├── __init__.py
-│   ├── unit/
-│   ├── integration/
-│   └── performance/
-├── /docs/                   # Documentation
-│   └── Implementation/      # Implementation docs
-└── /models/                 # Model storage (Docker volume)
+├── backend/                    # Backend service
+│   ├── app/                   # Flask application
+│   │   ├── __init__.py       # App initialization
+│   │   ├── api/              # API endpoints
+│   │   │   ├── __init__.py
+│   │   │   └── routes.py     # API route definitions
+│   │   └── config/           # Configuration
+│   │       ├── __init__.py
+│   │       └── config.py     # App configuration
+│   ├── models/               # ML models
+│   ├── tests/               # Backend tests
+│   ├── requirements.txt     # Python dependencies
+│   ├── requirements-dev.txt # Development dependencies
+│   ├── run_api.py          # API entry point
+│   ├── Dockerfile          # Production Dockerfile
+│   └── Dockerfile.dev      # Development Dockerfile
+│
+├── frontend/                 # React frontend
+│   ├── src/                # Source code
+│   │   ├── components/     # React components
+│   │   ├── services/      # API services
+│   │   ├── types/         # TypeScript types
+│   │   └── App.tsx        # Main app component
+│   ├── public/            # Static assets
+│   ├── package.json       # Node dependencies
+│   ├── vite.config.ts     # Vite configuration
+│   ├── Dockerfile         # Production Dockerfile
+│   └── Dockerfile.dev     # Development Dockerfile
+│
+├── docs/                    # Documentation
+│   └── Implementation/     # Implementation docs
+│
+├── scripts/                # Utility scripts
+│   ├── start_backend.sh   # Backend startup
+│   ├── start_frontend.sh  # Frontend startup
+│   ├── start_dev.sh       # Development startup
+│   └── start_redis.sh     # Redis startup
+│
+├── monitoring/             # Monitoring tools
+├── prometheus/            # Prometheus configuration
+├── logs/                  # Application logs
+├── systemd/              # Systemd service files
+├── docker-compose.yml    # Production compose
+├── docker-compose.dev.yml # Development compose
+└── README.md             # Project documentation
 ```
 
 ## Dependencies
 
 Key dependencies include:
-- asyncpg==0.27.0 (PostgreSQL async driver)
+
+**Backend:**
+- Flask==2.3.3 (Web framework)
+- Flask-CORS==4.0.0 (CORS support)
+- Flask-SocketIO==5.3.6 (WebSocket support)
 - redis==4.5.4 (Caching)
 - scikit-learn==1.0.2 (ML framework)
 - pandas==1.3.5 (Data processing)
-- aiohttp==3.8.1 (Async HTTP)
 - prometheus-client==0.17.0 (Metrics)
 - pytest==7.3.1 (Testing)
+
+**Frontend:**
+- React 18
+- TypeScript
+- Vite
+- React Query
+- Tailwind CSS
+- Socket.IO Client
+
+Key dependencies include:
+
+**Backend:**
+- Flask==2.3.3 (Web framework)
+- Flask-CORS==4.0.0 (CORS support)
+- Flask-SocketIO==5.3.6 (WebSocket support)
+- redis==4.5.4 (Caching)
+- scikit-learn==1.0.2 (ML framework)
+- pandas==1.3.5 (Data processing)
+- prometheus-client==0.17.0 (Metrics)
+- pytest==7.3.1 (Testing)
+
+**Frontend:**
+- React 18
+- TypeScript
+- Vite
+- React Query
+- Tailwind CSS
+- Socket.IO Client
 
 ## Next Steps
 

@@ -18,21 +18,36 @@
 
 ### Page Layout
 - Use a consistent layout structure across all pages
-- Main content should be wrapped in a `div` with appropriate padding
+- Main content should be wrapped in a `Container fluid` with `py-4` padding
 - Page title should be an `h2` element
 - Content sections should be organized in cards with proper spacing
 
 ```jsx
-<div>
-    <h2>Page Title</h2>
-    <Card className="mt-4">
-        <Card.Header className="bg-white text-dark">
-            <h5 className="mb-0">Section Title</h5>
-        </Card.Header>
-        <Card.Body>
-            {/* Content */}
-        </Card.Body>
-    </Card>
+<div className="d-flex flex-column min-vh-100">
+    {/* Top Bar */}
+    <Navbar bg="dark" variant="dark" className="px-3">
+        <Navbar.Brand>
+            <button className="btn btn-dark me-3" style={{ border: 'none' }}>
+                ☰
+            </button>
+            MCP Service
+        </Navbar.Brand>
+    </Navbar>
+
+    {/* Main Content */}
+    <div className="flex-grow-1">
+        <Container fluid className="py-4">
+            <h2>Page Title</h2>
+            <Card className="mt-4">
+                <Card.Header className="bg-white text-dark">
+                    <h5 className="mb-0">Section Title</h5>
+                </Card.Header>
+                <Card.Body>
+                    {/* Content */}
+                </Card.Body>
+            </Card>
+        </Container>
+    </div>
 </div>
 ```
 
@@ -40,6 +55,7 @@
 - Use `Container fluid` for full-width pages
 - Apply consistent padding with `py-4` class
 - Maintain consistent spacing between sections
+- Ensure proper flex layout with `d-flex flex-column min-vh-100`
 
 ## Typography
 
@@ -64,6 +80,7 @@
 - Danger: Bootstrap danger red
 - Warning: Bootstrap warning yellow
 - Info: Bootstrap info cyan
+- Dark: Bootstrap dark (for top bar and sidebar)
 
 ### Severity Colors
 - High Severity: `danger`
@@ -150,15 +167,48 @@
 
 ## Navigation
 
-### Sidebar
-- Use consistent navigation structure
-- Include icons for visual hierarchy
-- Maintain active state indicators
+### Top Bar
+- Dark theme with light text
+- Fixed at the top of the page
+- Contains hamburger menu and app title
+- Consistent padding with `px-3`
 
-### Back Navigation
-- Use "Back to List" buttons where appropriate
-- Position in top-right corner
-- Use `variant="outline-secondary"`
+### Sidebar
+- Implemented using React Bootstrap's `Offcanvas`
+- Dark theme with light text
+- Slides in from the left when hamburger is clicked
+- Contains navigation items with icons
+- Closes on menu item selection or manual close
+
+```jsx
+<Offcanvas show={show} onHide={handleClose} className="bg-dark text-light">
+    <Offcanvas.Header closeButton closeVariant="white">
+        <Offcanvas.Title>MCP Service</Offcanvas.Title>
+    </Offcanvas.Header>
+    <Offcanvas.Body>
+        <Nav className="flex-column">
+            {navItems.map((item) => (
+                <Nav.Link
+                    key={item.path}
+                    as={Link}
+                    to={item.path}
+                    className={`text-light mb-2 ${location.pathname === item.path ? "active" : ""}`}
+                    onClick={handleClose}
+                >
+                    <span className="me-2">{item.icon}</span>
+                    {item.label}
+                </Nav.Link>
+            ))}
+        </Nav>
+    </Offcanvas.Body>
+</Offcanvas>
+```
+
+### Navigation Items
+- Include icons for visual hierarchy
+- Use consistent spacing with `mb-2`
+- Show active state for current route
+- Close sidebar on selection
 
 ## Forms
 
