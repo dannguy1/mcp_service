@@ -31,4 +31,5 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 # Start the Flask development server
 echo "Starting backend development server..."
+cd "$(dirname "$0")/../backend"  # Ensure we're in the backend directory
 flask run --host=0.0.0.0 --port=5000

@@ -3,6 +3,9 @@ from datetime import datetime, timedelta
 import json
 import os
 import psutil
+from sqlalchemy import text
+from flask_sqlalchemy import SQLAlchemy
+from app.db import get_db_connection
 
 bp = Blueprint('api', __name__)
 
@@ -25,9 +28,132 @@ def get_recent_anomalies():
     return []
 
 def get_filtered_logs():
-    """Get filtered logs from PostgreSQL"""
-    # TODO: Implement actual database query
-    return []
+    """Get filtered logs from PostgreSQL with pagination"""
+    try:
+        # Get filter parameters
+        start_date = request.args.get('startDate')
+        end_date = request.args.get('endDate')
+        severity = request.args.get('severity')
+        program = request.args.get('program')
+        search = request.args.get('search')
+        
+        # Get pagination parameters
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 25))
+        offset = (page - 1) * per_page
+
+        print(f"Fetching logs with filters: start_date={start_date}, end_date={end_date}, severity={severity}, program={program}, page={page}, per_page={per_page}")
+
+        # Build the base query
+        query = """
+            SELECT 
+                id,
+                device_id,
+                device_ip,
+                timestamp,
+                log_level,
+                process_name,
+                message,
+                raw_message,
+                structured_data,
+                pushed_to_ai,
+                pushed_at,
+                push_attempts,
+                last_push_error
+            FROM log_entries
+            WHERE 1=1
+        """
+        count_query = "SELECT COUNT(*) FROM log_entries WHERE 1=1"
+        params = {}
+
+        # Add filters
+        if start_date:
+            query += " AND timestamp >= :start_date"
+            count_query += " AND timestamp >= :start_date"
+            params['start_date'] = start_date
+        if end_date:
+            query += " AND timestamp <= :end_date"
+            count_query += " AND timestamp <= :end_date"
+            params['end_date'] = end_date
+        if severity:
+            query += " AND log_level = :severity"
+            count_query += " AND log_level = :severity"
+            params['severity'] = severity
+        if program:
+            query += " AND process_name = :program"
+            count_query += " AND process_name = :program"
+            params['program'] = program
+        if search:
+            query += " AND (message ILIKE :search OR raw_message ILIKE :search)"
+            count_query += " AND (message ILIKE :search OR raw_message ILIKE :search)"
+            params['search'] = f'%{search}%'
+
+        # Add ordering and pagination
+        query += " ORDER BY timestamp DESC LIMIT :limit OFFSET :offset"
+        params['limit'] = per_page
+        params['offset'] = offset
+
+        print(f"Executing query: {query}")
+        print(f"With params: {params}")
+
+        # Execute queries
+        with get_db_connection() as conn:
+            # Get total count
+            total_count = conn.execute(text(count_query), params).scalar()
+            print(f"Total count: {total_count}")
+            
+            # Get paginated results
+            result = conn.execute(text(query), params)
+            logs = []
+            for row in result:
+                log_entry = {
+                    'id': row.id,
+                    'device_id': row.device_id,
+                    'device_ip': row.device_ip,
+                    'timestamp': row.timestamp.isoformat(),
+                    'level': row.log_level,
+                    'program': row.process_name,
+                    'message': row.message,
+                    'raw_message': row.raw_message,
+                    'structured_data': row.structured_data,
+                    'pushed_to_ai': row.pushed_to_ai,
+                    'pushed_at': row.pushed_at.isoformat() if row.pushed_at else None,
+                    'push_attempts': row.push_attempts,
+                    'last_push_error': row.last_push_error
+                }
+                logs.append(log_entry)
+
+        # Calculate pagination info
+        total_pages = (total_count + per_page - 1) // per_page
+        
+        response = {
+            'logs': logs,
+            'pagination': {
+                'total': total_count,
+                'per_page': per_page,
+                'current_page': page,
+                'total_pages': total_pages,
+                'has_next': page < total_pages,
+                'has_prev': page > 1
+            }
+        }
+        
+        print(f"Returning response with {len(logs)} logs")
+        print(f"Response structure: {response.keys()}")
+        return response
+    except Exception as e:
+        print(f"Error fetching logs: {str(e)}")
+        return {
+            'logs': [],
+            'pagination': {
+                'total': 0,
+                'per_page': per_page,
+                'current_page': page,
+                'total_pages': 0,
+                'has_next': False,
+                'has_prev': False
+            }
+        }
 
 def get_model_list():
     """Get list of available models"""
@@ -146,15 +272,24 @@ def get_dashboard_data():
 @bp.route('/logs')
 def get_logs():
     """Get filtered log entries"""
-    filters = request.args.to_dict()
-    return jsonify({
-        'logs': get_filtered_logs(),
-        'total': 0,
-        'filters': {
-            'severity': ['info', 'warning', 'error'],
-            'programs': ['hostapd', 'wpa_supplicant']
-        }
-    })
+    try:
+        logs = get_filtered_logs()
+        
+        # Get unique programs for filter options
+        with get_db_connection() as conn:
+            programs = conn.execute(text("SELECT DISTINCT process_name FROM log_entries WHERE process_name IS NOT NULL ORDER BY process_name")).fetchall()
+            programs = [p[0] for p in programs]
+
+        return jsonify({
+            'logs': logs,
+            'total': len(logs),
+            'filters': {
+                'severity': ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'],
+                'programs': programs
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @bp.route('/models')
 def get_models():

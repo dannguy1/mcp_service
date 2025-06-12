@@ -18,9 +18,11 @@ prometheus_client==0.19.0
 flask==3.0.2
 flask-cors==4.0.0
 flask-socketio==5.3.6
+flask-sqlalchemy==3.1.1
 pyyaml==6.0.2
 sqlalchemy==2.0.23
 pydantic==2.5.2
 python-jose==3.3.0
 passlib==1.7.4
 python-multipart==0.0.6
+psycopg2-binary==2.9.9
