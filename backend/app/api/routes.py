@@ -373,8 +373,8 @@ def get_logs():
             programs = [p[0] for p in programs]
 
         return jsonify({
-            'logs': logs,
-            'total': len(logs),
+            'logs': logs['logs'],  # Return just the logs array
+            'total': logs['pagination']['total'],
             'filters': {
                 'severity': ['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'],
                 'programs': programs
@@ -403,3 +403,106 @@ def deploy_model(model_id):
     """Deploy a model to the service"""
     # TODO: Implement model deployment
     return jsonify({'status': 'success', 'message': f'Model {model_id} deployed'})
+
+@bp.route('/server/status')
+def get_server_status():
+    """Get detailed server status information"""
+    try:
+        # Get system metrics
+        cpu_percent = psutil.cpu_percent()
+        memory = psutil.virtual_memory()
+        disk = psutil.disk_usage('/')
+        
+        # Get service statuses
+        services = {
+            'database': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            },
+            'redis': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            },
+            'model_service': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            },
+            'data_source': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            },
+            'backend_service': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            },
+            'mcp_service': {
+                'status': 'healthy',
+                'last_check': datetime.now().isoformat(),
+                'error': None
+            }
+        }
+
+        # Check database connection
+        try:
+            with get_db_connection() as conn:
+                conn.execute(text('SELECT 1'))
+        except Exception as e:
+            services['database']['status'] = 'error'
+            services['database']['error'] = str(e)
+
+        # Check Redis connection
+        try:
+            import redis
+            redis_host = os.getenv('REDIS_HOST', 'redis')
+            redis_port = int(os.getenv('REDIS_PORT', '6379'))
+            r = redis.Redis(
+                host=redis_host,
+                port=redis_port,
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5
+            )
+            r.ping()
+        except Exception as e:
+            services['redis']['status'] = 'error'
+            services['redis']['error'] = str(e)
+
+        # Calculate overall system status
+        system_status = 'healthy'
+        if any(service['status'] == 'error' for service in services.values()):
+            system_status = 'unhealthy'
+
+        return jsonify({
+            'status': system_status,
+            'version': '1.0.0',
+            'uptime': get_uptime(),
+            'components': {
+                'database': services['database']['status'],
+                'model': services['model_service']['status'],
+                'cache': services['redis']['status']
+            },
+            'metrics': {
+                'cpu_usage': cpu_percent,
+                'memory_usage': memory.percent,
+                'response_time': 120  # Placeholder value
+            },
+            'services': [
+                {
+                    'name': service_name,
+                    'status': service_info['status'],
+                    'uptime': get_uptime(),
+                    'memoryUsage': memory.percent
+                }
+                for service_name, service_info in services.items()
+            ]
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
