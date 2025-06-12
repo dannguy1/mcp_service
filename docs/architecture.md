@@ -201,7 +201,68 @@ sequenceDiagram
   );
   ```
 
-## 6. Configuration
+## 6. Status Variables
+
+The service uses Redis to maintain status information for all components. Each service's status is tracked using a consistent key pattern with the `mcp:` prefix.
+
+### Redis Status Keys
+```redis
+# Service Status Keys
+mcp:database:status          # Database connection status
+mcp:database:health          # Database health status
+mcp:database:error           # Last database error
+mcp:database:last_check      # Timestamp of last check
+
+mcp:model_service:status     # Model service status
+mcp:model_service:health     # Model service health
+mcp:model_service:error      # Last model service error
+mcp:model_service:last_check # Timestamp of last check
+
+mcp:backend:status          # Backend service status
+mcp:backend:health          # Backend service health
+mcp:backend:error           # Last backend error
+mcp:backend:last_check      # Timestamp of last check
+
+mcp:mcp_service:status      # MCP service status
+mcp:mcp_service:health      # MCP service health
+mcp:mcp_service:error       # Last MCP service error
+mcp:mcp_service:last_check  # Timestamp of last check
+
+mcp:data_source:status      # Data source status
+mcp:data_source:health      # Data source health
+mcp:data_source:error       # Last data source error
+mcp:data_source:last_check  # Timestamp of last check
+
+mcp:node_exporter:status    # Node exporter status
+mcp:node_exporter:health    # Node exporter health
+mcp:node_exporter:error     # Last node exporter error
+mcp:node_exporter:last_check # Timestamp of last check
+```
+
+### Status Values
+- **status**: Can be one of:
+  - `connected`: Service is connected and operational
+  - `disconnected`: Service is not connected
+  - `error`: Service encountered an error
+
+- **health**: Boolean value indicating if the service is healthy
+  - `true`: Service is healthy
+  - `false`: Service is unhealthy
+
+- **error**: String containing the last error message or `null` if no error
+
+- **last_check**: ISO 8601 timestamp of the last status check
+
+### Status Management
+- Each service updates its own status in Redis
+- Status checks occur every 10 seconds
+- Health checks include:
+  - Database connectivity
+  - Redis connectivity
+  - Service-specific health metrics
+  - Resource usage (CPU, memory)
+
+## 7. Configuration
 
 ### Environment Variables
 ```ini
@@ -232,7 +293,7 @@ LOG_LEVEL=INFO
 ANALYSIS_INTERVAL=300
 ```
 
-## 7. Deployment
+## 8. Deployment
 
 ### Docker Configuration
 ```yaml

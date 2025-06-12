@@ -4,24 +4,35 @@ from typing import Dict, Any
 class Config:
     def __init__(self):
         # Database Configuration (PostgreSQL - Read Only)
-        self.DB_HOST = os.getenv('DB_HOST', '192.168.10.14')
-        self.DB_PORT = int(os.getenv('DB_PORT', '5432'))
-        self.DB_NAME = os.getenv('DB_NAME', 'netmonitor_db')
-        self.DB_USER = os.getenv('DB_USER', 'netmonitor_user')
-        self.DB_PASSWORD = os.getenv('DB_PASSWORD', 'netmonitor_password')
+        self.db = {
+            'host': os.getenv('DB_HOST', '192.168.10.14'),
+            'port': int(os.getenv('DB_PORT', '5432')),
+            'database': os.getenv('DB_NAME', 'netmonitor_db'),
+            'user': os.getenv('DB_USER', 'netmonitor_user'),
+            'password': os.getenv('DB_PASSWORD', 'netmonitor_password'),
+            'min_connections': int(os.getenv('DB_MIN_CONNECTIONS', '5')),
+            'max_connections': int(os.getenv('DB_MAX_CONNECTIONS', '20')),
+            'pool_timeout': int(os.getenv('DB_POOL_TIMEOUT', '30'))
+        }
 
         # SQLite Configuration
-        self.SQLITE_DB_PATH = os.getenv('SQLITE_DB_PATH', '/app/data/mcp_anomalies.db')
-        self.SQLITE_JOURNAL_MODE = os.getenv('SQLITE_JOURNAL_MODE', 'WAL')
-        self.SQLITE_SYNCHRONOUS = os.getenv('SQLITE_SYNCHRONOUS', 'NORMAL')
-        self.SQLITE_CACHE_SIZE = os.getenv('SQLITE_CACHE_SIZE', '-2000')
-        self.SQLITE_TEMP_STORE = os.getenv('SQLITE_TEMP_STORE', 'MEMORY')
-        self.SQLITE_MMAP_SIZE = os.getenv('SQLITE_MMAP_SIZE', '30000000000')
+        self.sqlite = {
+            'db_path': os.getenv('SQLITE_DB_PATH', '/app/data/mcp_anomalies.db'),
+            'journal_mode': os.getenv('SQLITE_JOURNAL_MODE', 'WAL'),
+            'synchronous': os.getenv('SQLITE_SYNCHRONOUS', 'NORMAL'),
+            'cache_size': int(os.getenv('SQLITE_CACHE_SIZE', '-2000')),
+            'temp_store': os.getenv('SQLITE_TEMP_STORE', 'MEMORY'),
+            'mmap_size': int(os.getenv('SQLITE_MMAP_SIZE', '30000000000'))
+        }
 
         # Redis Configuration
-        self.REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
-        self.REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
-        self.REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+        self.redis = {
+            'host': os.getenv('REDIS_HOST', 'redis'),
+            'port': int(os.getenv('REDIS_PORT', '6379')),
+            'db': int(os.getenv('REDIS_DB', '0')),
+            'max_connections': int(os.getenv('REDIS_MAX_CONNECTIONS', '10')),
+            'socket_timeout': int(os.getenv('REDIS_SOCKET_TIMEOUT', '5'))
+        }
 
         # Service Configuration
         self.SERVICE_HOST = os.getenv('SERVICE_HOST', '0.0.0.0')
@@ -30,40 +41,26 @@ class Config:
         self.ANALYSIS_INTERVAL = int(os.getenv('ANALYSIS_INTERVAL', '300'))
 
         # SocketIO Configuration
-        self.SOCKETIO_MESSAGE_QUEUE = os.getenv('SOCKETIO_MESSAGE_QUEUE', f'redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}')
+        self.SOCKETIO_MESSAGE_QUEUE = os.getenv('SOCKETIO_MESSAGE_QUEUE', f'redis://{self.redis["host"]}:{self.redis["port"]}/{self.redis["db"]}')
         self.API_PREFIX = os.getenv('API_PREFIX', '/api/v1')
 
-    def get_db_config(self) -> Dict[str, Any]:
-        """Get PostgreSQL database configuration."""
-        return {
-            'host': self.DB_HOST,
-            'port': self.DB_PORT,
-            'database': self.DB_NAME,
-            'user': self.DB_USER,
-            'password': self.DB_PASSWORD
-        }
-
-    def get_redis_config(self) -> Dict[str, Any]:
-        """Get Redis configuration."""
-        return {
-            'host': self.REDIS_HOST,
-            'port': self.REDIS_PORT,
-            'db': self.REDIS_DB
+        # Log columns configuration
+        self.log_columns = {
+            'id': 'id',
+            'timestamp': 'timestamp',
+            'device_id': 'device_id',
+            'program': 'program',
+            'message': 'message',
+            'severity': 'severity',
+            'source': 'source'
         }
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for logging/debugging."""
         return {
-            'db': self.get_db_config(),
-            'sqlite': {
-                'db_path': self.SQLITE_DB_PATH,
-                'journal_mode': self.SQLITE_JOURNAL_MODE,
-                'synchronous': self.SQLITE_SYNCHRONOUS,
-                'cache_size': self.SQLITE_CACHE_SIZE,
-                'temp_store': self.SQLITE_TEMP_STORE,
-                'mmap_size': self.SQLITE_MMAP_SIZE
-            },
-            'redis': self.get_redis_config(),
+            'db': self.db,
+            'sqlite': self.sqlite,
+            'redis': self.redis,
             'service': {
                 'host': self.SERVICE_HOST,
                 'port': self.SERVICE_PORT,
@@ -72,5 +69,5 @@ class Config:
             }
         }
 
-# Create a singleton settings instance
-settings = Config() 
+# Create a singleton config instance
+config = Config() 

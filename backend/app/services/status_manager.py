@@ -14,25 +14,19 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 class ServiceStatusManager:
-    def __init__(self, service_name):
+    def __init__(self, service_name, redis_client):
         self.service_name = service_name
-        # Use the same Redis configuration as mcp-service
-        redis_host = os.getenv('REDIS_HOST', 'localhost')
-        redis_port = int(os.getenv('REDIS_PORT', '6379'))
-        
-        # Initialize Redis client without password
-        self.redis_client = redis.Redis(
-            host=redis_host,
-            port=redis_port,
-            decode_responses=True
-        )
-        
-        # Service-specific keys
-        self.status_key = f'service:{service_name}:status'
-        self.error_key = f'service:{service_name}:error'
-        self.last_check_key = f'service:{service_name}:last_check'
-        self.health_key = f'service:{service_name}:health'
-        self.start_time_key = f'service:{service_name}:start_time'
+        self.redis_client = redis_client
+        self.prefix = self._get_service_prefix(service_name)
+        self.status_key = f'mcp:{service_name}:status'
+        self.health_key = f'mcp:{service_name}:health'
+        self.error_key = f'mcp:{service_name}:error'
+        self.last_check_key = f'mcp:{service_name}:last_check'
+        self.data_source_status_key = f'mcp:data_source:status'
+        self.data_source_health_key = f'mcp:data_source:health'
+        self.data_source_error_key = f'mcp:data_source:error'
+        self.data_source_last_check_key = f'mcp:data_source:last_check'
+        self.start_time_key = f'mcp:{service_name}:start_time'
         self._stop_event = threading.Event()
         self._thread = None
         
@@ -40,6 +34,17 @@ class ServiceStatusManager:
         self._test_redis_connection()
         # Set initial start time
         self._set_start_time()
+
+    def _get_service_prefix(self, service_name):
+        """Get the appropriate prefix for a service name"""
+        prefix_map = {
+            'model_service': 'model',
+            'data_source': 'mcp',
+            'backend': 'backend',
+            'mcp_service': 'mcp',
+            'node_exporter': 'node'
+        }
+        return prefix_map.get(service_name, service_name)
 
     def _set_start_time(self):
         """Set the service start time"""
@@ -68,13 +73,14 @@ class ServiceStatusManager:
             status = 'connected' if is_connected else 'error'
             self.redis_client.set(self.status_key, status)
             self.redis_client.set(self.last_check_key, datetime.now().isoformat())
-            logger.debug(f"Updated Redis status to {status}")
+            logger.debug(f"Updated Redis status to {status} for {self.service_name}")
         except Exception as e:
-            logger.error(f"Failed to update Redis status: {str(e)}")
+            logger.error(f"Failed to update Redis status for {self.service_name}: {str(e)}")
 
     def update_status(self, status, error=None):
         """Update service status in Redis"""
         try:
+            logger.debug(f"Updating status for {self.service_name} to {status}")
             self.redis_client.set(self.status_key, status)
             if error:
                 self.redis_client.set(self.error_key, str(error))
@@ -85,7 +91,7 @@ class ServiceStatusManager:
         except Exception as e:
             logger.error(f"Failed to update status for {self.service_name}: {str(e)}")
 
-    def start_status_updates(self, health_check_func, interval=30):
+    def start_status_updates(self, health_check_func, interval=10):
         """Start periodic status updates in a background thread"""
         def update_loop():
             while not self._stop_event.is_set():
@@ -107,7 +113,7 @@ class ServiceStatusManager:
 
         self._thread = threading.Thread(target=update_loop, daemon=True)
         self._thread.start()
-        logger.info(f"Started status updates for {self.service_name}")
+        logger.info(f"Started status updates for {self.service_name} with interval={interval}s")
 
     def _update_health(self, is_healthy):
         """Update service health status"""
@@ -170,12 +176,12 @@ class ServiceStatusManager:
             redis_host = os.getenv('REDIS_HOST', 'localhost')
             redis_port = int(os.getenv('REDIS_PORT', '6379'))
             r = redis.Redis(host=redis_host, port=redis_port, decode_responses=True)
-            service_keys = r.keys('service:*:status')
+            service_keys = r.keys('mcp:*:status')
             services = []
             
             for key in service_keys:
                 service_name = key.split(':')[1]
-                status_manager = ServiceStatusManager(service_name)
+                status_manager = ServiceStatusManager(service_name, r)
                 services.append(status_manager.get_current_status())
             
             return services

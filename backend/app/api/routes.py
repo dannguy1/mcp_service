@@ -37,6 +37,11 @@ def get_system_status():
             'status': 'disconnected',
             'last_check': datetime.now().isoformat(),
             'error': None
+        },
+        'mcp_service': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
         }
     }
     
@@ -52,18 +57,25 @@ def get_system_status():
     # Check Redis connection and get service statuses
     try:
         import redis
-        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-        r = redis.from_url(redis_url, decode_responses=True)
+        redis_host = os.getenv('REDIS_HOST', 'redis')
+        redis_port = int(os.getenv('REDIS_PORT', '6379'))
+        r = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            decode_responses=True,
+            socket_timeout=5,
+            socket_connect_timeout=5
+        )
         
         # Test Redis connection
         r.ping()
         services['redis']['status'] = 'connected'
         
         # Get service statuses from Redis
-        for service in ['model_service', 'data_source', 'backend']:
-            status_key = f'service:{service}:status'
-            error_key = f'service:{service}:error'
-            last_check_key = f'service:{service}:last_check'
+        for service in ['model_service', 'data_source', 'backend', 'mcp_service', 'database']:
+            status_key = f'mcp:{service}:status'
+            error_key = f'mcp:{service}:error'
+            last_check_key = f'mcp:{service}:last_check'
             
             status = r.get(status_key)
             if status:
