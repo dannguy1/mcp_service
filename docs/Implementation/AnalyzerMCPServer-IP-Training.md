@@ -2,288 +2,273 @@
 
 ## Overview
 
-This document details the implementation of the model training and deployment process for the AnalyzerMCPServer, including log export, model training, and deployment mechanisms.
+This document details the implementation of the model training and deployment process for the AnalyzerMCPServer, optimized for resource-constrained environments like a Raspberry Pi. The focus is on model training, deployment, and monitoring for the AI processing service.
 
-## 1. Log Export Implementation
+### Workflow Overview
 
-### 1.1 Export Script (`export_logs.py`)
+1. **Model Training**: Process data to train a new model and generate metadata
+2. **Model Deployment**: Transfer trained model files to the AI processing service
+3. **Model Loading**: Detect and load the new model for inference
+4. **Model Monitoring**: Track model performance and resource usage
 
-```python
-import asyncio
-import asyncpg
-import pandas as pd
-import logging
-from datetime import datetime, timedelta
-from config import Config
+## 1. Model Training Implementation
 
-async def export_logs(config: Config, output_file: str, days: int = 30):
-    """Export logs from database to CSV file."""
-    try:
-        # Connect to database
-        conn = await asyncpg.connect(
-            host=config.db.host,
-            port=config.db.port,
-            user=config.db.user,
-            password=config.db.password,
-            database=config.db.database
-        )
-        
-        # Calculate time range
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=days)
-        
-        # Query logs
-        rows = await conn.fetch('''
-            SELECT * FROM wifi_logs 
-            WHERE timestamp BETWEEN $1 AND $2
-            ORDER BY timestamp
-        ''', start_time, end_time)
-        
-        # Convert to DataFrame
-        df = pd.DataFrame([dict(row) for row in rows])
-        
-        # Save to CSV
-        df.to_csv(output_file, index=False)
-        logging.info(f"Exported {len(df)} logs to {output_file}")
-        
-        await conn.close()
-        
-    except Exception as e:
-        logging.error(f"Failed to export logs: {str(e)}")
-        raise
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    config = Config()
-    asyncio.run(export_logs(config, 'wifi_logs.csv'))
-```
-
-## 2. Model Training Implementation
-
-### 2.1 Training Script (`train_model.py`)
+### 1.1 Model Trainer (`ModelTrainer` class)
 
 ```python
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
-import joblib
-import json
-import logging
+from app.models.training import ModelTrainer
+from app.models.config import ModelConfig
 from datetime import datetime
-from components.feature_extractor import WiFiFeatureExtractor
+from typing import Optional
+import logging
 
-def train_model(input_file: str, output_dir: str):
+async def train_model(config_path: str, start_date: Optional[datetime] = None,
+                     end_date: Optional[datetime] = None):
     """Train WiFi anomaly detection model."""
     try:
-        # Load data
-        df = pd.read_csv(input_file)
-        logging.info(f"Loaded {len(df)} records from {input_file}")
+        # Load configuration
+        model_config = ModelConfig.from_yaml(config_path)
         
-        # Extract features
-        feature_extractor = WiFiFeatureExtractor()
-        features = []
-        
-        # Process in 5-minute windows
-        window_size = pd.Timedelta(minutes=5)
-        for start_time in pd.date_range(
-            df['timestamp'].min(),
-            df['timestamp'].max(),
-            freq=window_size
-        ):
-            end_time = start_time + window_size
-            window_logs = df[
-                (df['timestamp'] >= start_time) &
-                (df['timestamp'] < end_time)
-            ]
-            
-            if len(window_logs) > 0:
-                window_features = feature_extractor.extract_features(
-                    window_logs.to_dict('records')
-                )
-                features.append(window_features)
-        
-        # Convert to DataFrame
-        features_df = pd.DataFrame(features)
-        
-        # Scale features
-        scaler = StandardScaler()
-        scaled_features = scaler.fit_transform(features_df)
+        # Initialize trainer
+        trainer = ModelTrainer(model_config)
         
         # Train model
-        model = IsolationForest(
-            n_estimators=100,
-            contamination=0.1,
-            random_state=42
-        )
-        model.fit(scaled_features)
-        
-        # Save model and scaler
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        model_path = f"{output_dir}/wifi_model_{timestamp}.joblib"
-        scaler_path = f"{output_dir}/wifi_scaler_{timestamp}.joblib"
-        
-        joblib.dump(model, model_path)
-        joblib.dump(scaler, scaler_path)
-        
-        # Save metadata
-        metadata = {
-            'timestamp': timestamp,
-            'n_samples': len(features_df),
-            'feature_means': features_df.mean().to_dict(),
-            'feature_stds': features_df.std().to_dict(),
-            'model_params': model.get_params()
-        }
-        
-        metadata_path = f"{output_dir}/wifi_metadata_{timestamp}.json"
-        with open(metadata_path, 'w') as f:
-            json.dump(metadata, f, indent=2)
+        model_path = await trainer.train_and_save(start_date, end_date)
         
         logging.info(f"Model saved to {model_path}")
-        logging.info(f"Scaler saved to {scaler_path}")
-        logging.info(f"Metadata saved to {metadata_path}")
+        return model_path
         
     except Exception as e:
         logging.error(f"Failed to train model: {str(e)}")
         raise
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    train_model('wifi_logs.csv', 'models')
 ```
 
-## 3. Model Deployment Implementation
+#### Key Features
+- Loads configuration from a YAML file
+- Supports optional date ranges for data selection
+- Trains an Isolation Forest model with specified hyperparameters
+- Handles training failures gracefully
+- Optimizes for resource-constrained environments
 
-### 3.1 Deployment Script (`deploy_model.py`)
+#### Implementation Notes
+- Ensure robust configuration loading with error handling
+- Default to the last 30 days of data if dates are unspecified
+- Use specific exception handling (e.g., `ValueError` for config issues, `RuntimeError` for training failures)
+- Implement memory-efficient training for Raspberry Pi
+
+### 1.2 Model Configuration (`ModelConfig` class)
+
+```yaml
+# model_config.yaml
+version: '1.0.0'
+model:
+  type: isolation_forest
+  hyperparameters:
+    n_estimators: 100
+    max_samples: auto
+    contamination: 0.1
+    random_state: 42
+features:
+  numeric:
+    - signal_strength
+    - connection_time
+    - packet_loss
+  categorical:
+    - device_type
+    - connection_type
+  temporal:
+    - hour_of_day
+    - day_of_week
+training:
+  test_size: 0.2
+  validation_size: 0.1
+  random_state: 42
+  n_jobs: -1
+storage:
+  directory: models
+  version_format: '%Y%m%d_%H%M%S'
+  keep_last_n_versions: 5
+evaluation:
+  metrics:
+    - accuracy
+    - precision
+    - recall
+    - f1_score
+  thresholds:
+    accuracy: 0.8
+    precision: 0.7
+    recall: 0.7
+    f1_score: 0.7
+logging:
+  level: INFO
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  file: logs/model_training.log
+```
+
+#### Implementation Notes
+- Validate feature types in the `FeatureExtractor` class
+- Ensure the storage directory is compatible with Docker volumes
+- Calculate evaluation metrics during validation and compare against thresholds
+- Support version control for model artifacts
+
+## 2. Model Deployment Implementation
+
+### 2.1 Model Loader (`ModelLoader` class)
 
 ```python
-import os
-import paramiko
+from app.models.model_loader import ModelLoader
+from app.models.config import ModelConfig
 import logging
-from config import Config
 
-def deploy_model(config: Config, model_dir: str):
-    """Deploy model to remote server."""
+async def deploy_model(config_path: str):
+    """Deploy model to production."""
     try:
-        # Validate input files
-        model_files = [f for f in os.listdir(model_dir) if f.endswith('.joblib')]
-        metadata_files = [f for f in os.listdir(model_dir) if f.endswith('.json')]
+        # Load configuration
+        model_config = ModelConfig.from_yaml(config_path)
         
-        if not model_files or not metadata_files:
-            raise ValueError("No model or metadata files found")
+        # Initialize model loader
+        model_loader = ModelLoader(model_config)
         
-        # Get latest files
-        latest_model = max(model_files)
-        latest_metadata = max(metadata_files)
-        
-        # Connect to SFTP server
-        transport = paramiko.Transport((config.sftp.host, config.sftp.port))
-        transport.connect(
-            username=config.sftp.user,
-            password=config.sftp.password
-        )
-        sftp = paramiko.SFTPClient.from_transport(transport)
-        
-        # Upload files
-        remote_model_path = f"{config.sftp.remote_path}/{latest_model}"
-        remote_metadata_path = f"{config.sftp.remote_path}/{latest_metadata}"
-        
-        sftp.put(
-            os.path.join(model_dir, latest_model),
-            remote_model_path
-        )
-        sftp.put(
-            os.path.join(model_dir, latest_metadata),
-            remote_metadata_path
-        )
-        
-        # Update symlinks
-        ssh = transport.open_session()
-        ssh.exec_command(f"""
-            cd {config.sftp.remote_path} && \
-            ln -sf {latest_model} wifi_model.joblib && \
-            ln -sf {latest_metadata} wifi_metadata.json
-        """)
-        
-        sftp.close()
-        transport.close()
-        
-        logging.info(f"Deployed model {latest_model} to {config.sftp.host}")
-        
+        # Load latest model
+        model_path = model_config.get_model_path()
+        if await model_loader.load_model(model_path):
+            logging.info(f"Model loaded successfully from {model_path}")
+            return True
+        else:
+            logging.error("Failed to load model")
+            return False
+            
     except Exception as e:
         logging.error(f"Failed to deploy model: {str(e)}")
         raise
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    config = Config()
-    deploy_model(config, 'models')
 ```
+
+#### Key Features
+- Loads the latest model based on configuration
+- Returns `False` on failure with detailed logging
+- Supports model versioning
+- Handles deployment failures gracefully
+
+#### Implementation Notes
+- Implement `get_model_path` to fetch the latest or specified model version
+- Consider adding a retry mechanism or fallback to a previous model version
+- Make loading asynchronous to handle I/O efficiently
+- Optimize model loading for Raspberry Pi's limited resources
+
+## 3. Model Monitoring
+
+### 3.1 Model Monitor (`ModelMonitor` class)
+
+```python
+from app.models.monitoring import ModelMonitor
+import logging
+
+async def monitor_model():
+    """Monitor model performance."""
+    try:
+        # Initialize monitor
+        monitor = ModelMonitor()
+        await monitor.initialize()
+        
+        # Update metrics
+        await monitor.update_metrics(
+            predictions=predictions,
+            scores=scores,
+            features=features,
+            latency=latency
+        )
+        
+    except Exception as e:
+        logging.error(f"Failed to monitor model: {str(e)}")
+        raise
+```
+
+#### Key Features
+- Updates metrics (e.g., predictions, scores, latency)
+- Monitors data drift and resource usage
+- Tracks model performance in real-time
+- Optimizes monitoring for resource-constrained environments
+
+#### Implementation Notes
+- Collect inference data (`predictions`, `scores`, `features`, `latency`) from the service
+- Implement lightweight statistical tests for data drift detection
+- Optimize monitoring to minimize resource impact on the Raspberry Pi
+- Use efficient data structures for metric storage
 
 ## 4. Training Pipeline
 
 ### 4.1 Training Workflow
 
-1. **Data Collection**
-   - Export logs from production database
-   - Filter and preprocess data
-   - Split into training and validation sets
-
-2. **Feature Engineering**
-   - Extract features using `WiFiFeatureExtractor`
+1. **Feature Engineering**
+   - Extract features using `FeatureExtractor`
    - Scale features using `StandardScaler`
    - Handle missing values and outliers
 
-3. **Model Training**
+2. **Model Training**
    - Train `IsolationForest` model
    - Tune hyperparameters
    - Validate model performance
 
-4. **Model Deployment**
+3. **Model Deployment**
    - Save model artifacts
    - Generate metadata
    - Deploy to production server
 
-### 4.2 Training Script (`train_pipeline.py`)
+#### Implementation Notes
+- Split data using `test_size` and `validation_size` from the config
+- Use `StandardScaler` for feature scaling, applied consistently during inference
+- Handle missing values (e.g., imputation with mean/median) and outliers (e.g., clipping)
+- Optimize memory usage during training
+
+### 4.2 Training Script (`train_model.py`)
 
 ```python
+#!/usr/bin/env python3
+import os
+import sys
+import yaml
 import logging
+import argparse
+from pathlib import Path
 from datetime import datetime
-from config import Config
-from export_logs import export_logs
-from train_model import train_model
-from deploy_model import deploy_model
+from dotenv import load_dotenv
 
-def run_training_pipeline(config: Config):
-    """Run complete training pipeline."""
+from models.training import ModelTrainer
+from models.config import ModelConfig
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train an AI model for AnalyzerMCPServer")
+    parser.add_argument("--config", type=str, required=True, help="Path to YAML config file")
+    parser.add_argument("--start-date", type=str, help="Start date (YYYY-MM-DD)")
+    parser.add_argument("--end-date", type=str, help="End date (YYYY-MM-DD)")
+    return parser.parse_args()
+
+def setup_environment():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logger = logging.getLogger(__name__)
+    return logger
+
+async def main():
+    args = parse_args()
+    logger = setup_environment()
+
     try:
-        # Create output directory
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        output_dir = f"training_{timestamp}"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Export logs
-        log_file = f"{output_dir}/wifi_logs.csv"
-        export_logs(config, log_file)
-        
-        # Train model
-        model_dir = f"{output_dir}/models"
-        os.makedirs(model_dir, exist_ok=True)
-        train_model(log_file, model_dir)
-        
-        # Deploy model
-        deploy_model(config, model_dir)
-        
-        logging.info("Training pipeline completed successfully")
-        
-    except Exception as e:
-        logging.error(f"Training pipeline failed: {str(e)}")
-        raise
+        config = ModelConfig.from_yaml(args.config)
+        start_date = datetime.strptime(args.start_date, "%Y-%m-%d") if args.start_date else None
+        end_date = datetime.strptime(args.end_date, "%Y-%m-%d") if args.end_date else None
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    config = Config()
-    run_training_pipeline(config)
+        trainer = ModelTrainer(config)
+        await trainer.train_model(start_date=start_date, end_date=end_date)
+        logger.info("Model training completed successfully")
+    except ValueError as ve:
+        logger.error(f"Configuration or date parsing error: {ve}")
+    except RuntimeError as re:
+        logger.error(f"Training failed: {re}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## 5. Model Monitoring
@@ -309,61 +294,31 @@ if __name__ == '__main__':
 ### 5.2 Monitoring Script (`monitor_model.py`)
 
 ```python
-import pandas as pd
-import numpy as np
-from sklearn.metrics import roc_auc_score
 import logging
 from datetime import datetime, timedelta
-from config import Config
-from components.feature_extractor import WiFiFeatureExtractor
-from components.model_manager import WiFiModelManager
+from app.models.monitoring import ModelMonitor
+from app.models.config import ModelConfig
+import asyncio
 
-async def monitor_model_performance(config: Config):
+async def monitor_model_performance(config_path: str):
     """Monitor model performance."""
     try:
-        # Get recent logs
-        end_time = datetime.now()
-        start_time = end_time - timedelta(days=7)
+        # Load configuration
+        model_config = ModelConfig.from_yaml(config_path)
         
-        logs = await config.data_service.get_logs(
-            start_time.isoformat(),
-            end_time.isoformat()
+        # Initialize monitor
+        monitor = ModelMonitor()
+        await monitor.initialize()
+        
+        # Update metrics
+        await monitor.update_metrics(
+            predictions=predictions,
+            scores=scores,
+            features=features,
+            latency=latency
         )
         
-        if not logs:
-            return
-        
-        # Extract features
-        feature_extractor = WiFiFeatureExtractor()
-        features = feature_extractor.extract_features(logs)
-        
-        # Load model
-        model_manager = WiFiModelManager(config.sftp.remote_path)
-        await model_manager.start()
-        
-        # Make predictions
-        predictions = model_manager.predict(features)
-        
-        # Calculate metrics
-        metrics = {
-            'timestamp': datetime.now().isoformat(),
-            'n_samples': len(logs),
-            'anomaly_rate': np.mean(predictions < -0.5),
-            'feature_stats': {
-                name: {
-                    'mean': np.mean(values),
-                    'std': np.std(values)
-                }
-                for name, values in features.items()
-            }
-        }
-        
-        # Save metrics
-        metrics_file = f"model_metrics_{datetime.now().strftime('%Y%m%d')}.json"
-        with open(metrics_file, 'w') as f:
-            json.dump(metrics, f, indent=2)
-        
-        logging.info(f"Model metrics saved to {metrics_file}")
+        logging.info("Model monitoring completed successfully")
         
     except Exception as e:
         logging.error(f"Failed to monitor model: {str(e)}")
@@ -371,12 +326,37 @@ async def monitor_model_performance(config: Config):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    config = Config()
-    asyncio.run(monitor_model_performance(config))
+    asyncio.run(monitor_model_performance('app/config/model_config.yaml'))
 ```
+
+## Implementation Recommendations
+
+1. **Resource Optimization**
+   - Limit memory usage during training
+   - Use efficient data structures
+   - Implement batch processing
+   - Optimize for Raspberry Pi's constraints
+
+2. **Error Handling**
+   - Implement specific exception handling
+   - Add retry mechanisms for critical operations
+   - Log detailed error information
+   - Provide fallback options
+
+3. **Testing**
+   - Unit test each component
+   - Integration test the pipeline
+   - Performance test on target hardware
+   - Validate resource usage
+
+4. **Documentation**
+   - Document configuration options
+   - Provide usage examples
+   - Include troubleshooting guide
+   - Document performance characteristics
 
 ## Next Steps
 
 1. Review the [Testing Implementation](AnalyzerMCPServer-IP-Testing.md) for testing procedures
 2. Check the [Deployment Guide](AnalyzerMCPServer-IP-Deployment.md) for setup instructions
-3. Follow the [Documentation Guide](AnalyzerMCPServer-IP-Docs.md) for documentation templates 
+3. Follow the [Documentation Guide](AnalyzerMCPServer-IP-Docs.md) for documentation templates
