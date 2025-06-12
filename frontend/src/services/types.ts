@@ -8,6 +8,38 @@ export interface SystemStatus {
     memory_usage: number;
     response_time: number;
   };
+  connections: {
+    mcp_service: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+    backend_service: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+    data_source: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+    database: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+    model_service: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+    redis: {
+      status: 'connected' | 'disconnected' | 'error';
+      last_check: string;
+      error?: string;
+    };
+  };
 }
 
 export interface ServerStats {

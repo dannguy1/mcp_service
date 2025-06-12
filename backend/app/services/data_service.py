@@ -5,6 +5,9 @@ import logging
 import json
 from tenacity import retry, wait_fixed, stop_after_attempt
 from datetime import datetime
+from .status_manager import ServiceStatusManager
+
+logger = logging.getLogger(__name__)
 
 class DataService:
     def __init__(self, config):
@@ -15,7 +18,7 @@ class DataService:
         self.pool = None
         self.redis = None
         self.sqlite_conn = None
-        self.logger = logging.getLogger("DataService")
+        self.status_manager = ServiceStatusManager('data_source')
 
     async def start(self):
         try:
@@ -34,9 +37,13 @@ class DataService:
             
             # Start Redis
             self.redis = redis.Redis(**self.redis_config)
-            self.logger.info("Initialized PostgreSQL, SQLite, and Redis connections")
+            
+            # Start status updates
+            self.status_manager.start_status_updates(self.check_health)
+            logger.info("Initialized PostgreSQL, SQLite, and Redis connections")
         except Exception as e:
-            self.logger.error(f"Failed to start DataService: {e}")
+            logger.error(f"Failed to start DataService: {e}")
+            self.status_manager.update_status('error', str(e))
             raise
 
     async def stop(self):
@@ -47,16 +54,18 @@ class DataService:
                 await self.sqlite_conn.close()
             if self.redis:
                 await self.redis.close()
-            self.logger.info("Closed all database and Redis connections")
+            self.status_manager.stop_status_updates()
+            logger.info("Closed all database and Redis connections")
         except Exception as e:
-            self.logger.error(f"Failed to stop DataService cleanly: {e}")
+            logger.error(f"Failed to stop DataService cleanly: {e}")
+            raise
 
     @retry(stop=stop_after_attempt(3), wait=wait_fixed(5))
     async def get_logs_by_program(self, start_time, end_time, programs, device_id=None):
         cache_key = f"get_logs_by_program:{start_time}:{end_time}:{programs}:{device_id}"
         cached = await self.redis.get(cache_key)
         if cached:
-            self.logger.info(f"Cache hit for {cache_key}")
+            logger.info(f"Cache hit for {cache_key}")
             return json.loads(cached)
 
         async with self.pool.acquire() as conn:
@@ -74,7 +83,7 @@ class DataService:
             logs = await conn.fetch(query, *params)
             logs = [dict(record) for record in logs]
             await self.redis.setex(cache_key, 300, json.dumps(logs))
-            self.logger.info(f"Retrieved {len(logs)} logs")
+            logger.info(f"Retrieved {len(logs)} logs")
             return logs
 
     async def store_anomaly(self, anomaly):
@@ -99,9 +108,9 @@ class DataService:
                 )
             )
             await self.sqlite_conn.commit()
-            self.logger.info(f"Stored anomaly for agent {anomaly.get('agent_name')}")
+            logger.info(f"Stored anomaly for agent {anomaly.get('agent_name')}")
         except Exception as e:
-            self.logger.error(f"Failed to store anomaly to SQLite: {e}")
+            logger.error(f"Failed to store anomaly to SQLite: {e}")
             raise
 
     async def get_anomalies(self, limit=100, offset=0, agent_name=None, status=None, resolution_status=None):
@@ -143,7 +152,7 @@ class DataService:
 
             return anomalies
         except Exception as e:
-            self.logger.error(f"Failed to retrieve anomalies from SQLite: {e}")
+            logger.error(f"Failed to retrieve anomalies from SQLite: {e}")
             return []
 
     async def update_anomaly_status(self, anomaly_id, status, resolution_status=None, resolution_notes=None):
@@ -168,10 +177,28 @@ class DataService:
             
             await self.sqlite_conn.execute(query, tuple(params))
             await self.sqlite_conn.commit()
-            self.logger.info(f"Updated anomaly {anomaly_id} status to {status}")
+            logger.info(f"Updated anomaly {anomaly_id} status to {status}")
         except Exception as e:
-            self.logger.error(f"Failed to update anomaly status: {e}")
+            logger.error(f"Failed to update anomaly status: {e}")
             raise
+
+    def check_health(self):
+        """Check if the data source service is healthy"""
+        try:
+            # Check PostgreSQL
+            async with self.pool.acquire() as conn:
+                await conn.execute("SELECT 1")
+            
+            # Check SQLite
+            await self.sqlite_conn.execute("SELECT 1")
+            
+            # Check Redis
+            await self.redis.ping()
+            
+            return True
+        except Exception as e:
+            logger.error(f"Data source health check failed: {str(e)}")
+            return False
 
     async def health(self):
         """Check the health of all database connections."""
@@ -193,7 +220,7 @@ class DataService:
                 "redis": "connected"
             }
         except Exception as e:
-            self.logger.error(f"Health check failed: {str(e)}")
+            logger.error(f"Health check failed: {str(e)}")
             return {
                 "status": "unhealthy",
                 "error": str(e)

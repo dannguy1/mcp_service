@@ -19,7 +19,7 @@ class Config:
         self.SQLITE_MMAP_SIZE = os.getenv('SQLITE_MMAP_SIZE', '30000000000')
 
         # Redis Configuration
-        self.REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+        self.REDIS_HOST = os.getenv('REDIS_HOST', 'redis')
         self.REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
         self.REDIS_DB = int(os.getenv('REDIS_DB', '0'))
 

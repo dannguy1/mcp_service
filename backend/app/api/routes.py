@@ -11,15 +11,95 @@ bp = Blueprint('api', __name__)
 
 def get_system_status():
     """Get system status information"""
+    # Initialize all services with default status
+    services = {
+        'database': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
+        },
+        'redis': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
+        },
+        'model_service': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
+        },
+        'data_source': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
+        },
+        'backend_service': {
+            'status': 'disconnected',
+            'last_check': datetime.now().isoformat(),
+            'error': None
+        }
+    }
+    
+    # Check database connection
+    try:
+        with get_db_connection() as conn:
+            conn.execute(text('SELECT 1'))
+            services['database']['status'] = 'connected'
+    except Exception as e:
+        services['database']['status'] = 'error'
+        services['database']['error'] = str(e)
+
+    # Check Redis connection and get service statuses
+    try:
+        import redis
+        redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+        r = redis.from_url(redis_url, decode_responses=True)
+        
+        # Test Redis connection
+        r.ping()
+        services['redis']['status'] = 'connected'
+        
+        # Get service statuses from Redis
+        for service in ['model_service', 'data_source', 'backend']:
+            status_key = f'service:{service}:status'
+            error_key = f'service:{service}:error'
+            last_check_key = f'service:{service}:last_check'
+            
+            status = r.get(status_key)
+            if status:
+                # Map 'backend' to 'backend_service' for frontend compatibility
+                service_key = 'backend_service' if service == 'backend' else service
+                services[service_key]['status'] = status
+                services[service_key]['error'] = r.get(error_key)
+                last_check = r.get(last_check_key)
+                if last_check:
+                    services[service_key]['last_check'] = last_check
+                
+    except redis.AuthenticationError as e:
+        services['redis']['status'] = 'error'
+        services['redis']['error'] = "Redis authentication failed. Please check credentials."
+    except redis.ConnectionError as e:
+        services['redis']['status'] = 'error'
+        services['redis']['error'] = "Could not connect to Redis server."
+    except Exception as e:
+        services['redis']['status'] = 'error'
+        services['redis']['error'] = str(e)
+
+    # Calculate overall system status
+    system_status = 'healthy'
+    if any(service['status'] == 'error' for service in services.values()):
+        system_status = 'unhealthy'
+
     return {
-        'status': 'healthy',
-        'uptime': '1d 2h 3m',
+        'status': system_status,
+        'uptime': get_uptime(),
         'version': '1.0.0',
         'metrics': {
-            'cpu_usage': 45.2,
-            'memory_usage': 62.8,
+            'cpu_usage': psutil.cpu_percent(),
+            'memory_usage': psutil.virtual_memory().percent,
             'response_time': 120
-        }
+        },
+        'connections': services
     }
 
 def get_recent_anomalies():
