@@ -63,8 +63,22 @@ export interface DashboardData {
   performance_metrics: SystemStatus["metrics"];
 }
 
-export interface LogsResponse {
+export interface PaginationInfo {
+  current_page: number;
+  has_next: boolean;
+  has_prev: boolean;
+  per_page: number;
+  total: number;
+  total_pages: number;
+}
+
+export interface LogsData {
   logs: LogEntry[];
+  pagination: PaginationInfo;
+}
+
+export interface LogsResponse {
+  logs: LogsData;
   total: number;
   filters: {
     severity: string[];

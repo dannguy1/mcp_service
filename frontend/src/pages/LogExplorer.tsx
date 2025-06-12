@@ -21,6 +21,11 @@ const LogExplorer: React.FC = () => {
   if (error) return <div>Error loading logs</div>;
   if (!data) return null;
 
+  // Ensure we have the logs array from the nested structure
+  const logs = data.logs?.logs || [];
+  const total = data.logs?.pagination?.total || 0;
+  const availablePrograms = data.filters?.programs || [];
+
   return (
     <div>
       <h2 className="mb-4">Log Explorer</h2>
@@ -56,7 +61,7 @@ const LogExplorer: React.FC = () => {
                   setFilters(prev => ({ ...prev, programs: values }));
                 }}
               >
-                {data.filters.programs.map(program => (
+                {availablePrograms.map(program => (
                   <option key={program} value={program}>{program}</option>
                 ))}
               </Form.Select>
@@ -82,7 +87,7 @@ const LogExplorer: React.FC = () => {
       </Card>
 
       <Card>
-        <Card.Header>Logs ({data.total})</Card.Header>
+        <Card.Header>Logs ({total})</Card.Header>
         <Card.Body>
           <Table striped bordered hover responsive>
             <thead>
@@ -94,7 +99,7 @@ const LogExplorer: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {data.logs.map((log: Types.LogEntry) => (
+              {logs.map((log: Types.LogEntry) => (
                 <tr key={log.id}>
                   <td>{new Date(log.timestamp).toLocaleString()}</td>
                   <td>
