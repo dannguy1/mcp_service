@@ -9,31 +9,34 @@ The External AI Analyzer module is designed to read logs from and add anomaly re
 ### Log Entries Table
 ```sql
 CREATE TABLE log_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY,
     device_id INTEGER NOT NULL,
-    timestamp DATETIME NOT NULL,
-    facility INTEGER NOT NULL,
-    severity INTEGER NOT NULL,
-    priority INTEGER NOT NULL,
-    hostname VARCHAR(255),
-    program VARCHAR(255),
-    pid INTEGER,
+    device_ip VARCHAR(45) NOT NULL,
+    timestamp TIMESTAMP NOT NULL,
+    log_level VARCHAR(50),
+    process_name VARCHAR(128),
     message TEXT NOT NULL,
-    raw_message TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    raw_message TEXT,
+    structured_data JSON,
+    pushed_to_ai BOOLEAN,
+    pushed_at TIMESTAMP,
+    push_attempts INTEGER,
+    last_push_error TEXT,
     FOREIGN KEY (device_id) REFERENCES devices(id)
 );
 
 -- Indexes for efficient querying
-CREATE INDEX idx_log_entries_device_id ON log_entries(device_id);
-CREATE INDEX idx_log_entries_timestamp ON log_entries(timestamp);
-CREATE INDEX idx_log_entries_severity ON log_entries(severity);
-CREATE INDEX idx_log_entries_priority ON log_entries(priority);
+CREATE INDEX ix_log_entries_device_id ON log_entries(device_id);
+CREATE INDEX ix_log_entries_device_ip ON log_entries(device_ip);
+CREATE INDEX ix_log_entries_log_level ON log_entries(log_level);
+CREATE INDEX ix_log_entries_process_name ON log_entries(process_name);
+CREATE INDEX ix_log_entries_pushed_to_ai ON log_entries(pushed_to_ai);
+CREATE INDEX ix_log_entries_timestamp ON log_entries(timestamp);
 ```
 
 ### Anomaly Records Table
 ```sql
-CREATE TABLE anomaly_records (
+CREATE TABLE log_anomalies (
     id SERIAL PRIMARY KEY,
     log_entry_id INTEGER REFERENCES log_entries(id),
     device_id INTEGER NOT NULL,
@@ -50,11 +53,11 @@ CREATE TABLE anomaly_records (
 );
 
 -- Indexes for efficient querying
-CREATE INDEX idx_anomaly_records_device_id ON anomaly_records(device_id);
-CREATE INDEX idx_anomaly_records_timestamp ON anomaly_records(timestamp);
-CREATE INDEX idx_anomaly_records_anomaly_type ON anomaly_records(anomaly_type);
-CREATE INDEX idx_anomaly_records_severity ON anomaly_records(severity);
-CREATE INDEX idx_anomaly_records_status ON anomaly_records(status);
+CREATE INDEX idx_log_anomalies_device_id ON log_anomalies(device_id);
+CREATE INDEX idx_log_anomalies_timestamp ON log_anomalies(timestamp);
+CREATE INDEX idx_log_anomalies_anomaly_type ON log_anomalies(anomaly_type);
+CREATE INDEX idx_log_anomalies_severity ON log_anomalies(severity);
+CREATE INDEX idx_log_anomalies_status ON log_anomalies(status);
 ```
 
 ### Anomaly Patterns Table
@@ -81,26 +84,27 @@ CREATE INDEX idx_anomaly_patterns_is_active ON anomaly_patterns(is_active);
 ### Log Entry Fields
 1. **id**: Unique identifier for the log entry
 2. **device_id**: Reference to the device that generated the log
-3. **timestamp**: When the log was generated (UTC)
-4. **facility**: Syslog facility number (0-23)
-5. **severity**: Syslog severity level (0-7)
-6. **priority**: Calculated priority (facility * 8 + severity)
-7. **hostname**: Name of the device that generated the log
-8. **program**: Name of the program that generated the log
-9. **pid**: Process ID of the program
-10. **message**: The actual log message
-11. **raw_message**: Original unparsed log message
-12. **created_at**: When the log was stored in the database
+3. **device_ip**: IP address of the device that generated the log
+4. **timestamp**: When the log was generated (UTC)
+5. **log_level**: Severity level of the log (e.g., 'info', 'warning', 'error')
+6. **process_name**: Name of the process that generated the log
+7. **message**: The actual log message
+8. **raw_message**: Original unparsed log message
+9. **structured_data**: Additional JSON data extracted from the log
+10. **pushed_to_ai**: Whether the log has been sent to AI analysis
+11. **pushed_at**: When the log was last sent to AI analysis
+12. **push_attempts**: Number of attempts to push to AI
+13. **last_push_error**: Last error message from AI push attempt
 
-### Severity Levels
-- 0: Emergency
-- 1: Alert
-- 2: Critical
-- 3: Error
-- 4: Warning
-- 5: Notice
-- 6: Informational
-- 7: Debug
+### Log Levels
+- emergency
+- alert
+- critical
+- error
+- warning
+- notice
+- info
+- debug
 
 ## Anomaly Records
 
@@ -166,7 +170,7 @@ ORDER BY timestamp DESC;
 ### Adding Anomaly Records
 1. Basic anomaly record:
 ```sql
-INSERT INTO anomaly_records (
+INSERT INTO log_anomalies (
     log_entry_id, device_id, timestamp, anomaly_type,
     severity, confidence, description, metadata
 ) VALUES (
@@ -177,7 +181,7 @@ INSERT INTO anomaly_records (
 
 2. Update anomaly status:
 ```sql
-UPDATE anomaly_records 
+UPDATE log_anomalies 
 SET status = :new_status, updated_at = CURRENT_TIMESTAMP 
 WHERE id = :anomaly_id;
 ```
@@ -243,7 +247,7 @@ class ExternalAIAnalyzer:
         """Add a new anomaly record"""
         with self.engine.connect() as conn:
             query = text("""
-                INSERT INTO anomaly_records (
+                INSERT INTO log_anomalies (
                     log_entry_id, device_id, timestamp, anomaly_type,
                     severity, confidence, description, metadata
                 ) VALUES (
