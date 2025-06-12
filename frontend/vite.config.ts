@@ -2,12 +2,12 @@ import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import path from "path"
 
-// https://vite.dev/config/
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: "0.0.0.0",  // Allow external access
-    port: 3001,       // Changed from 3000 to 3001
+    host: true,
+    port: 3001,
     strictPort: true, // Dont try other ports if 3001 is taken
     cors: true,       // Enable CORS
     proxy: {
@@ -22,5 +22,12 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-  }
+  },
+  css: {
+    preprocessorOptions: {
+      less: {
+        javascriptEnabled: true,
+      },
+    },
+  },
 })

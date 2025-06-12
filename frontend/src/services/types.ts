@@ -62,12 +62,12 @@ export interface ServerStats {
 }
 
 export interface Anomaly {
-  id: number;
+  id: string;
   timestamp: string;
   type: string;
   severity: number;
   description: string;
-  status: string;
+  status: 'detected' | 'investigating' | 'resolved';
 }
 
 export interface LogEntry {
@@ -80,13 +80,14 @@ export interface LogEntry {
 
 export interface Model {
   id: string;
-  name: string;
-  is_active: boolean;
-  metadata: {
-    version: string;
-    created_at: string;
-    metrics: Record<string, number>;
+  version: string;
+  created_at: string;
+  metrics: {
+    accuracy: number;
+    false_positive_rate: number;
+    false_negative_rate: number;
   };
+  status: 'active' | 'inactive' | 'error';
 }
 
 export interface DashboardData {
@@ -110,7 +111,7 @@ export interface LogsData {
 }
 
 export interface LogsResponse {
-  logs: LogsData;
+  logs: Log[];
   total: number;
   filters: {
     severity: string[];
@@ -120,6 +121,51 @@ export interface LogsResponse {
 
 export interface ModelsResponse {
   models: Model[];
-  active_model: Model | null;
-  metadata: Record<string, any>;
+  total: number;
+}
+
+export interface Log {
+  id: string;
+  device_id: string;
+  device_ip: string;
+  timestamp: string;
+  log_level: string;
+  process_name: string;
+  message: string;
+  raw_message: string;
+  structured_data: any;
+  pushed_to_ai: boolean;
+  pushed_at: string | null;
+  push_attempts: number;
+  last_push_error: string | null;
+}
+
+export interface Service {
+  name: string;
+  status: 'running' | 'stopped' | 'error';
+  uptime: string;
+  memoryUsage: number;
+}
+
+export interface ServerStatus {
+  status: string;
+  version: string;
+  uptime: string;
+  components: {
+    database: string;
+    model: string;
+    cache: string;
+  };
+  metrics: {
+    cpu_usage: number;
+    memory_usage: number;
+    response_time: number;
+  };
+  services: Service[];
+}
+
+export interface ChangePasswordForm {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }

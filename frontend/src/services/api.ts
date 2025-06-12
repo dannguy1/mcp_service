@@ -1,16 +1,16 @@
 import axios from "axios";
-import type { DashboardData, LogsResponse, ModelsResponse, ServerStats, Anomaly } from "./types";
+import type { DashboardData, LogsResponse, ModelsResponse, ServerStats, Anomaly, Log, Model, ServerStatus, ChangePasswordForm } from "./types";
 
-const baseURL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
 
-console.log("API Base URL:", baseURL);
+console.log("API Base URL:", API_BASE_URL);
 
-export const api = axios.create({
-  baseURL,
+const api = axios.create({
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json"
   },
-  timeout: 5000 // 5 second timeout
+  timeout: 10000 // 10 second timeout
 });
 
 api.interceptors.request.use((config) => {
@@ -30,12 +30,12 @@ api.interceptors.response.use(
   (error) => {
     if (error.code === "ECONNABORTED") {
       console.error("API Request timed out");
-      return Promise.reject(new Error("Request timed out. Please check if the backend server is running."));
+      return Promise.reject(new Error("Request timed out. Please try again."));
     }
     
     if (!error.response) {
       console.error("API Network Error:", error.message);
-      return Promise.reject(new Error("Network error. Please check if the backend server is running at " + baseURL));
+      return Promise.reject(new Error("Network error. Please check if the backend server is running at " + API_BASE_URL));
     }
 
     console.error("API Error:", error.response?.status, error.config?.url, error.message);
@@ -78,5 +78,11 @@ export const endpoints = {
   getHealth: () => {
     console.log("Checking health...");
     return api.get<{ status: string }>("/health").then(res => res.data);
-  }
+  },
+  login: (credentials: { username: string; password: string }) =>
+    api.post('/auth/login', credentials).then((res) => res.data),
+  changePassword: (data: ChangePasswordForm) =>
+    api.post('/auth/change-password', data).then((res) => res.data),
+  getServerStatus: () =>
+    api.get<ServerStatus>('/server/status').then((res) => res.data),
 };

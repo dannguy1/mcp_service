@@ -1,126 +1,199 @@
 import React, { useState } from 'react';
-import { Card, Table, Button, Badge, Form, Modal } from 'react-bootstrap';
-import { FaUpload, FaTrash, FaPlay, FaStop, FaInfoCircle } from 'react-icons/fa';
-
-interface Model {
-  id: string;
-  name: string;
-  type: string;
-  version: string;
-  status: 'active' | 'inactive' | 'error';
-  lastUpdated: string;
-  accuracy: number;
-}
+import { useQuery } from '@tanstack/react-query';
+import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form } from 'react-bootstrap';
+import { FaPlay, FaStop, FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle } from 'react-icons/fa';
+import { endpoints } from '../services/api';
+import type { Model } from '../services/types';
 
 const Models: React.FC = () => {
-  const [models, setModels] = useState<Model[]>([
-    {
-      id: '1',
-      name: 'WiFi Classifier',
-      type: 'Classification',
-      version: '1.0.0',
-      status: 'active',
-      lastUpdated: '2024-03-15',
-      accuracy: 0.95
-    },
-    {
-      id: '2',
-      name: 'Anomaly Detector',
-      type: 'Anomaly Detection',
-      version: '2.1.0',
-      status: 'inactive',
-      lastUpdated: '2024-03-14',
-      accuracy: 0.89
-    }
-  ]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<Model | null>(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['models'],
+    queryFn: () => endpoints.getModels(),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  });
 
-  const handleStatusToggle = (modelId: string) => {
-    setModels(models.map(model => 
-      model.id === modelId 
-        ? { ...model, status: model.status === 'active' ? 'inactive' : 'active' }
-        : model
-    ));
-  };
-
-  const handleDelete = (modelId: string) => {
-    if (window.confirm('Are you sure you want to delete this model?')) {
-      setModels(models.filter(model => model.id !== modelId));
+  const handleActivate = async (modelId: string) => {
+    try {
+      await endpoints.activateModel(modelId);
+      refetch();
+    } catch (error) {
+      console.error('Failed to activate model:', error);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const variants = {
-      active: 'success',
-      inactive: 'secondary',
-      error: 'danger'
-    };
-    return <Badge bg={variants[status as keyof typeof variants]}>{status}</Badge>;
+  const handleDeploy = async (modelId: string) => {
+    try {
+      await endpoints.deployModel(modelId);
+      refetch();
+    } catch (error) {
+      console.error('Failed to deploy model:', error);
+    }
   };
+
+  const handleDelete = async (modelId: string) => {
+    try {
+      await endpoints.deleteModel(modelId);
+      setShowDeleteModal(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to delete model:', error);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+    
+    try {
+      const formData = new FormData();
+      formData.append('model', selectedFile);
+      await endpoints.uploadModel(formData);
+      setShowAddModal(false);
+      setSelectedFile(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to upload model:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Alert variant="danger">
+        <FaExclamationTriangle className="me-2" />
+        Error loading models: {error instanceof Error ? error.message : 'Unknown error'}
+      </Alert>
+    );
+  }
+
+  const activeModels = data?.models.filter(m => m.status === 'active').length || 0;
+  const totalModels = data?.models.length || 0;
 
   return (
-    <div className="models-page">
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Models</h2>
-        <Button variant="primary" onClick={() => setShowUploadModal(true)}>
-          <FaUpload className="me-2" />
-          Upload New Model
-        </Button>
+        <h2>AI Models</h2>
+        <div className="d-flex gap-2">
+          <Button variant="outline-primary" onClick={() => refetch()}>
+            <FaSync className="me-2" />
+            Refresh
+          </Button>
+          <Button variant="primary" onClick={() => setShowAddModal(true)}>
+            <FaPlus className="me-2" />
+            Add Model
+          </Button>
+        </div>
       </div>
 
+      {/* Model Statistics */}
+      <div className="row mb-4">
+        <div className="col-md-4">
+          <Card>
+            <Card.Body>
+              <h6 className="text-muted mb-2">Total Models</h6>
+              <h3>{totalModels}</h3>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-4">
+          <Card>
+            <Card.Body>
+              <h6 className="text-muted mb-2">Active Models</h6>
+              <h3>{activeModels}</h3>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-4">
+          <Card>
+            <Card.Body>
+              <h6 className="text-muted mb-2">Latest Update</h6>
+              <h3>
+                {data?.models.length > 0
+                  ? new Date(Math.max(...data.models.map(m => new Date(m.created_at))))
+                      .toLocaleDateString()
+                  : 'N/A'}
+              </h3>
+            </Card.Body>
+          </Card>
+        </div>
+      </div>
+
+      {/* Models Table */}
       <Card>
         <Card.Body>
           <Table responsive hover>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Type</th>
                 <th>Version</th>
+                <th>Created At</th>
                 <th>Status</th>
-                <th>Last Updated</th>
                 <th>Accuracy</th>
+                <th>False Positive Rate</th>
+                <th>False Negative Rate</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {models.map(model => (
+              {data?.models.map((model) => (
                 <tr key={model.id}>
-                  <td>{model.name}</td>
-                  <td>{model.type}</td>
                   <td>{model.version}</td>
-                  <td>{getStatusBadge(model.status)}</td>
-                  <td>{model.lastUpdated}</td>
-                  <td>{(model.accuracy * 100).toFixed(1)}%</td>
+                  <td>{new Date(model.created_at).toLocaleString()}</td>
                   <td>
-                    <Button
-                      variant={model.status === 'active' ? 'warning' : 'success'}
-                      size="sm"
-                      className="me-2"
-                      onClick={() => handleStatusToggle(model.id)}
+                    <Badge
+                      bg={
+                        model.status === 'active' ? 'success' :
+                        model.status === 'inactive' ? 'secondary' :
+                        'danger'
+                      }
                     >
-                      {model.status === 'active' ? <FaStop /> : <FaPlay />}
-                    </Button>
-                    <Button
-                      variant="info"
-                      size="sm"
-                      className="me-2"
-                      onClick={() => {
-                        setSelectedModel(model);
-                        setShowDetailsModal(true);
-                      }}
-                    >
-                      <FaInfoCircle />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(model.id)}
-                    >
-                      <FaTrash />
-                    </Button>
+                      {model.status}
+                    </Badge>
+                  </td>
+                  <td>{(model.metrics.accuracy * 100).toFixed(1)}%</td>
+                  <td>{(model.metrics.false_positive_rate * 100).toFixed(1)}%</td>
+                  <td>{(model.metrics.false_negative_rate * 100).toFixed(1)}%</td>
+                  <td>
+                    <div className="d-flex gap-2">
+                      <Button
+                        variant={model.status === 'active' ? 'warning' : 'success'}
+                        size="sm"
+                        onClick={() => handleActivate(model.id)}
+                      >
+                        {model.status === 'active' ? <FaStop /> : <FaPlay />}
+                      </Button>
+                      <Button
+                        variant="info"
+                        size="sm"
+                        onClick={() => handleDeploy(model.id)}
+                      >
+                        <FaInfoCircle />
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => setShowDeleteModal(model.id)}
+                      >
+                        <FaTrash />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -129,70 +202,54 @@ const Models: React.FC = () => {
         </Card.Body>
       </Card>
 
-      {/* Upload Modal */}
-      <Modal show={showUploadModal} onHide={() => setShowUploadModal(false)}>
+      {/* Add Model Modal */}
+      <Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Upload New Model</Modal.Title>
+          <Modal.Title>Add New Model</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>Model Name</Form.Label>
-              <Form.Control type="text" placeholder="Enter model name" />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Model Type</Form.Label>
-              <Form.Select>
-                <option>Classification</option>
-                <option>Anomaly Detection</option>
-                <option>Regression</option>
-              </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
               <Form.Label>Model File</Form.Label>
-              <Form.Control type="file" />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Version</Form.Label>
-              <Form.Control type="text" placeholder="e.g., 1.0.0" />
+              <Form.Control
+                type="file"
+                onChange={handleFileChange}
+                accept=".joblib,.pkl,.model"
+              />
             </Form.Group>
           </Form>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowUploadModal(false)}>
+          <Button variant="secondary" onClick={() => setShowAddModal(false)}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => setShowUploadModal(false)}>
+          <Button
+            variant="primary"
+            onClick={handleUpload}
+            disabled={!selectedFile}
+          >
             Upload
           </Button>
         </Modal.Footer>
       </Modal>
 
-      {/* Details Modal */}
-      <Modal show={showDetailsModal} onHide={() => setShowDetailsModal(false)}>
+      {/* Delete Confirmation Modal */}
+      <Modal show={!!showDeleteModal} onHide={() => setShowDeleteModal(null)}>
         <Modal.Header closeButton>
-          <Modal.Title>Model Details</Modal.Title>
+          <Modal.Title>Confirm Delete</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {selectedModel && (
-            <div>
-              <h5>{selectedModel.name}</h5>
-              <p><strong>Type:</strong> {selectedModel.type}</p>
-              <p><strong>Version:</strong> {selectedModel.version}</p>
-              <p><strong>Status:</strong> {getStatusBadge(selectedModel.status)}</p>
-              <p><strong>Last Updated:</strong> {selectedModel.lastUpdated}</p>
-              <p><strong>Accuracy:</strong> {(selectedModel.accuracy * 100).toFixed(1)}%</p>
-              <hr />
-              <h6>Model Metrics</h6>
-              <p><strong>Training Time:</strong> 2.5 hours</p>
-              <p><strong>Dataset Size:</strong> 10,000 samples</p>
-              <p><strong>Features:</strong> 50</p>
-            </div>
-          )}
+          Are you sure you want to delete this model? This action cannot be undone.
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>
-            Close
+          <Button variant="secondary" onClick={() => setShowDeleteModal(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => showDeleteModal && handleDelete(showDeleteModal)}
+          >
+            Delete
           </Button>
         </Modal.Footer>
       </Modal>
