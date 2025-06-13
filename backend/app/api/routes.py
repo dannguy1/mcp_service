@@ -6,6 +6,7 @@ import psutil
 from sqlalchemy import text
 from flask_sqlalchemy import SQLAlchemy
 from app.db import get_db_connection
+from app.mcp_service.components.model_manager import model_manager
 
 bp = Blueprint('api', __name__)
 
@@ -386,17 +387,84 @@ def get_logs():
 @bp.route('/models')
 def get_models():
     """Get model information"""
-    return jsonify({
-        'models': get_model_list(),
-        'active_model': next((m for m in get_model_list() if m['is_active']), None),
-        'metadata': {}
-    })
+    try:
+        # Get models from ModelManager
+        model_data = model_manager.get_all_models()
+        
+        # Return the data directly as it's already in the correct format
+        return jsonify(model_data)
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        return jsonify({
+            'models': [],
+            'total': 0
+        }), 500
 
 @bp.route('/models/<model_id>/activate', methods=['POST'])
-def activate_model(model_id):
+async def activate_model(model_id):
     """Activate a specific model version"""
-    # TODO: Implement model activation
-    return jsonify({'status': 'success', 'message': f'Model {model_id} activated'})
+    try:
+        # Get model data
+        model_data = next((m for m in model_manager.get_all_models() if m['id'] == model_id), None)
+        if not model_data:
+            return jsonify({
+                'error': f'Model {model_id} not found',
+                'status': 'error'
+            }), 404
+            
+        # Get agent instance
+        agent = model_manager.models[model_id]['agent']
+        
+        # Start the agent
+        await agent.start()
+        
+        # Update model status
+        model_manager._update_model_status(model_id, 'active')
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Model {model_id} activated',
+            'model': model_data
+        })
+    except Exception as e:
+        logger.error(f"Error activating model {model_id}: {e}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+@bp.route('/models/<model_id>/deactivate', methods=['POST'])
+async def deactivate_model(model_id):
+    """Deactivate a specific model version"""
+    try:
+        # Get model data
+        model_data = next((m for m in model_manager.get_all_models() if m['id'] == model_id), None)
+        if not model_data:
+            return jsonify({
+                'error': f'Model {model_id} not found',
+                'status': 'error'
+            }), 404
+            
+        # Get agent instance
+        agent = model_manager.models[model_id]['agent']
+        
+        # Stop the agent
+        await agent.stop()
+        
+        # Update model status
+        model_manager._update_model_status(model_id, 'inactive')
+        
+        return jsonify({
+            'status': 'success',
+            'message': f'Model {model_id} deactivated',
+            'model': model_data
+        })
+    except Exception as e:
+        logger.error(f"Error deactivating model {model_id}: {e}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
 
 @bp.route('/models/<model_id>/deploy', methods=['POST'])
 def deploy_model(model_id):
