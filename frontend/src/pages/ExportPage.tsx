@@ -3,7 +3,6 @@ import { Tabs, Space, Typography } from 'antd';
 import ExportControl from '../components/export/ExportControl';
 import ExportStatus from '../components/export/ExportStatus';
 import ExportHistory from '../components/export/ExportHistory';
-import ExportMetrics from '../components/export/ExportMetrics';
 
 const { Title } = Typography;
 
@@ -46,16 +45,6 @@ const ExportPage: React.FC = () => {
         <Space direction="vertical" style={{ width: '100%' }}>
           <Title level={2}>Export History</Title>
           <ExportHistory onExportSelect={setActiveExportId} />
-        </Space>
-      )
-    },
-    {
-      key: 'metrics',
-      label: 'Export Metrics',
-      children: (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Title level={2}>Export Metrics</Title>
-          <ExportMetrics />
         </Space>
       )
     }

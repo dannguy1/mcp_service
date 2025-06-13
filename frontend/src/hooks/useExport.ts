@@ -32,22 +32,6 @@ interface ExportRecord {
   updated_at: string;
 }
 
-interface ExportMetrics {
-  total_exports: number;
-  successful_exports: number;
-  failed_exports: number;
-  total_records: number;
-  total_size: number;
-  average_duration: number;
-  success_rate: number;
-  data_type_distribution: Record<string, number>;
-  export_trend: {
-    date: string;
-    count: number;
-    success_rate: number;
-  }[];
-}
-
 interface ListExportsResponse {
   items: ExportRecord[];
   total: number;
@@ -82,17 +66,11 @@ export const useExport = () => {
     await axios.delete(`/api/export/${exportId}`);
   };
 
-  const getExportMetrics = async (): Promise<ExportMetrics> => {
-    const response = await axios.get('/api/export/metrics');
-    return response.data;
-  };
-
   return {
     isExporting,
     createExport,
     getExportStatus,
     listExports,
-    deleteExport,
-    getExportMetrics
+    deleteExport
   };
 }; 
