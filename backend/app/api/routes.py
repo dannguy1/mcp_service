@@ -8,6 +8,7 @@ from sqlalchemy import text
 from flask_sqlalchemy import SQLAlchemy
 from app.db import get_db_connection
 from app.mcp_service.components.model_manager import model_manager
+from fastapi import HTTPException
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -619,4 +620,60 @@ def get_server_status():
         return jsonify({
             'status': 'error',
             'error': str(e)
+        }), 500
+
+@bp.route('/models/<model_id>/info', methods=['GET'])
+async def get_model_info(model_id):
+    """Get detailed information about a specific model"""
+    try:
+        # Get model data
+        model_data = model_manager.get_all_models()
+        if not isinstance(model_data, dict) or 'models' not in model_data:
+            logger.error(f"Invalid model data format: {model_data}")
+            return jsonify({
+                'error': 'Invalid model data format',
+                'status': 'error'
+            }), 500
+
+        model_info = next((m for m in model_data['models'] if m['id'] == model_id), None)
+        if not model_info:
+            return jsonify({
+                'error': f'Model {model_id} not found',
+                'status': 'error'
+            }), 404
+        
+        # Get agent instance if available
+        agent_info = {}
+        if model_id in model_manager.models:
+            agent = model_manager.models[model_id]['agent']
+            if agent:
+                agent_info = {
+                    'status': agent.status,
+                    'is_running': agent.is_running,
+                    'last_run': agent.last_run.isoformat() if agent.last_run else None,
+                    'capabilities': agent.capabilities,
+                    'description': agent.description,
+                    'model_path': agent.model_path if hasattr(agent, 'model_path') else None,
+                    'programs': agent.programs if hasattr(agent, 'programs') else []
+                }
+        
+        # Combine model and agent information
+        response = {
+            **model_info,
+            'agent_info': agent_info,
+            'metrics': {
+                'accuracy': model_info.get('metrics', {}).get('accuracy', 0),
+                'false_positive_rate': model_info.get('metrics', {}).get('false_positive_rate', 0),
+                'false_negative_rate': model_info.get('metrics', {}).get('false_negative_rate', 0)
+            }
+        }
+        
+        logger.info(f"Retrieved info for model {model_id}: {response}")
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error getting model info for {model_id}: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
         }), 500

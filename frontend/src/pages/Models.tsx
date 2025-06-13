@@ -1,14 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form } from 'react-bootstrap';
 import { FaPlay, FaStop, FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle } from 'react-icons/fa';
 import { endpoints } from '../services/api';
 import type { Model } from '../services/types';
+import { toast } from 'react-hot-toast';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 const Models: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [modelInfo, setModelInfo] = useState<Model | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['models'],
@@ -22,6 +26,22 @@ const Models: React.FC = () => {
       refetch();
     } catch (error) {
       console.error('Failed to activate model:', error);
+    }
+  };
+
+  const handleInfo = async (modelId: string) => {
+    try {
+      const info = await endpoints.getModelInfo(modelId);
+      if (info.error) {
+        console.error('Error in model info:', info.error);
+        alert(info.error);
+        return;
+      }
+      setModelInfo(info);
+      setShowInfoModal(true);
+    } catch (error) {
+      console.error('Error fetching model info:', error);
+      alert('Failed to fetch model information');
     }
   };
 
@@ -88,7 +108,7 @@ const Models: React.FC = () => {
   const totalModels = data?.models.length || 0;
 
   return (
-    <div>
+    <div className="container-fluid">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h2>AI Models</h2>
         <div className="d-flex gap-2">
@@ -182,7 +202,7 @@ const Models: React.FC = () => {
                       <Button
                         variant="info"
                         size="sm"
-                        onClick={() => handleDeploy(model.id)}
+                        onClick={() => handleInfo(model.id)}
                       >
                         <FaInfoCircle />
                       </Button>
@@ -229,6 +249,131 @@ const Models: React.FC = () => {
             disabled={!selectedFile}
           >
             Upload
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Model Info Modal */}
+      <Modal show={showInfoModal} onHide={() => setShowInfoModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Model Information</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {modelInfo && (
+            <div>
+              <h5>Basic Information</h5>
+              <Table striped bordered>
+                <tbody>
+                  <tr>
+                    <th>ID</th>
+                    <td>{modelInfo.id}</td>
+                  </tr>
+                  <tr>
+                    <th>Version</th>
+                    <td>{modelInfo.version}</td>
+                  </tr>
+                  <tr>
+                    <th>Created At</th>
+                    <td>{new Date(modelInfo.created_at).toLocaleString()}</td>
+                  </tr>
+                  <tr>
+                    <th>Status</th>
+                    <td>
+                      <Badge bg={modelInfo.status === 'active' ? 'success' : 'secondary'}>
+                        {modelInfo.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                </tbody>
+              </Table>
+
+              {modelInfo.metrics && (
+                <>
+                  <h5 className="mt-4">Metrics</h5>
+                  <Table striped bordered>
+                    <tbody>
+                      <tr>
+                        <th>Accuracy</th>
+                        <td>{(modelInfo.metrics.accuracy * 100).toFixed(1)}%</td>
+                      </tr>
+                      <tr>
+                        <th>False Positive Rate</th>
+                        <td>{(modelInfo.metrics.false_positive_rate * 100).toFixed(1)}%</td>
+                      </tr>
+                      <tr>
+                        <th>False Negative Rate</th>
+                        <td>{(modelInfo.metrics.false_negative_rate * 100).toFixed(1)}%</td>
+                      </tr>
+                    </tbody>
+                  </Table>
+                </>
+              )}
+
+              {modelInfo.agent_info && Object.keys(modelInfo.agent_info).length > 0 && (
+                <>
+                  <h5 className="mt-4">Agent Information</h5>
+                  <Table striped bordered>
+                    <tbody>
+                      <tr>
+                        <th>Status</th>
+                        <td>{modelInfo.agent_info.status}</td>
+                      </tr>
+                      <tr>
+                        <th>Running</th>
+                        <td>{modelInfo.agent_info.is_running ? 'Yes' : 'No'}</td>
+                      </tr>
+                      {modelInfo.agent_info.last_run && (
+                        <tr>
+                          <th>Last Run</th>
+                          <td>{new Date(modelInfo.agent_info.last_run).toLocaleString()}</td>
+                        </tr>
+                      )}
+                      {modelInfo.agent_info.description && (
+                        <tr>
+                          <th>Description</th>
+                          <td>{modelInfo.agent_info.description}</td>
+                        </tr>
+                      )}
+                      {modelInfo.agent_info.capabilities && modelInfo.agent_info.capabilities.length > 0 && (
+                        <tr>
+                          <th>Capabilities</th>
+                          <td>
+                            <ul className="mb-0">
+                              {modelInfo.agent_info.capabilities.map((cap, index) => (
+                                <li key={index}>{cap}</li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                      {modelInfo.agent_info.programs && modelInfo.agent_info.programs.length > 0 && (
+                        <tr>
+                          <th>Monitored Programs</th>
+                          <td>
+                            <ul className="mb-0">
+                              {modelInfo.agent_info.programs.map((prog, index) => (
+                                <li key={index}>{prog}</li>
+                              ))}
+                            </ul>
+                          </td>
+                        </tr>
+                      )}
+                      {modelInfo.agent_info.model_path && (
+                        <tr>
+                          <th>Model Path</th>
+                          <td>{modelInfo.agent_info.model_path}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </Table>
+                </>
+              )}
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowInfoModal(false)}>
+            Close
           </Button>
         </Modal.Footer>
       </Modal>

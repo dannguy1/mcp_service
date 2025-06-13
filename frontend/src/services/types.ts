@@ -90,6 +90,18 @@ export interface Model {
   status: 'active' | 'inactive' | 'error';
 }
 
+export interface ModelInfo extends Model {
+  agent_info?: {
+    status: string;
+    is_running: boolean;
+    last_run: string | null;
+    capabilities: string[];
+    description: string;
+    model_path: string | null;
+    programs: string[];
+  };
+}
+
 export interface DashboardData {
   system_status: SystemStatus;
   recent_anomalies: Anomaly[];

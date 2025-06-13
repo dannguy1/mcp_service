@@ -1,5 +1,5 @@
 import axios from "axios";
-import type { DashboardData, LogsResponse, ModelsResponse, ServerStats, Anomaly, Log, Model, ServerStatus, ChangePasswordForm } from "./types";
+import type { DashboardData, LogsResponse, ModelsResponse, ServerStats, Anomaly, Log, Model, ServerStatus, ChangePasswordForm, ModelInfo } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -59,6 +59,10 @@ export const endpoints = {
   getModels: () => {
     console.log("Fetching models...");
     return api.get<ModelsResponse>("/models").then(res => res.data);
+  },
+  getModelInfo: (modelId: string) => {
+    console.log("Fetching model info for:", modelId);
+    return api.get<ModelInfo>(`/models/${modelId}/info`).then(res => res.data);
   },
   getServerStats: () => {
     console.log("Fetching server stats...");
