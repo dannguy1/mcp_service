@@ -3,10 +3,14 @@ from datetime import datetime, timedelta
 import json
 import os
 import psutil
+import logging
 from sqlalchemy import text
 from flask_sqlalchemy import SQLAlchemy
 from app.db import get_db_connection
 from app.mcp_service.components.model_manager import model_manager
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 bp = Blueprint('api', __name__)
 
@@ -405,26 +409,53 @@ async def activate_model(model_id):
     """Activate a specific model version"""
     try:
         # Get model data
-        model_data = next((m for m in model_manager.get_all_models() if m['id'] == model_id), None)
-        if not model_data:
+        model_data = model_manager.get_all_models()
+        model_info = next((m for m in model_data['models'] if m['id'] == model_id), None)
+        if not model_info:
             return jsonify({
                 'error': f'Model {model_id} not found',
                 'status': 'error'
             }), 404
             
         # Get agent instance
+        if model_id not in model_manager.models:
+            # If model is not registered, try to register it
+            try:
+                # Create a new WiFiAgent instance
+                from app.mcp_service.agents.wifi_agent import WiFiAgent
+                from config.config import config
+                from app.mcp_service.data_service import DataService
+                
+                data_service = DataService(config)
+                agent = WiFiAgent(config, data_service)
+                await model_manager.register_model(agent, model_id)
+            except Exception as e:
+                logger.error(f"Failed to register model {model_id}: {e}")
+                return jsonify({
+                    'error': f'Failed to register model {model_id}',
+                    'status': 'error'
+                }), 400
+        
         agent = model_manager.models[model_id]['agent']
         
         # Start the agent
         await agent.start()
         
         # Update model status
-        model_manager._update_model_status(model_id, 'active')
+        model_manager._update_model_status(model_id, {
+            'id': model_id,
+            'name': agent.__class__.__name__,
+            'status': 'active',
+            'is_running': True,
+            'last_run': datetime.now().isoformat(),
+            'capabilities': agent.capabilities,
+            'description': agent.description
+        })
         
         return jsonify({
             'status': 'success',
             'message': f'Model {model_id} activated',
-            'model': model_data
+            'model': model_info
         })
     except Exception as e:
         logger.error(f"Error activating model {model_id}: {e}")
@@ -438,26 +469,41 @@ async def deactivate_model(model_id):
     """Deactivate a specific model version"""
     try:
         # Get model data
-        model_data = next((m for m in model_manager.get_all_models() if m['id'] == model_id), None)
-        if not model_data:
+        model_data = model_manager.get_all_models()
+        model_info = next((m for m in model_data['models'] if m['id'] == model_id), None)
+        if not model_info:
             return jsonify({
                 'error': f'Model {model_id} not found',
                 'status': 'error'
             }), 404
             
         # Get agent instance
+        if model_id not in model_manager.models:
+            return jsonify({
+                'error': f'Model {model_id} is not registered',
+                'status': 'error'
+            }), 400
+            
         agent = model_manager.models[model_id]['agent']
         
         # Stop the agent
         await agent.stop()
         
         # Update model status
-        model_manager._update_model_status(model_id, 'inactive')
+        model_manager._update_model_status(model_id, {
+            'id': model_id,
+            'name': agent.__class__.__name__,
+            'status': 'inactive',
+            'is_running': False,
+            'last_run': datetime.now().isoformat(),
+            'capabilities': agent.capabilities,
+            'description': agent.description
+        })
         
         return jsonify({
             'status': 'success',
             'message': f'Model {model_id} deactivated',
-            'model': model_data
+            'model': model_info
         })
     except Exception as e:
         logger.error(f"Error deactivating model {model_id}: {e}")

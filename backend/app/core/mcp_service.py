@@ -81,11 +81,15 @@ class MCPService:
             # Initialize components
             await self.data_service.start()
             
+            # Ensure Redis client is set in ModelManager
+            if not model_manager.redis_client:
+                model_manager.set_redis_client(self.redis_client)
+            
             # Start ModelManager first
             await model_manager.start()
             
             # Create and start WiFi agent
-            self.wifi_agent = WiFiAgent(self.config, self.data_service)
+            self.wifi_agent = WiFiAgent(self.config, self.data_service, model_manager)
             await self.wifi_agent.start()
             
             # Start status updates with more frequent checks

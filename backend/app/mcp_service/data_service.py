@@ -3,7 +3,7 @@ import redis
 import os
 from typing import Dict, Any, List
 from app.services.status_manager import ServiceStatusManager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -113,4 +113,43 @@ class DataService:
             
         except Exception as e:
             logger.error(f"Error storing anomaly: {e}")
+            raise
+
+    async def get_recent_logs(self, programs: List[str], minutes: int = 5) -> List[Dict[str, Any]]:
+        """
+        Get recent logs for specific programs.
+        
+        Args:
+            programs: List of program names to filter by
+            minutes: Number of minutes to look back
+            
+        Returns:
+            List of log entries matching the criteria
+        """
+        try:
+            end_time = datetime.now()
+            start_time = end_time - timedelta(minutes=minutes)
+            
+            logs = []
+            for program in programs:
+                # Get all logs for this program
+                program_logs = self.redis_client.lrange(f"logs:{program}", 0, -1)
+                
+                # Filter logs by time range
+                for log_str in program_logs:
+                    try:
+                        log = eval(log_str)  # Convert string representation to dict
+                        log_time = datetime.fromisoformat(log['timestamp'])
+                        
+                        if start_time <= log_time <= end_time:
+                            logs.append(log)
+                    except Exception as e:
+                        logger.error(f"Error parsing log entry: {e}")
+                        continue
+            
+            logger.info(f"Retrieved {len(logs)} logs for programs {programs}")
+            return logs
+            
+        except Exception as e:
+            logger.error(f"Error getting recent logs: {e}")
             raise 

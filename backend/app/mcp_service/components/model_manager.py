@@ -99,10 +99,26 @@ class ModelManager:
 
     def set_redis_client(self, redis_client: redis.Redis) -> None:
         """Set the Redis client for status updates."""
+        if not redis_client:
+            self.logger.warning("Attempted to set None Redis client")
+            return
+            
         self.redis_client = redis_client
         self.logger.info("Setting Redis client for ModelManager")
         self.status_manager = ServiceStatusManager('model_service', self.redis_client)
-        logger.info("Status manager initialized")
+        self.logger.info("Status manager initialized")
+        
+        # Update model registry status in Redis
+        for model_id, model_data in self.model_registry.items():
+            self._update_model_status(model_id, {
+                'id': model_id,
+                'name': model_id,
+                'status': model_data['status'],
+                'is_running': False,
+                'last_run': None,
+                'capabilities': model_data['capabilities'],
+                'description': model_data['description']
+            })
 
     def _update_model_status(self, model_id: str, model_entry: Dict[str, Any]) -> None:
         """Update model status in Redis."""
@@ -131,11 +147,21 @@ class ModelManager:
                 }
             )
             
+            # Update in-memory model entry
+            if model_id in self.models:
+                self.models[model_id].update(status_data)
+            
+            # Update registry status
+            if model_id in self.model_registry:
+                self.model_registry[model_id]['status'] = model_entry['status']
+            
+            self.logger.info(f"Updated model {model_id} status to {model_entry['status']}")
+            
         except Exception as e:
             self.logger.error(f"Failed to update model {model_id} status: {e}")
             raise
 
-    def register_model(self, agent: BaseAgent, model_id: str = None) -> None:
+    async def register_model(self, agent: BaseAgent, model_id: str = None) -> None:
         """Register a model agent with the manager."""
         try:
             # Use provided model_id or convert class name
@@ -181,6 +207,9 @@ class ModelManager:
             if self.redis_client:
                 self.status_manager.start_status_updates(self.check_health, interval=10)
                 self.status_manager.update_status('connected')
+                self.logger.info("Started status updates for model_service")
+            else:
+                self.logger.warning("Redis client not set, status updates will be disabled")
             
             self.logger.info("ModelManager started successfully")
         except Exception as e:

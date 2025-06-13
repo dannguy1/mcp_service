@@ -1,15 +1,18 @@
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
 class AnomalyClassifier:
-    """Classifies anomalies in extracted features."""
+    """Classifies anomalies in extracted features using both ML model and rule-based detection."""
     
     def __init__(self):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.model = None
+        self.threshold = 0.95  # Confidence threshold for ML model predictions
+        
+        # Rule-based thresholds for different anomaly types
         self.thresholds = {
             'auth_failures': 5,  # More than 5 auth failures in 5 minutes
             'deauth_count': 10,  # More than 10 deauth frames in 5 minutes
@@ -17,14 +20,14 @@ class AnomalyClassifier:
             'unique_mac_count': 20  # More than 20 unique MACs in 5 minutes
         }
     
-    def set_model(self, model):
+    def set_model(self, model: Any):
         """Set the anomaly detection model."""
         self.model = model
         self.logger.info("Anomaly detection model set")
     
     def detect_anomalies(self, features: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Detect anomalies in the extracted features.
+        Detect anomalies using both ML model and rule-based detection.
         
         Args:
             features: Dictionary of extracted features
@@ -35,70 +38,199 @@ class AnomalyClassifier:
         try:
             anomalies = []
             
-            # Check authentication failures
-            if features['auth_failures'] > self.thresholds['auth_failures']:
-                anomalies.append({
-                    'type': 'auth_failure',
-                    'severity': 3,
-                    'confidence': 0.8,
-                    'description': (
-                        f"Multiple authentication failures detected "
-                        f"({features['auth_failures']} failures in 5 minutes)"
-                    ),
-                    'features': {
-                        'auth_failures': features['auth_failures'],
-                        'failed_auth_mac_count': features['failed_auth_mac_count']
-                    }
-                })
+            # Rule-based detection
+            rule_based_anomalies = self._detect_rule_based_anomalies(features)
+            anomalies.extend(rule_based_anomalies)
             
-            # Check deauthentication flood
-            if features['deauth_count'] > self.thresholds['deauth_count']:
-                anomalies.append({
-                    'type': 'deauth_flood',
-                    'severity': 4,
-                    'confidence': 0.9,
-                    'description': (
-                        f"Deauthentication flood detected "
-                        f"({features['deauth_count']} deauth frames in 5 minutes)"
-                    ),
-                    'features': {
-                        'deauth_count': features['deauth_count']
-                    }
-                })
-            
-            # Check beacon flood
-            if features['beacon_count'] > self.thresholds['beacon_count']:
-                anomalies.append({
-                    'type': 'beacon_flood',
-                    'severity': 2,
-                    'confidence': 0.7,
-                    'description': (
-                        f"Beacon frame flood detected "
-                        f"({features['beacon_count']} beacon frames in 5 minutes)"
-                    ),
-                    'features': {
-                        'beacon_count': features['beacon_count']
-                    }
-                })
-            
-            # Check for potential MAC spoofing
-            if features['unique_mac_count'] > self.thresholds['unique_mac_count']:
-                anomalies.append({
-                    'type': 'mac_spoofing',
-                    'severity': 4,
-                    'confidence': 0.6,
-                    'description': (
-                        f"Potential MAC spoofing detected "
-                        f"({features['unique_mac_count']} unique MACs in 5 minutes)"
-                    ),
-                    'features': {
-                        'unique_mac_count': features['unique_mac_count']
-                    }
-                })
+            # ML model-based detection if model is available
+            if self.model:
+                try:
+                    ml_anomalies = self._detect_ml_anomalies(features)
+                    anomalies.extend(ml_anomalies)
+                except Exception as e:
+                    self.logger.warning(f"ML model detection failed: {e}")
             
             self.logger.info(f"Detected {len(anomalies)} anomalies")
             return anomalies
             
         except Exception as e:
             self.logger.error(f"Error detecting anomalies: {e}")
-            raise 
+            raise
+    
+    def _detect_rule_based_anomalies(self, features: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Detect anomalies using rule-based thresholds."""
+        anomalies = []
+        
+        # Check authentication failures
+        if features['auth_failures'] > self.thresholds['auth_failures']:
+            anomalies.append({
+                'type': 'auth_failure',
+                'severity': min(5, features['auth_failures'] // 2),
+                'confidence': 0.8,
+                'description': (
+                    f"Multiple authentication failures detected "
+                    f"({features['auth_failures']} failures in 5 minutes)"
+                ),
+                'features': {
+                    'auth_failures': features['auth_failures'],
+                    'failed_auth_mac_count': features.get('failed_auth_mac_count', 0)
+                }
+            })
+        
+        # Check deauthentication flood
+        if features['deauth_count'] > self.thresholds['deauth_count']:
+            anomalies.append({
+                'type': 'deauth_flood',
+                'severity': min(5, features['deauth_count'] // 5),
+                'confidence': 0.9,
+                'description': (
+                    f"Deauthentication flood detected "
+                    f"({features['deauth_count']} deauth frames in 5 minutes)"
+                ),
+                'features': {
+                    'deauth_count': features['deauth_count']
+                }
+            })
+        
+        # Check beacon flood
+        if features['beacon_count'] > self.thresholds['beacon_count']:
+            anomalies.append({
+                'type': 'beacon_flood',
+                'severity': min(5, features['beacon_count'] // 50),
+                'confidence': 0.7,
+                'description': (
+                    f"Beacon frame flood detected "
+                    f"({features['beacon_count']} beacon frames in 5 minutes)"
+                ),
+                'features': {
+                    'beacon_count': features['beacon_count']
+                }
+            })
+        
+        # Check for potential MAC spoofing
+        if features['unique_mac_count'] > self.thresholds['unique_mac_count']:
+            anomalies.append({
+                'type': 'mac_spoofing',
+                'severity': 4,
+                'confidence': 0.6,
+                'description': (
+                    f"Potential MAC spoofing detected "
+                    f"({features['unique_mac_count']} unique MACs in 5 minutes)"
+                ),
+                'features': {
+                    'unique_mac_count': features['unique_mac_count']
+                }
+            })
+        
+        return anomalies
+    
+    def _detect_ml_anomalies(self, features: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Detect anomalies using the ML model."""
+        if not self.model:
+            return []
+            
+        try:
+            # Convert features to model input format
+            X = self._prepare_features(features)
+            
+            # Get model predictions
+            predictions = self.model.predict_proba(X)
+            
+            # Find anomalies
+            anomalies = []
+            for i, pred in enumerate(predictions):
+                if pred[1] > self.threshold:  # Assuming binary classification
+                    anomaly = self._create_anomaly(
+                        features,
+                        pred[1],
+                        i
+                    )
+                    anomalies.append(anomaly)
+            
+            return anomalies
+            
+        except Exception as e:
+            self.logger.error(f"Error in ML model detection: {e}")
+            return []
+    
+    def _prepare_features(self, features: Dict[str, Any]) -> np.ndarray:
+        """Prepare features for ML model input."""
+        # Extract relevant features in the correct order
+        feature_vector = [
+            features['auth_failures'],
+            features['deauth_count'],
+            features['beacon_count'],
+            features['unique_mac_count'],
+            features.get('unique_ssid_count', 0)
+        ]
+        
+        # Add reason code counts
+        for code in range(1, 18):  # Common WiFi reason codes
+            feature_vector.append(
+                features.get('reason_codes', {}).get(str(code), 0)
+            )
+        
+        # Add status code counts
+        for code in range(1, 18):  # Common WiFi status codes
+            feature_vector.append(
+                features.get('status_codes', {}).get(str(code), 0)
+            )
+        
+        # Convert to numpy array and reshape for model input
+        return np.array(feature_vector).reshape(1, -1)
+    
+    def _create_anomaly(
+        self,
+        features: Dict[str, Any],
+        confidence: float,
+        index: int
+    ) -> Dict[str, Any]:
+        """Create an anomaly dictionary from ML model prediction."""
+        # Determine anomaly type based on feature values
+        if features['auth_failures'] > self.thresholds['auth_failures']:
+            anomaly_type = 'auth_failure'
+            severity = min(5, features['auth_failures'] // 2)
+        elif features['deauth_count'] > self.thresholds['deauth_count']:
+            anomaly_type = 'deauth_flood'
+            severity = min(5, features['deauth_count'] // 5)
+        elif features['beacon_count'] > self.thresholds['beacon_count']:
+            anomaly_type = 'beacon_flood'
+            severity = min(5, features['beacon_count'] // 50)
+        else:
+            anomaly_type = 'unknown'
+            severity = 3
+        
+        return {
+            'type': anomaly_type,
+            'severity': severity,
+            'confidence': float(confidence),
+            'description': self._get_anomaly_description(
+                anomaly_type,
+                features
+            ),
+            'features': features
+        }
+    
+    def _get_anomaly_description(
+        self,
+        anomaly_type: str,
+        features: Dict[str, Any]
+    ) -> str:
+        """Generate a human-readable description for an anomaly."""
+        if anomaly_type == 'auth_failure':
+            return (
+                f"Multiple authentication failures detected "
+                f"({features['auth_failures']} failures in 5 minutes)"
+            )
+        elif anomaly_type == 'deauth_flood':
+            return (
+                f"Deauthentication flood detected "
+                f"({features['deauth_count']} deauth frames in 5 minutes)"
+            )
+        elif anomaly_type == 'beacon_flood':
+            return (
+                f"Beacon frame flood detected "
+                f"({features['beacon_count']} beacon frames in 5 minutes)"
+            )
+        else:
+            return f"Unknown anomaly type: {anomaly_type}" 
