@@ -242,24 +242,30 @@ class DataExporter:
 
     async def _fetch_logs(self, start_date: datetime, end_date: datetime, batch_number: int) -> List[Dict[str, Any]]:
         """Fetch a batch of log entries."""
-        async with AsyncSession(get_db()) as session:
+        try:
             # Calculate offset and limit for pagination
             offset = batch_number * self.config.batch_size
             limit = self.config.batch_size
 
-            # Query logs within date range
-            query = select(LogEntry).where(
-                and_(
-                    LogEntry.timestamp >= start_date,
-                    LogEntry.timestamp <= end_date
-                )
-            ).offset(offset).limit(limit)
-
-            result = await session.execute(query)
-            logs = result.scalars().all()
-
+            # Start with base query
+            query = self.db.query(LogEntry).filter(
+                LogEntry.timestamp >= start_date,
+                LogEntry.timestamp <= end_date
+            )
+            
+            # Add process filtering if specified
+            if hasattr(self.config, 'processes') and self.config.processes:
+                query = query.filter(LogEntry.process_name.in_(self.config.processes))
+            
+            # Execute query with pagination
+            logs = query.offset(offset).limit(limit).all()
+            
             # Convert to dictionaries
             return [log.to_dict() for log in logs]
+            
+        except Exception as e:
+            logger.error(f"Error fetching logs: {str(e)}")
+            raise
 
     async def _fetch_anomalies(self, start_date: datetime, end_date: datetime, batch_number: int) -> List[Dict[str, Any]]:
         """Fetch a batch of anomaly detection results."""

@@ -31,4 +31,5 @@ class ExportConfig(BaseModel):
     include_metadata: bool = Field(default=True, description="Whether to include metadata")
     validation_level: str = Field(default="basic", description="Level of validation to perform")
     output_format: str = Field(default="json", description="Output format for export")
-    compression: bool = Field(default=False, description="Whether to compress output") 
+    compression: bool = Field(default=False, description="Whether to compress output")
+    processes: List[str] = Field(default_factory=list, description="List of processes to filter by") 

@@ -129,8 +129,8 @@ export interface Log {
   device_id: string;
   device_ip: string;
   timestamp: string;
-  log_level: string;
-  process_name: string;
+  level: string;
+  process: string;
   message: string;
   raw_message: string;
   structured_data: any;

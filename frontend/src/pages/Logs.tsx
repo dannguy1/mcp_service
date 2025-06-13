@@ -132,7 +132,7 @@ const Logs: React.FC = () => {
               </Col>
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Severity</Form.Label>
+                  <Form.Label>Level</Form.Label>
                   <Form.Select
                     multiple
                     name="severity"
@@ -152,7 +152,7 @@ const Logs: React.FC = () => {
               </Col>
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Program</Form.Label>
+                  <Form.Label>Process</Form.Label>
                   <Form.Select
                     multiple
                     name="programs"

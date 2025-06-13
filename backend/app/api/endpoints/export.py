@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import uuid
 import logging
 
@@ -23,6 +23,7 @@ class ExportRequest(BaseModel):
     validation_level: Optional[str] = "basic"
     output_format: Optional[str] = "json"
     compression: Optional[bool] = False
+    processes: Optional[List[str]] = Field(default_factory=list, description="List of processes to filter by")
 
 @router.post("/export", response_model=ExportMetadata)
 async def create_export(request: ExportRequest, background_tasks: BackgroundTasks):
