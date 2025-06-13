@@ -3,6 +3,7 @@ import redis
 import os
 from typing import Dict, Any, List
 from app.services.status_manager import ServiceStatusManager
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -47,4 +48,69 @@ class DataService:
         except Exception as e:
             logger.error(f"Error stopping DataService: {e}")
             self.status_manager.update_status('error', str(e))
+            raise
+
+    async def get_logs_by_program(
+        self,
+        start_time: str,
+        end_time: str,
+        programs: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Get logs for specific programs within a time range.
+        
+        Args:
+            start_time: Start time in ISO format
+            end_time: End time in ISO format
+            programs: List of program names to filter by
+            
+        Returns:
+            List of log entries matching the criteria
+        """
+        try:
+            logs = []
+            start_dt = datetime.fromisoformat(start_time)
+            end_dt = datetime.fromisoformat(end_time)
+            
+            # For each program, get logs from Redis
+            for program in programs:
+                # Get all logs for this program
+                program_logs = self.redis_client.lrange(f"logs:{program}", 0, -1)
+                
+                # Filter logs by time range
+                for log_str in program_logs:
+                    try:
+                        log = eval(log_str)  # Convert string representation to dict
+                        log_time = datetime.fromisoformat(log['timestamp'])
+                        
+                        if start_dt <= log_time <= end_dt:
+                            logs.append(log)
+                    except Exception as e:
+                        logger.error(f"Error parsing log entry: {e}")
+                        continue
+            
+            logger.info(f"Retrieved {len(logs)} logs for programs {programs}")
+            return logs
+            
+        except Exception as e:
+            logger.error(f"Error getting logs by program: {e}")
+            raise
+
+    async def store_anomaly(self, anomaly: Dict[str, Any]):
+        """
+        Store an anomaly in the database.
+        
+        Args:
+            anomaly: Dictionary containing anomaly information
+        """
+        try:
+            # Store anomaly in Redis
+            anomaly_id = f"anomaly:{datetime.now().isoformat()}"
+            self.redis_client.hmset(anomaly_id, anomaly)
+            self.redis_client.expire(anomaly_id, 86400)  # Expire after 24 hours
+            
+            logger.info(f"Stored anomaly: {anomaly_id}")
+            
+        except Exception as e:
+            logger.error(f"Error storing anomaly: {e}")
             raise 

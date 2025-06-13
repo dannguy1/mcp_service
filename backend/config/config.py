@@ -18,6 +18,9 @@ class Config:
     HEALTH_CHECK_INTERVAL = int(os.getenv('HEALTH_CHECK_INTERVAL', '60'))  # 1 minute
     MODEL_UPDATE_INTERVAL = int(os.getenv('MODEL_UPDATE_INTERVAL', '86400').split('#')[0].strip())  # 24 hours
 
+    # Model configuration
+    model_dir = os.getenv('MODEL_DIR', os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models'))
+
     # API configuration
     API_PREFIX = '/api/ui'
     

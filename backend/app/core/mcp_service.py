@@ -19,11 +19,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Global ModelManager instance
+model_manager = ModelManager()
+
 class MCPService:
     def __init__(self):
         self.config = config
         self.data_service = DataService(self.config)
-        self.wifi_agent = WiFiAgent(self.config, self.data_service)
         self.resource_monitor = ResourceMonitor()
         
         # Initialize Redis client
@@ -38,12 +40,12 @@ class MCPService:
         )
         
         # Initialize components with Redis client
-        self.model_manager = ModelManager()
-        self.model_manager.set_redis_client(self.redis_client)
+        model_manager.set_redis_client(self.redis_client)
         
         # Initialize status manager with Redis client
         self.status_manager = ServiceStatusManager('mcp_service', self.redis_client)
         self.running = False
+        self.wifi_agent = None  # Initialize to None, will be created in start()
 
     def health_check(self) -> bool:
         """Check if the service is healthy."""
@@ -78,17 +80,20 @@ class MCPService:
             
             # Initialize components
             await self.data_service.start()
+            
+            # Start ModelManager first
+            await model_manager.start()
+            
+            # Create and start WiFi agent
+            self.wifi_agent = WiFiAgent(self.config, self.data_service)
             await self.wifi_agent.start()
-            await self.model_manager.start()
             
             # Start status updates with more frequent checks
+            self.running = True
+            self.status_manager.update_status("connected")
             self.status_manager.start_status_updates(self.health_check, interval=10)
             
-            self.running = True
             logger.info("MCP service started successfully")
-            
-            # Initial status update
-            self.status_manager.update_status('connected')
             
         except Exception as e:
             logger.error(f"Failed to start MCP service: {e}")
@@ -106,9 +111,10 @@ class MCPService:
             self.status_manager.update_status('disconnected')
             
             # Stop components
-            await self.wifi_agent.stop()
+            if self.wifi_agent:
+                await self.wifi_agent.stop()
             await self.data_service.stop()
-            await self.model_manager.stop()
+            await model_manager.stop()
             self.status_manager.stop_status_updates()
             
             logger.info("MCP service stopped successfully")
@@ -128,7 +134,8 @@ class MCPService:
                     continue
                 
                 # Run analysis cycle
-                await self.wifi_agent.run_analysis_cycle()
+                if self.wifi_agent:
+                    await self.wifi_agent.run_analysis_cycle()
                 
                 # Wait for next cycle
                 await asyncio.sleep(config.ANALYSIS_INTERVAL)
