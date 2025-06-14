@@ -7,8 +7,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 3001,
-    strictPort: true, // Dont try other ports if 3001 is taken
+    port: 3000,
+    strictPort: true, // Don't try other ports if 3000 is taken
     cors: true,       // Enable CORS
     proxy: {
       "/api": {

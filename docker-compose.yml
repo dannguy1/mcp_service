@@ -23,6 +23,19 @@ services:
     networks:
       - mcp-network
 
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - VITE_API_URL=http://mcp-service:8000
+  #   depends_on:
+  #     - mcp-service
+  #   networks:
+  #     - mcp-network
+
   redis:
     image: redis:7.0
     ports:
@@ -81,7 +94,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     environment:

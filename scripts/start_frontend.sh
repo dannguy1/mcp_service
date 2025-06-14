@@ -18,15 +18,12 @@ check_port() {
     fi
 }
 
-# Try ports 3001-3010
-for port in {3001..3010}; do
-    if ! check_port $port; then
-        echo "Starting frontend development server on port $port..."
-        export VITE_PORT=$port
-        npm run dev
-        exit 0
-    fi
-done
-
-echo "Error: No available ports found between 3001-3010"
-exit 1
+# Check if port 3000 is available
+if ! check_port 3000; then
+    echo "Starting frontend development server on port 3000..."
+    npm run dev
+    exit 0
+else
+    echo "Error: Port 3000 is already in use"
+    exit 1
+fi
