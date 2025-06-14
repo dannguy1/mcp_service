@@ -315,6 +315,7 @@ class ModelManager:
         for model_id, model_info in self.model_registry.items():
             # Default to the registry status instead of 'inactive'
             status = model_info.get('status', 'active')
+            self.logger.info(f"Initial status from registry for {model_id}: {status}")
             
             # Get current status from Redis
             if self.redis_client:
@@ -359,6 +360,8 @@ class ModelManager:
                                 status = 'inactive'
                 except Exception as e:
                     self.logger.error(f"Error getting Redis status for {model_id}: {e}")
+            
+            self.logger.info(f"Final status for {model_id} after Redis check: {status}")
             
             # Format model info for API response
             api_model = {

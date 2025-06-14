@@ -703,13 +703,15 @@ async def get_model_info(model_id):
                 'status': 'error'
             }), 404
         
+        logger.info(f"Initial model info status: {model_info.get('status')}")
+        
         # Get agent instance if available
         agent_info = {}
         if model_id in model_manager.models:
             agent = model_manager.models[model_id]['agent']
             if agent:
                 # Get current status from Redis
-                status = 'inactive'
+                status = model_info.get('status', 'inactive')  # Start with model's status
                 if model_manager.redis_client:
                     try:
                         key = f"mcp:model:{model_id}:status"
@@ -726,17 +728,36 @@ async def get_model_info(model_id):
                                     status = 'error'
                                 else:
                                     status = 'inactive'
-                                logger.debug(f"Mapped status to: {status}")
+                                logger.debug(f"Mapped status {agent_status['status']} to {status}")
                             except json.JSONDecodeError:
                                 logger.error(f"Failed to parse JSON from Redis for {model_id}")
                                 status = 'inactive'
                         else:
                             logger.debug(f"No status found in Redis for key: {key}")
+                            # Try alternative key format
+                            alt_key = f"mcp:model:wifi_agent:status"
+                            logger.debug(f"Trying alternative key: {alt_key}")
+                            alt_status = model_manager.redis_client.get(alt_key)
+                            if alt_status:
+                                try:
+                                    agent_status = json.loads(alt_status)
+                                    logger.debug(f"Retrieved status from alternative key: {agent_status}")
+                                    if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                        status = 'active'
+                                    elif agent_status['status'] == 'error':
+                                        status = 'error'
+                                    else:
+                                        status = 'inactive'
+                                    logger.debug(f"Mapped status {agent_status['status']} to {status}")
+                                except json.JSONDecodeError:
+                                    logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                                    status = 'inactive'
                     except Exception as e:
                         logger.error(f"Error getting Redis status for {model_id}: {e}")
 
+                logger.info(f"Final agent status from Redis: {status}")
                 agent_info = {
-                    'status': status,
+                    'status': status,  # Use the same status as the model
                     'is_running': agent.is_running,
                     'last_run': agent.last_run.isoformat() if agent.last_run else None,
                     'capabilities': agent.capabilities,
@@ -746,8 +767,10 @@ async def get_model_info(model_id):
                 }
                 logger.debug(f"Created agent info with status: {status}")
         
-        # Update model_info with current status
-        model_info['status'] = agent_info.get('status', 'inactive')
+        # Only update model status if we have agent info
+        if agent_info:
+            model_info['status'] = agent_info.get('status', model_info.get('status', 'inactive'))
+        logger.info(f"Final model info status: {model_info['status']}")
         
         # Combine model and agent information
         response = {
@@ -760,7 +783,7 @@ async def get_model_info(model_id):
             }
         }
         
-        logger.info(f"Retrieved info for model {model_id}: {response}")
+        logger.info(f"Final response for model {model_id}: {json.dumps(response, indent=2)}")
         return jsonify(response)
         
     except Exception as e:

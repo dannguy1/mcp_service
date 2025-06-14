@@ -279,7 +279,11 @@ const Models: React.FC = () => {
                   <tr>
                     <th>Status</th>
                     <td>
-                      <Badge bg={modelInfo.status === 'active' ? 'success' : 'secondary'}>
+                      <Badge bg={
+                        modelInfo.status === 'active' ? 'success' :
+                        modelInfo.status === 'inactive' ? 'secondary' :
+                        'danger'
+                      }>
                         {modelInfo.status}
                       </Badge>
                     </td>
@@ -316,7 +320,15 @@ const Models: React.FC = () => {
                     <tbody>
                       <tr>
                         <th>Status</th>
-                        <td>{modelInfo.agent_info.status}</td>
+                        <td>
+                          <Badge bg={
+                            modelInfo.agent_info.status === 'active' ? 'success' :
+                            modelInfo.agent_info.status === 'inactive' ? 'secondary' :
+                            'danger'
+                          }>
+                            {modelInfo.agent_info.status}
+                          </Badge>
+                        </td>
                       </tr>
                       <tr>
                         <th>Running</th>

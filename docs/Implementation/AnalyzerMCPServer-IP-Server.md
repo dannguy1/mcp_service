@@ -445,6 +445,211 @@ class DataService:
         return [dict(row) for row in rows]
 ```
 
+### 2.3 Model Status Management
+
+The MCP service maintains model status through a combination of Redis caching and database persistence. Here's how it works:
+
+#### 2.3.1 Status Storage
+
+```python
+# model_manager.py
+class ModelManager:
+    def __init__(self):
+        # Static model registry for UI display
+        self.model_registry = {
+            'wifi_agent': {
+                'id': 'wifi_agent',
+                'version': '1.0.0',
+                'created_at': datetime.now().isoformat(),
+                'metrics': {
+                    'accuracy': 0.92,
+                    'false_positive_rate': 0.03,
+                    'false_negative_rate': 0.05
+                },
+                'status': 'active',  # Initial status
+                'description': 'WiFi anomaly detection agent',
+                'capabilities': [
+                    'Authentication failure detection',
+                    'Deauthentication flood detection',
+                    'Beacon frame flood detection'
+                ]
+            }
+        }
+        self.redis_client = None
+        self.logger = logging.getLogger(__name__)
+
+    def set_redis_client(self, redis_client):
+        """Set Redis client for status updates."""
+        self.redis_client = redis_client
+
+    def get_all_models(self) -> Dict[str, Any]:
+        """Get all registered models with their current status."""
+        models = []
+        
+        for model_id, model_info in self.model_registry.items():
+            # Start with registry status
+            status = model_info.get('status', 'active')
+            
+            # Get current status from Redis
+            if self.redis_client:
+                try:
+                    key = f"mcp:model:{model_id}:status"
+                    status_data = self.redis_client.get(key)
+                    if status_data:
+                        try:
+                            agent_status = json.loads(status_data)
+                            # Map agent status to frontend status
+                            if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                status = 'active'
+                            elif agent_status['status'] == 'error':
+                                status = 'error'
+                            else:
+                                status = 'inactive'
+                        except json.JSONDecodeError:
+                            self.logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                            status = 'inactive'
+                except Exception as e:
+                    self.logger.error(f"Error getting Redis status for {model_id}: {e}")
+            
+            # Format model info for API response
+            api_model = {
+                'id': model_id,
+                'name': model_info.get('name', model_id),
+                'version': model_info['version'],
+                'created_at': model_info['created_at'],
+                'metrics': model_info['metrics'],
+                'status': status,
+                'description': model_info.get('description', ''),
+                'capabilities': model_info.get('capabilities', [])
+            }
+            models.append(api_model)
+        
+        return {
+            'models': models,
+            'total': len(models)
+        }
+```
+
+#### 2.3.2 Status API Endpoints
+
+```python
+# routes.py
+@bp.route('/models', methods=['GET'])
+async def get_models():
+    """Get list of all models with their current status."""
+    try:
+        model_data = model_manager.get_all_models()
+        return jsonify(model_data)
+    except Exception as e:
+        logger.error(f"Error getting models: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
+
+@bp.route('/models/<model_id>/info', methods=['GET'])
+async def get_model_info(model_id):
+    """Get detailed information about a specific model."""
+    try:
+        # Get model data
+        model_data = model_manager.get_all_models()
+        model_info = next((m for m in model_data['models'] if m['id'] == model_id), None)
+        
+        if not model_info:
+            return jsonify({
+                'error': f'Model {model_id} not found',
+                'status': 'error'
+            }), 404
+        
+        # Get agent instance if available
+        agent_info = {}
+        if model_id in model_manager.models:
+            agent = model_manager.models[model_id]['agent']
+            if agent:
+                # Get current status from Redis
+                status = model_info.get('status', 'inactive')
+                if model_manager.redis_client:
+                    try:
+                        key = f"mcp:model:{model_id}:status"
+                        status_data = model_manager.redis_client.get(key)
+                        if status_data:
+                            try:
+                                agent_status = json.loads(status_data)
+                                if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                    status = 'active'
+                                elif agent_status['status'] == 'error':
+                                    status = 'error'
+                                else:
+                                    status = 'inactive'
+                            except json.JSONDecodeError:
+                                logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                                status = 'inactive'
+                    except Exception as e:
+                        logger.error(f"Error getting Redis status for {model_id}: {e}")
+
+                agent_info = {
+                    'status': status,
+                    'is_running': agent.is_running,
+                    'last_run': agent.last_run.isoformat() if agent.last_run else None,
+                    'capabilities': agent.capabilities,
+                    'description': agent.description,
+                    'model_path': agent.model_path if hasattr(agent, 'model_path') else None,
+                    'programs': agent.programs if hasattr(agent, 'programs') else []
+                }
+        
+        # Only update model status if we have agent info
+        if agent_info:
+            model_info['status'] = agent_info.get('status', model_info.get('status', 'inactive'))
+        
+        response = {
+            **model_info,
+            'agent_info': agent_info,
+            'metrics': {
+                'accuracy': model_info.get('metrics', {}).get('accuracy', 0),
+                'false_positive_rate': model_info.get('metrics', {}).get('false_positive_rate', 0),
+                'false_negative_rate': model_info.get('metrics', {}).get('false_negative_rate', 0)
+            }
+        }
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Error getting model info for {model_id}: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'status': 'error'
+        }), 500
+```
+
+#### 2.3.3 Status Management Guidelines
+
+1. **Status Hierarchy**:
+   - Model registry provides initial status
+   - Redis provides real-time status updates
+   - Agent instance provides operational status
+
+2. **Status Mapping**:
+   - `active`: Agent is running and processing data
+   - `inactive`: Agent is stopped or not running
+   - `error`: Agent encountered an error
+   - `analyzing`: Agent is currently processing data
+   - `initialized`: Agent is ready but not yet processing
+
+3. **Status Updates**:
+   - Agents update their status in Redis using the key format: `mcp:model:{model_id}:status`
+   - Status updates include timestamp and additional metadata
+   - Status is cached in Redis with a TTL of 5 minutes
+
+4. **Error Handling**:
+   - Failed Redis operations fall back to registry status
+   - JSON parsing errors default to 'inactive' status
+   - All status changes are logged for debugging
+
+5. **API Response**:
+   - `/models` endpoint returns list of all models with current status
+   - `/models/{id}/info` endpoint returns detailed model and agent status
+   - Status is consistent between list and detail views
+
 ## 3. Main Service Implementation
 
 ### 3.1 Main Service (`mcp_service.py`)
