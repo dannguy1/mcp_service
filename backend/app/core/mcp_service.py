@@ -86,7 +86,7 @@ class MCPService:
                 model_manager.set_redis_client(self.redis_client)
             
             # Start ModelManager first
-            await model_manager.start()
+            model_manager.start()
             
             # Create and start WiFi agent
             self.wifi_agent = WiFiAgent(self.config, self.data_service, model_manager)
@@ -118,7 +118,7 @@ class MCPService:
             if self.wifi_agent:
                 await self.wifi_agent.stop()
             await self.data_service.stop()
-            await model_manager.stop()
+            model_manager.stop()
             self.status_manager.stop_status_updates()
             
             logger.info("MCP service stopped successfully")

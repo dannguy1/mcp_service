@@ -47,7 +47,7 @@ class WiFiAgent(BaseAgent):
                     }
                 }
             else:
-                self.model = await self.model_manager.load_model(model_path)
+                self.model = self.model_manager.load_model(model_path)
             self.logger.info("Loaded WiFi anomaly detection model")
             
             # Initialize classifier and set model
@@ -56,18 +56,41 @@ class WiFiAgent(BaseAgent):
             self.logger.info("Initialized anomaly classifier")
             
             # Register with ModelManager
-            await self.model_manager.register_model(self, self.model_id)
+            if not self.model_manager.register_model(self, self.model_id):
+                raise Exception("Failed to register model")
             
             # Set running state
             self.is_running = True
             self.status = 'active'
             self.last_run = datetime.now()
             
+            # Update status in Redis
+            self.model_manager._update_model_status(self.model_id, {
+                'id': self.model_id,
+                'name': self.__class__.__name__,
+                'status': 'active',
+                'is_running': True,
+                'last_run': self.last_run.isoformat(),
+                'capabilities': self.capabilities,
+                'description': self.description
+            })
+            
             self.logger.info("WiFi agent started")
             
         except Exception as e:
             self.logger.error(f"Failed to start WiFi agent: {e}")
             self.status = 'error'
+            # Update status in Redis
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'error',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description
+                })
             raise
 
     async def stop(self):
@@ -82,7 +105,7 @@ class WiFiAgent(BaseAgent):
             
             # Update model status in ModelManager
             if self.model_manager:
-                await self.model_manager._update_model_status(self.model_id, {
+                self.model_manager._update_model_status(self.model_id, {
                     'id': self.model_id,
                     'name': self.__class__.__name__,
                     'status': 'inactive',
@@ -97,6 +120,17 @@ class WiFiAgent(BaseAgent):
         except Exception as e:
             self.logger.error(f"Error stopping WiFi agent: {e}")
             self.status = 'error'
+            # Update status in Redis
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'error',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description
+                })
             raise
 
     async def run_analysis_cycle(self):
@@ -106,6 +140,17 @@ class WiFiAgent(BaseAgent):
 
         try:
             self.status = 'analyzing'
+            # Update status in Redis
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'analyzing',
+                    'is_running': True,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description
+                })
             self.logger.info("Starting analysis cycle")
 
             # Get recent logs
@@ -138,12 +183,34 @@ class WiFiAgent(BaseAgent):
                 )
 
             self.status = 'active'
+            # Update status in Redis
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'active',
+                    'is_running': True,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description
+                })
             self.last_run = datetime.now()
             self.logger.info("Analysis cycle completed")
 
         except Exception as e:
             self.logger.error(f"Error in analysis cycle: {e}")
             self.status = 'error'
+            # Update status in Redis
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'error',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description
+                })
             raise
 
     def get_status(self) -> Dict[str, Any]:

@@ -389,20 +389,81 @@ def get_logs():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@bp.route('/models')
-def get_models():
-    """Get model information"""
+@bp.route('/models', methods=['GET'])
+async def get_models():
+    """Get list of all models"""
     try:
-        # Get models from ModelManager
+        # Get model data
         model_data = model_manager.get_all_models()
-        
-        # Return the data directly as it's already in the correct format
+        if not isinstance(model_data, dict) or 'models' not in model_data:
+            logger.error(f"Invalid model data format: {model_data}")
+            return jsonify({
+                'error': 'Invalid model data format',
+                'status': 'error'
+            }), 500
+
+        # Add debug logging for each model's status
+        for model in model_data['models']:
+            model_id = model['id']
+            if model_manager.redis_client:
+                try:
+                    key = f"mcp:model:{model_id}:status"
+                    logger.debug(f"Getting status from Redis with key: {key}")
+                    status_data = model_manager.redis_client.get(key)
+                    if status_data:
+                        try:
+                            agent_status = json.loads(status_data)
+                            logger.debug(f"Retrieved status from Redis: {agent_status}")
+                            # Map agent status to frontend status
+                            if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                model['status'] = 'active'
+                            elif agent_status['status'] == 'error':
+                                model['status'] = 'error'
+                            else:
+                                model['status'] = 'inactive'
+                            logger.debug(f"Mapped status {agent_status['status']} to {model['status']}")
+                        except json.JSONDecodeError:
+                            logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                            model['status'] = 'inactive'
+                    else:
+                        logger.debug(f"No status found in Redis for key: {key}")
+                        # Try alternative key format
+                        alt_key = f"mcp:model:wifi_agent:status"
+                        logger.debug(f"Trying alternative key: {alt_key}")
+                        alt_status = model_manager.redis_client.get(alt_key)
+                        if alt_status:
+                            try:
+                                agent_status = json.loads(alt_status)
+                                logger.debug(f"Retrieved status from alternative key: {agent_status}")
+                                if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                    model['status'] = 'active'
+                                elif agent_status['status'] == 'error':
+                                    model['status'] = 'error'
+                                else:
+                                    model['status'] = 'inactive'
+                                logger.debug(f"Mapped status {agent_status['status']} to {model['status']}")
+                            except json.JSONDecodeError:
+                                logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                                model['status'] = 'inactive'
+                except Exception as e:
+                    logger.error(f"Error getting Redis status for {model_id}: {e}")
+
+            # Format model info for API response
+            model['metrics'] = {
+                'accuracy': model.get('metrics', {}).get('accuracy', 0),
+                'false_positive_rate': model.get('metrics', {}).get('false_positive_rate', 0),
+                'false_negative_rate': model.get('metrics', {}).get('false_negative_rate', 0)
+            }
+
+        # Log the final response data
+        logger.info(f"Preparing response for /models: {json.dumps(model_data, indent=2)}")
         return jsonify(model_data)
+        
     except Exception as e:
-        logger.error(f"Error getting models: {e}")
+        logger.error(f"Error getting models: {str(e)}")
         return jsonify({
-            'models': [],
-            'total': 0
+            'error': str(e),
+            'status': 'error'
         }), 500
 
 @bp.route('/models/<model_id>/activate', methods=['POST'])
@@ -647,8 +708,35 @@ async def get_model_info(model_id):
         if model_id in model_manager.models:
             agent = model_manager.models[model_id]['agent']
             if agent:
+                # Get current status from Redis
+                status = 'inactive'
+                if model_manager.redis_client:
+                    try:
+                        key = f"mcp:model:{model_id}:status"
+                        logger.debug(f"Getting status from Redis with key: {key}")
+                        status_data = model_manager.redis_client.get(key)
+                        if status_data:
+                            try:
+                                agent_status = json.loads(status_data)
+                                logger.debug(f"Retrieved status from Redis: {agent_status}")
+                                # Map agent status to frontend status
+                                if agent_status['status'] in ['active', 'analyzing', 'initialized']:
+                                    status = 'active'
+                                elif agent_status['status'] == 'error':
+                                    status = 'error'
+                                else:
+                                    status = 'inactive'
+                                logger.debug(f"Mapped status to: {status}")
+                            except json.JSONDecodeError:
+                                logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                                status = 'inactive'
+                        else:
+                            logger.debug(f"No status found in Redis for key: {key}")
+                    except Exception as e:
+                        logger.error(f"Error getting Redis status for {model_id}: {e}")
+
                 agent_info = {
-                    'status': agent.status,
+                    'status': status,
                     'is_running': agent.is_running,
                     'last_run': agent.last_run.isoformat() if agent.last_run else None,
                     'capabilities': agent.capabilities,
@@ -656,6 +744,10 @@ async def get_model_info(model_id):
                     'model_path': agent.model_path if hasattr(agent, 'model_path') else None,
                     'programs': agent.programs if hasattr(agent, 'programs') else []
                 }
+                logger.debug(f"Created agent info with status: {status}")
+        
+        # Update model_info with current status
+        model_info['status'] = agent_info.get('status', 'inactive')
         
         # Combine model and agent information
         response = {
