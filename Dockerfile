@@ -2,7 +2,7 @@
 FROM python:3.10-slim
 
 # Set working directory
-WORKDIR /app
+WORKDIR /app/backend/app
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -11,27 +11,47 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application code
-COPY mcp_service/ mcp_service/
-COPY README.md .
+COPY backend /app/backend/
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/models
 
 # Set environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/backend
 ENV PYTHONUNBUFFERED=1
-
-# Initialize SQLite database
-RUN python -m mcp_service.init_local_db
+ENV DB_HOST=192.168.10.14
+ENV DB_PORT=5432
+ENV DB_NAME=netmonitor_db
+ENV DB_USER=netmonitor_user
+ENV DB_PASSWORD=netmonitor_password
+ENV DB_MIN_CONNECTIONS=5
+ENV DB_MAX_CONNECTIONS=20
+ENV DB_POOL_TIMEOUT=30
+ENV REDIS_HOST=redis
+ENV REDIS_PORT=6379
+ENV REDIS_DB=0
+ENV REDIS_MAX_CONNECTIONS=10
+ENV REDIS_SOCKET_TIMEOUT=5
+ENV SERVICE_HOST=0.0.0.0
+ENV SERVICE_PORT=8000
+ENV LOG_LEVEL=INFO
+ENV ANALYSIS_INTERVAL=300
+ENV BATCH_SIZE=1000
+ENV MAX_RETRIES=3
+ENV RETRY_DELAY=5
+ENV SQLITE_DB_PATH=/app/data/mcp_anomalies.db
+ENV SQLITE_JOURNAL_MODE=WAL
+ENV SQLITE_SYNCHRONOUS=NORMAL
+ENV SQLITE_CACHE_SIZE=-2000
+ENV SQLITE_TEMP_STORE=MEMORY
+ENV SQLITE_MMAP_SIZE=30000000000
 
 # Expose port
-EXPOSE 5555
+EXPOSE 8000
 
 # Run the service
-CMD ["python", "-m", "mcp_service.mcp_service"]
+CMD ["python", "core/mcp_service.py"]

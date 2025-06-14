@@ -5,56 +5,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     environment:
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_MIN_CONNECTIONS=${DB_MIN_CONNECTIONS:-5}
-      - DB_MAX_CONNECTIONS=${DB_MAX_CONNECTIONS:-20}
-      - DB_POOL_TIMEOUT=${DB_POOL_TIMEOUT:-30}
-      - SQLITE_DB_PATH=/app/data/mcp_anomalies.db
-      - SQLITE_SYNCHRONOUS=${SQLITE_SYNCHRONOUS:-NORMAL}
-      - SQLITE_CACHE_SIZE=${SQLITE_CACHE_SIZE:--2000}
-      - SQLITE_TEMP_STORE=${SQLITE_TEMP_STORE:-MEMORY}
-      - SQLITE_MMAP_SIZE=${SQLITE_MMAP_SIZE:-30000000000}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_DB=${REDIS_DB:-0}
-      - REDIS_MAX_CONNECTIONS=${REDIS_MAX_CONNECTIONS:-10}
-      - REDIS_SOCKET_TIMEOUT=${REDIS_SOCKET_TIMEOUT:-5}
-      - SERVICE_HOST=0.0.0.0
-      - SERVICE_PORT=5555
-      - LOG_LEVEL=INFO
-      - ANALYSIS_INTERVAL=300
-    ports:
-      - "5555:5555"
-    volumes:
-      - models:/app/models
-      - anomaly_data:/app/data
+      - DB_HOST=192.168.10.14
+      - DB_PORT=5432
+      - DB_NAME=netmonitor_db
+      - DB_USER=netmonitor_user
+      - DB_PASSWORD=netmonitor_password
+      - DB_MIN_CONNECTIONS=5
+      - DB_MAX_CONNECTIONS=20
+      - DB_POOL_TIMEOUT=30
     depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5555/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-    restart: unless-stopped
+      - redis
     networks:
-      - mcp_network
+      - mcp-network
 
   redis:
-    image: redis:6.2
+    image: redis:7.0
     ports:
       - "6379:6379"
     volumes:
@@ -82,7 +52,7 @@ services:
           memory: 256M
     restart: unless-stopped
     networks:
-      - mcp_network
+      - mcp-network
 
   prometheus:
     image: prom/prometheus:latest
@@ -106,7 +76,7 @@ services:
           memory: 256M
     restart: unless-stopped
     networks:
-      - mcp_network
+      - mcp-network
 
   grafana:
     image: grafana/grafana:latest
@@ -127,7 +97,7 @@ services:
           memory: 256M
     restart: unless-stopped
     networks:
-      - mcp_network
+      - mcp-network
 
   node_exporter:
     image: prom/node-exporter:latest
@@ -152,15 +122,15 @@ services:
           memory: 128M
     restart: unless-stopped
     networks:
-      - mcp_network
+      - mcp-network
 
 networks:
-  mcp_network:
+  mcp-network:
     driver: bridge
     ipam:
       driver: default
       config:
-        - subnet: 192.168.92.0/24
+        - subnet: 192.168.93.0/24
 
 volumes:
   models:

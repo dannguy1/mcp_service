@@ -29,7 +29,21 @@ class DataService:
     async def start(self):
         """Initialize database connection."""
         try:
-            # TODO: Initialize database connection using self.config.db
+            # Initialize database connection using environment variables
+            db_config = {
+                'host': os.getenv('DB_HOST', '192.168.10.14'),
+                'port': int(os.getenv('DB_PORT', '5432')),
+                'database': os.getenv('DB_NAME', 'netmonitor_db'),
+                'user': os.getenv('DB_USER', 'netmonitor_user'),
+                'password': os.getenv('DB_PASSWORD', 'netmonitor_password'),
+                'min_connections': int(os.getenv('DB_MIN_CONNECTIONS', '5')),
+                'max_connections': int(os.getenv('DB_MAX_CONNECTIONS', '20')),
+                'pool_timeout': int(os.getenv('DB_POOL_TIMEOUT', '30'))
+            }
+            
+            # Store the database configuration
+            self.db_config = db_config
+            
             self.status_manager.update_status('connected')
             logger.info("DataService started successfully")
         except Exception as e:
