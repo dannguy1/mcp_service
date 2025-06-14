@@ -8,35 +8,49 @@ import 'antd/dist/antd.css'
 
 console.log('Starting application...')
 
-const rootElement = document.getElementById('root')
-console.log('Root element:', rootElement)
+// Create a client with better error handling
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+})
 
-if (!rootElement) {
-  console.error('Root element not found!')
-} else {
-  try {
-    // Create a client
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          refetchOnWindowFocus: false,
-          retry: 1,
-        },
-      },
-    })
-
-    const root = ReactDOM.createRoot(rootElement)
-    console.log('Root created successfully')
-    
-    root.render(
-      <React.StrictMode>
-        <QueryClientProvider client={queryClient}>
-          <App />
-        </QueryClientProvider>
-      </React.StrictMode>
-    )
-    console.log('App rendered successfully')
-  } catch (error) {
-    console.error('Error rendering app:', error)
+// Initialize the app
+const initializeApp = () => {
+  const rootElement = document.getElementById('root')
+  
+  if (!rootElement) {
+    throw new Error('Root element not found!')
   }
+
+  const root = ReactDOM.createRoot(rootElement)
+  
+  root.render(
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </React.StrictMode>
+  )
+}
+
+// Start the app with error handling
+try {
+  initializeApp()
+} catch (error) {
+  console.error('Failed to initialize app:', error)
+  // You might want to show a user-friendly error message here
+  document.body.innerHTML = `
+    <div style="color: red; padding: 20px; text-align: center;">
+      <h1>Application Error</h1>
+      <p>Failed to initialize the application. Please refresh the page or contact support.</p>
+    </div>
+  `
 }
