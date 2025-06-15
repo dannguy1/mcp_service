@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Badge, Spinner, Alert, Form, Row, Col, Button, ButtonGroup } from 'react-bootstrap';
+import { Card, Table, Badge, Spinner, Alert, Form, Row, Col, Button, ButtonGroup, Pagination } from 'react-bootstrap';
 import { FaExclamationTriangle, FaFilter, FaDownload, FaSync } from 'react-icons/fa';
 import { endpoints } from '../services/api';
 import type { Log } from '../services/types';
@@ -14,9 +14,14 @@ const Logs: React.FC = () => {
     search: ''
   });
 
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    perPage: 25
+  });
+
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['logs', filters],
-    queryFn: () => endpoints.getLogs(filters),
+    queryKey: ['logs', filters, pagination],
+    queryFn: () => endpoints.getLogs({ ...filters, page: pagination.currentPage, per_page: pagination.perPage }),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
@@ -56,6 +61,10 @@ const Logs: React.FC = () => {
     refetch();
   };
 
+  const handlePageChange = (page: number) => {
+    setPagination(prev => ({ ...prev, currentPage: page }));
+  };
+
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
@@ -83,6 +92,8 @@ const Logs: React.FC = () => {
       </Alert>
     );
   }
+
+  const totalPages = Math.ceil((data.total || 0) / pagination.perPage);
 
   return (
     <div>
@@ -180,7 +191,26 @@ const Logs: React.FC = () => {
                 </Form.Group>
               </Col>
             </Row>
-            <div className="d-flex justify-content-end">
+            <div className="d-flex justify-content-between align-items-center">
+              <Pagination>
+                <Pagination.First 
+                  onClick={() => handlePageChange(1)}
+                  disabled={pagination.currentPage === 1}
+                />
+                <Pagination.Prev 
+                  onClick={() => handlePageChange(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 1}
+                />
+                <Pagination.Item active>{pagination.currentPage}</Pagination.Item>
+                <Pagination.Next 
+                  onClick={() => handlePageChange(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === totalPages}
+                />
+                <Pagination.Last 
+                  onClick={() => handlePageChange(totalPages)}
+                  disabled={pagination.currentPage === totalPages}
+                />
+              </Pagination>
               <Button variant="primary" onClick={() => refetch()}>
                 Apply Filters
               </Button>
