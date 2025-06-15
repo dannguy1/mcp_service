@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form } from 'react-bootstrap';
-import { FaPlay, FaStop, FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle } from 'react-icons/fa';
+import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle } from 'react-icons/fa';
 import { endpoints } from '../services/api';
 import type { Model } from '../services/types';
 import { toast } from 'react-hot-toast';
@@ -20,15 +20,6 @@ const Models: React.FC = () => {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const handleActivate = async (modelId: string) => {
-    try {
-      await endpoints.activateModel(modelId);
-      refetch();
-    } catch (error) {
-      console.error('Failed to activate model:', error);
-    }
-  };
-
   const handleInfo = async (modelId: string) => {
     try {
       const info = await endpoints.getModelInfo(modelId);
@@ -42,15 +33,6 @@ const Models: React.FC = () => {
     } catch (error) {
       console.error('Error fetching model info:', error);
       alert('Failed to fetch model information');
-    }
-  };
-
-  const handleDeploy = async (modelId: string) => {
-    try {
-      await endpoints.deployModel(modelId);
-      refetch();
-    } catch (error) {
-      console.error('Failed to deploy model:', error);
     }
   };
 
@@ -192,13 +174,6 @@ const Models: React.FC = () => {
                   <td>{(model.metrics.false_negative_rate * 100).toFixed(1)}%</td>
                   <td>
                     <div className="d-flex gap-2">
-                      <Button
-                        variant={model.status === 'active' ? 'warning' : 'success'}
-                        size="sm"
-                        onClick={() => handleActivate(model.id)}
-                      >
-                        {model.status === 'active' ? <FaStop /> : <FaPlay />}
-                      </Button>
                       <Button
                         variant="info"
                         size="sm"
