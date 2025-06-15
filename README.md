@@ -25,19 +25,35 @@ A Modular, Extensible AI Processing Service for network log analysis.
 │   └── Dockerfile         # Frontend container config
 ├── docs/                   # Documentation
 ├── scripts/               # Project-wide scripts
-├── docker-compose.yml     # Production compose file
-└── docker-compose.dev.yml # Development compose file
+└── docker-compose.yml     # Docker compose file
 ```
 
 ## Development Setup
 
 ### Prerequisites
-- Python 3.10+
-- Node.js 18+
 - Docker and Docker Compose
-- Redis
 
-### Local Development
+### Development Environment
+
+The project uses Docker Compose for development. All services (backend, frontend, Redis, Prometheus, and Grafana) are containerized.
+
+1. Start all services:
+```bash
+docker compose up
+```
+
+This will start:
+- Frontend on http://localhost:3000
+- Backend API on http://localhost:8000
+- Grafana on http://localhost:3001
+- Prometheus on http://localhost:9090
+- Redis on port 6379
+
+The frontend container includes hot-reloading, so any changes to the frontend code will be immediately reflected in the browser.
+
+### Manual Development (Alternative)
+
+If you prefer to run services manually:
 
 1. Start Redis:
 ```bash
@@ -60,12 +76,6 @@ npm install
 npm run dev
 ```
 
-### Docker Development
-
-```bash
-docker compose -f docker-compose.dev.yml up
-```
-
 ## Testing
 
 ### Backend Tests
@@ -78,18 +88,6 @@ pytest
 ```bash
 cd frontend
 npm test
-```
-
-## Deployment
-
-1. Build the containers:
-```bash
-docker compose build
-```
-
-2. Start the services:
-```bash
-docker compose up -d
 ```
 
 ## Documentation

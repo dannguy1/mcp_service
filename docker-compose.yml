@@ -23,18 +23,21 @@ services:
     networks:
       - mcp-network
 
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - VITE_API_URL=http://mcp-service:8000
-  #   depends_on:
-  #     - mcp-service
-  #   networks:
-  #     - mcp-network
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://mcp-service:8000
+    depends_on:
+      - mcp-service
+    networks:
+      - mcp-network
 
   redis:
     image: redis:7.0
