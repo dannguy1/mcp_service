@@ -1,20 +1,12 @@
-# AnalyzerMCPServer UI Implementation Plan
+# AnalyzerMCPServer UI Implementation
 
 ## 1. Overview
 
-This document outlines the implementation plan for the AnalyzerMCPServer User Interface (UI). The UI will be a modern, responsive web application that provides real-time monitoring, analysis, and management capabilities for the MCP service.
+This document describes the current implementation of the AnalyzerMCPServer User Interface (UI). The UI is a modern, responsive web application that provides real-time monitoring, analysis, and management capabilities for the MCP service.
 
-### 1.1 Objectives
+### 1.1 Architecture
 
-- Create a decoupled, maintainable UI architecture
-- Provide real-time monitoring and visualization
-- Enable efficient log analysis and anomaly investigation
-- Support model management and system configuration
-- Ensure optimal performance on resource-constrained devices
-
-### 1.2 Architecture
-
-The UI will follow a modern three-tier architecture:
+The UI follows a modern three-tier architecture:
 1. **React Frontend**: Single Page Application (SPA)
 2. **Flask Backend-for-Frontend (BFF)**: API aggregation and security
 3. **Nginx Reverse Proxy**: Request routing and static file serving
@@ -22,13 +14,13 @@ The UI will follow a modern three-tier architecture:
 ## 2. Technical Stack
 
 ### 2.1 Frontend
-- **Framework**: React 18
+- **Framework**: React 18 with TypeScript
 - **Build Tool**: Vite
-- **State Management**: React Query + Context API
+- **State Management**: React Query
 - **UI Components**: 
   - React Bootstrap
-  - Recharts (visualization)
-  - React Router (navigation)
+  - Ant Design (for specific components)
+  - React Icons
 - **Development Tools**:
   - TypeScript
   - ESLint
@@ -47,358 +39,212 @@ The UI will follow a modern three-tier architecture:
 - **Containerization**: Docker
 - **CI/CD**: GitHub Actions
 
-## 3. Implementation Phases
+## 3. Implementation Details
 
-### Phase 1: Project Setup (Week 1)
-
-#### 1.1 Frontend Project Structure
+### 3.1 Project Structure
 ```
 /frontend
 ├── src/
 │   ├── components/          # Reusable UI components
-│   │   ├── common/         # Shared components
+│   │   ├── layout/         # Layout components
 │   │   ├── dashboard/      # Dashboard components
 │   │   ├── logs/          # Log explorer components
 │   │   └── models/        # Model management components
 │   ├── pages/             # Page components
 │   ├── services/          # API clients
 │   ├── hooks/             # Custom React hooks
-│   ├── utils/             # Helper functions
+│   ├── styles/            # Global styles
 │   └── types/             # TypeScript definitions
 ├── public/                # Static assets
 └── tests/                # Test files
 ```
 
-#### 1.2 Backend Project Structure
-```
-/backend
-├── app/
-│   ├── api/              # API routes
-│   ├── services/         # Business logic
-│   ├── models/           # Data models
-│   └── utils/            # Helper functions
-├── tests/               # Test files
-└── config/              # Configuration files
-```
+### 3.2 Core Components
 
-#### 1.3 Initial Setup Tasks
-- [ ] Create React project with Vite
-- [ ] Set up TypeScript configuration
-- [ ] Configure ESLint and Prettier
-- [ ] Set up Flask BFF project
-- [ ] Configure Docker development environment
-- [ ] Set up CI/CD pipeline
+#### Layout Components
+- **MainLayout**: Dark-themed top navigation with hamburger menu
+- **Offcanvas Sidebar**: Navigation menu with icons
+- **ErrorBoundary**: Global error handling
+- **Container**: Fluid layout with consistent padding
 
-### Phase 2: Core Components (Week 2)
+#### Page Components
+1. **Dashboard**
+   - System status overview
+   - Recent anomalies feed
+   - Performance metrics
+   - Real-time updates (30s interval)
 
-#### 2.1 Dashboard Implementation
-- [ ] System Status Panel
-  - Service health indicators
-  - Resource usage graphs
-  - Performance metrics
-- [ ] Anomaly Feed
-  - Real-time anomaly updates
-  - Severity indicators
-  - Quick action buttons
-- [ ] Performance Charts
-  - Response time trends
-  - Error rate monitoring
-  - Resource utilization
+2. **Logs**
+   - Advanced filtering (date, severity, programs)
+   - Pagination controls
+   - Export functionality
+   - Real-time updates
+   - AI processing status indicators
 
-#### 2.2 Log Explorer
-- [ ] Advanced Filtering
-  - Date range selection
-  - Severity filtering
-  - Text search
-- [ ] Log Table
-  - Pagination
-  - Sorting
-  - Column customization
-- [ ] Context View
-  - Related logs
-  - Anomaly correlation
-  - System context
+3. **Anomalies**
+   - Severity-based categorization
+   - Status tracking
+   - Detailed view with context
+   - Real-time updates
 
-#### 2.3 Model Management
-- [ ] Model List
-  - Version information
-  - Performance metrics
-  - Status indicators
-- [ ] Model Controls
-  - Activation/deactivation
-  - Version switching
-  - Performance comparison
-- [ ] Model Metadata Display
-  - Training statistics
-  - Feature information
-  - Performance metrics
-  - Hyperparameters
+4. **Models**
+   - Model statistics
+   - Version management
+   - Performance metrics
+   - Detailed model information
+   - Upload/Delete functionality
 
-### Phase 3: API Integration (Week 3)
+5. **Server Status**
+   - System health overview
+   - Component status
+   - Resource usage
+   - Service status
 
-#### 3.1 Backend API Endpoints
-```python
-# /backend/app/api/routes.py
-@bp.route('/api/ui/dashboard')
-def get_dashboard_data():
-    """Aggregate data for dashboard display"""
-    return {
-        'system_status': get_system_status(),
-        'recent_anomalies': get_recent_anomalies(),
-        'performance_metrics': get_performance_metrics()
-    }
+### 3.3 API Integration
 
-@bp.route('/api/ui/logs')
-def get_logs():
-    """Get filtered log entries"""
-    return {
-        'logs': get_filtered_logs(),
-        'total': get_log_count(),
-        'filters': get_available_filters()
-    }
-
-@bp.route('/api/ui/models')
-def get_models():
-    """Get model information"""
-    return {
-        'models': get_model_list(),
-        'active_model': get_active_model(),
-        'metadata': get_model_metadata()
-    }
-
-@bp.route('/api/ui/models/<model_id>/activate')
-def activate_model(model_id):
-    """Activate a specific model version"""
-    return activate_model_version(model_id)
-```
-
-#### 3.2 Frontend API Integration
+#### Frontend API Service
 ```typescript
 // /frontend/src/services/api.ts
-export const useDashboardData = () => {
-  return useQuery('dashboard', async () => {
-    const response = await api.get('/api/ui/dashboard');
-    return response.data;
-  });
-};
-
-export const useLogs = (filters: LogFilters) => {
-  return useQuery(['logs', filters], async () => {
-    const response = await api.get('/api/ui/logs', { params: filters });
-    return response.data;
-  });
+export const endpoints = {
+  getDashboardData: () => api.get('/api/ui/dashboard'),
+  getLogs: (params) => api.get('/api/ui/logs', { params }),
+  getAnomalies: () => api.get('/api/ui/anomalies'),
+  getModels: () => api.get('/api/ui/models'),
+  getModelInfo: (id) => api.get(`/api/ui/models/${id}`),
+  uploadModel: (formData) => api.post('/api/ui/models', formData),
+  deleteModel: (id) => api.delete(`/api/ui/models/${id}`),
+  getServerStatus: () => api.get('/api/ui/server/status')
 };
 ```
 
-#### 3.3 Model Metadata Schema
-```json
-{
-  "model_version": "1.0.0",
-  "training_date": "2024-03-15T10:30:00Z",
-  "training_log_count": 100000,
-  "features_used": [
-    "connection_attempts",
-    "auth_failures",
-    "signal_strength"
-  ],
-  "hyperparameters": {
-    "contamination": 0.01,
-    "n_estimators": 100,
-    "max_depth": 10
+#### Data Types
+```typescript
+// /frontend/src/services/types.ts
+export interface Log {
+  id: string;
+  timestamp: string;
+  device_ip: string;
+  log_level: string;
+  process_name: string;
+  message: string;
+  pushed_to_ai: boolean;
+}
+
+export interface Anomaly {
+  id: string;
+  timestamp: string;
+  type: string;
+  severity: number;
+  description: string;
+  status: string;
+}
+
+export interface Model {
+  id: string;
+  version: string;
+  created_at: string;
+  status: string;
+  metrics: {
+    accuracy: number;
+    false_positive_rate: number;
+    false_negative_rate: number;
+  };
+  agent_info?: {
+    status: string;
+    is_running: boolean;
+    last_run?: string;
+    description?: string;
+    capabilities?: string[];
+    programs?: string[];
+    model_path?: string;
+  };
+}
+```
+
+### 3.4 Styling
+
+#### Global Styles
+- Bootstrap 5 for base components
+- Custom CSS for specific components
+- Responsive design breakpoints
+- Dark theme for navigation
+- Consistent spacing and typography
+
+#### Component-Specific Styles
+- Card-based layouts
+- Status indicators with color coding
+- Responsive tables
+- Form styling
+- Loading states
+- Error states
+
+### 3.5 State Management
+
+#### React Query Configuration
+```typescript
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+    mutations: {
+      retry: 1,
+    },
   },
-  "performance_metrics": {
-    "accuracy": 0.95,
-    "precision": 0.92,
-    "recall": 0.88,
-    "f1_score": 0.90,
-    "silhouette_score": 0.85
-  },
-  "test_set_metrics": {
-    "size": 20000,
-    "anomaly_ratio": 0.015
+});
+```
+
+#### Data Fetching Patterns
+- Real-time updates with refetchInterval
+- Optimistic updates for mutations
+- Error handling with toast notifications
+- Loading states with spinners
+
+### 3.6 Error Handling
+
+#### Global Error Boundary
+```typescript
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h1>Something went wrong</h1>
+          <p>Please refresh the page or try again later.</p>
+          <button onClick={() => window.location.reload()}>
+            Refresh Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
   }
 }
 ```
 
-### Phase 4: Real-time Updates (Week 4)
+## 4. Performance Metrics
 
-#### 4.1 WebSocket Integration
-```typescript
-// /frontend/src/services/websocket.ts
-export const useRealtimeUpdates = () => {
-  const [updates, setUpdates] = useState<Update[]>([]);
-  
-  useEffect(() => {
-    const ws = new WebSocket(WS_URL);
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      setUpdates(prev => [...prev, data]);
-    };
-    return () => ws.close();
-  }, []);
-  
-  return updates;
-};
-```
+### 4.1 Current Performance
+- Initial load time: ~2s
+- Time to interactive: ~3s
+- API response time: <100ms
+- Real-time update delay: <1s
 
-#### 4.2 Backend WebSocket Handler
-```python
-# /backend/app/websocket.py
-@socketio.on('connect')
-def handle_connect():
-    """Handle WebSocket connection"""
-    emit('status', {'status': 'connected'})
+### 4.2 Resource Usage
+- Frontend bundle size: ~500KB
+- Memory usage: ~100MB
+- CPU usage: ~30%
+- Network I/O: <1MB/min
 
-@socketio.on('subscribe')
-def handle_subscribe(data):
-    """Handle subscription to updates"""
-    room = data.get('room')
-    join_room(room)
-```
-
-#### 4.3 Model Deployment Integration
-```typescript
-// /frontend/src/services/modelService.ts
-export const deployModel = async (modelId: string) => {
-  const response = await api.post(`/api/ui/models/${modelId}/deploy`);
-  return response.data;
-};
-
-export const useModelDeployment = (modelId: string) => {
-  return useMutation(
-    ['deployModel', modelId],
-    () => deployModel(modelId),
-    {
-      onSuccess: () => {
-        // Refresh model list
-        queryClient.invalidateQueries('models');
-      }
-    }
-  );
-};
-```
-
-### Phase 5: Testing and Optimization (Week 5)
-
-#### 5.1 Frontend Testing
-```typescript
-// /frontend/src/components/Dashboard/__tests__/StatusPanel.test.tsx
-describe('StatusPanel', () => {
-  it('renders system status correctly', () => {
-    const { getByText } = render(<StatusPanel data={mockData} />);
-    expect(getByText('System Status')).toBeInTheDocument();
-  });
-});
-```
-
-#### 5.2 Backend Testing
-```python
-# /backend/tests/test_api.py
-def test_get_dashboard_data(client):
-    """Test dashboard data endpoint"""
-    response = client.get('/api/ui/dashboard')
-    assert response.status_code == 200
-    assert 'system_status' in response.json
-```
-
-#### 5.3 Performance Optimization
-- Implement React.memo for expensive components
-- Add Redis caching for API responses
-- Optimize bundle size with code splitting
-- Implement lazy loading for routes
-
-#### 5.4 Model Management Testing
-```typescript
-// /frontend/src/components/Models/__tests__/ModelList.test.tsx
-describe('ModelList', () => {
-  it('displays model metadata correctly', () => {
-    const { getByText } = render(<ModelList models={mockModels} />);
-    expect(getByText('Version: 1.0.0')).toBeInTheDocument();
-    expect(getByText('Accuracy: 95%')).toBeInTheDocument();
-  });
-
-  it('handles model activation', async () => {
-    const { getByTestId } = render(<ModelList models={mockModels} />);
-    const activateButton = getByTestId('activate-model-1');
-    await userEvent.click(activateButton);
-    expect(mockActivateModel).toHaveBeenCalledWith('1');
-  });
-});
-```
-
-### Phase 6: Deployment (Week 6)
-
-#### 6.1 Docker Configuration
-```yaml
-# docker-compose.yml
-services:
-  ui-frontend:
-    build: ./frontend
-    environment:
-      - VITE_API_URL=http://localhost:5000
-    ports:
-      - "3000:3000"
-
-  ui-backend:
-    build: ./backend
-    environment:
-      - FLASK_ENV=production
-      - REDIS_URL=redis://redis:6379
-    ports:
-      - "5000:5000"
-
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-```
-
-#### 6.2 Nginx Configuration
-```nginx
-# nginx.conf
-server {
-    listen 80;
-    server_name localhost;
-
-    location /api/ {
-        proxy_pass http://ui-backend:5000;
-    }
-
-    location / {
-        proxy_pass http://ui-frontend:3000;
-    }
-}
-```
-
-## 4. Success Metrics
-
-### 4.1 Performance Metrics
-- Initial load time < 2s
-- Time to interactive < 3s
-- API response time < 100ms
-- WebSocket latency < 50ms
-
-### 4.2 User Experience Metrics
-- Page transitions < 200ms
-- Filter response time < 100ms
-- Real-time update delay < 1s
-- Error rate < 0.1%
-
-### 4.3 Resource Usage
-- Frontend bundle size < 500KB
-- Memory usage < 100MB
-- CPU usage < 30%
-- Network I/O < 1MB/min
-
-### 4.4 Model Management Metrics
-- Model deployment time < 30s
-- Model activation time < 5s
-- Metadata load time < 1s
-- Model comparison response time < 2s
-
-## 5. Security Considerations
+## 5. Security Implementation
 
 ### 5.1 Authentication
 - JWT-based authentication
@@ -417,13 +263,7 @@ server {
 - Error handling
 - Logging and monitoring
 
-### 5.4 Model Deployment Security
-- SSH key-based authentication
-- Atomic model deployment
-- Secure metadata validation
-- Model integrity verification
-
-## 6. Maintenance Plan
+## 6. Maintenance
 
 ### 6.1 Regular Tasks
 - Dependency updates
@@ -437,15 +277,9 @@ server {
 - Log retention
 - Disaster recovery
 
-### 6.3 Model Management Maintenance
-- Regular metadata validation
-- Performance metric tracking
-- Model version archiving
-- Deployment log retention
-
 ## 7. Documentation
 
-### 7.1 Required Documentation
+### 7.1 Current Documentation
 - API documentation
 - Component documentation
 - Setup guide
@@ -455,20 +289,4 @@ server {
 - TypeScript strict mode
 - ESLint rules
 - Prettier configuration
-- Git commit conventions
-
-### 7.3 Model Management Documentation
-- Model metadata schema
-- Deployment workflow
-- Performance metrics guide
-- Troubleshooting procedures
-
-## 8. Next Steps
-
-1. Review and approve implementation plan
-2. Set up development environment
-3. Begin Phase 1 implementation
-4. Regular progress reviews
-5. Continuous integration and testing
-6. Implement model metadata standardization
-7. Set up secure deployment workflow 
+- Git commit conventions 
