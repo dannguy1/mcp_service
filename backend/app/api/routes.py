@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, redirect
 from datetime import datetime, timedelta
 import json
 import os
@@ -14,6 +14,48 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 bp = Blueprint('api', __name__)
+
+@bp.route('/')
+def index():
+    """Root endpoint that shows API documentation"""
+    return jsonify({
+        'message': 'MCP Service API Documentation',
+        'version': '1.0.0',
+        'endpoints': {
+            'GET /api/v1/health': 'Check API health status',
+            'GET /api/v1/server/status': 'Get server status',
+            'GET /api/v1/server/stats': 'Get server statistics',
+            'GET /api/v1/logs': 'Get filtered logs',
+            'GET /api/v1/anomalies': 'Get recent anomalies',
+            'GET /api/v1/dashboard': 'Get dashboard data',
+            'GET /api/v1/models': 'Get list of models',
+            'GET /api/v1/models/<model_id>/info': 'Get model details',
+            'POST /api/v1/models/<model_id>/activate': 'Activate a model',
+            'POST /api/v1/models/<model_id>/deactivate': 'Deactivate a model',
+            'POST /api/v1/models/<model_id>/deploy': 'Deploy a model'
+        }
+    })
+
+@bp.route('/docs')
+def docs():
+    """API documentation endpoint"""
+    return jsonify({
+        'message': 'MCP Service API Documentation',
+        'version': '1.0.0',
+        'endpoints': {
+            'GET /api/v1/health': 'Check API health status',
+            'GET /api/v1/server/status': 'Get server status',
+            'GET /api/v1/server/stats': 'Get server statistics',
+            'GET /api/v1/logs': 'Get filtered logs',
+            'GET /api/v1/anomalies': 'Get recent anomalies',
+            'GET /api/v1/dashboard': 'Get dashboard data',
+            'GET /api/v1/models': 'Get list of models',
+            'GET /api/v1/models/<model_id>/info': 'Get model details',
+            'POST /api/v1/models/<model_id>/activate': 'Activate a model',
+            'POST /api/v1/models/<model_id>/deactivate': 'Deactivate a model',
+            'POST /api/v1/models/<model_id>/deploy': 'Deploy a model'
+        }
+    })
 
 def get_system_status():
     """Get system status information"""

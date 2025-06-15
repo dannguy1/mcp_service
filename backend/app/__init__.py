@@ -1,8 +1,8 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect
 from flask_cors import CORS
 from flask_socketio import SocketIO
-from app.config.config import Config, config
-from app.services.status_manager import ServiceStatusManager
+from .config.config import Config, config
+from .services.status_manager import ServiceStatusManager
 import os
 import redis
 from sqlalchemy import text
@@ -42,7 +42,7 @@ def create_app(config_class=Config):
             redis_client.ping()
             
             # Check database connection
-            from app.db import get_db_connection
+            from .db import get_db_connection
             with get_db_connection() as conn:
                 conn.execute(text('SELECT 1'))
             
@@ -54,10 +54,20 @@ def create_app(config_class=Config):
     status_manager.start_status_updates(health_check)
 
     # Register blueprints
-    from app.api.routes import bp as api_bp
+    from .api.routes import bp as api_bp
     app.register_blueprint(api_bp, url_prefix='/api/v1')
 
-    @app.route("/api/v1/health")
+    @app.route('/')
+    def index():
+        """Root endpoint that redirects to the API documentation"""
+        return redirect('/api/v1')
+
+    @app.route('/docs')
+    def docs():
+        """API documentation endpoint"""
+        return redirect('/api/v1')
+
+    @app.route('/api/v1/health')
     def health_check():
         return jsonify({"status": "healthy"})
 
