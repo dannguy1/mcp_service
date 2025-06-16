@@ -55,6 +55,9 @@ class Config:
             'source': 'source'
         }
 
+        # Model directory configuration
+        self.model_dir = os.getenv('MODEL_DIR', '/app/models')
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert configuration to dictionary for logging/debugging."""
         return {

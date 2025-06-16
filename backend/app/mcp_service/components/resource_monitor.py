@@ -25,4 +25,8 @@ class ResourceMonitor:
             return True
         except Exception as e:
             logger.error(f"Error checking system resources: {e}")
-            return False 
+            return False
+
+    def is_running(self) -> bool:
+        """Check if the resource monitor is running."""
+        return True  # ResourceMonitor is always running as it's a passive monitor 

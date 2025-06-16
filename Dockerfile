@@ -1,24 +1,25 @@
-# Use Python 3.10 slim image
-FROM python:3.10-slim
+# Use Python 3.11 slim image
+FROM python:3.11-slim
 
 # Set working directory
-WORKDIR /app/backend/app
+WORKDIR /app
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first to leverage Docker cache
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY backend /app/backend/
 
 # Create necessary directories
-RUN mkdir -p /app/data /app/models
+RUN mkdir -p /app/data /app/models /app/static
 
 # Set environment variables
 ENV PYTHONPATH=/app/backend
@@ -37,7 +38,7 @@ ENV REDIS_DB=0
 ENV REDIS_MAX_CONNECTIONS=10
 ENV REDIS_SOCKET_TIMEOUT=5
 ENV SERVICE_HOST=0.0.0.0
-ENV SERVICE_PORT=8000
+ENV SERVICE_PORT=5000
 ENV LOG_LEVEL=INFO
 ENV ANALYSIS_INTERVAL=300
 ENV BATCH_SIZE=1000
@@ -51,7 +52,7 @@ ENV SQLITE_TEMP_STORE=MEMORY
 ENV SQLITE_MMAP_SIZE=30000000000
 
 # Expose port
-EXPOSE 8000
+EXPOSE 5000
 
-# Run the service
-CMD ["python", "core/mcp_service.py"]
+# Run the FastAPI application with uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "1", "--log-level", "info"]

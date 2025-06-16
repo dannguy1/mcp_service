@@ -229,6 +229,14 @@ class WiFiAgent(BaseAgent):
             "description": self.description
         }
 
+    def is_running(self) -> bool:
+        """Check if the agent is running."""
+        return self.is_running
+
+    def check_running(self) -> bool:
+        """Check if the agent is running."""
+        return self.is_running
+
     def _get_anomaly_description(self, anomaly_type: str, features: Dict[str, Any]) -> str:
         """Generate a human-readable description for an anomaly."""
         if anomaly_type == 'auth_failure':

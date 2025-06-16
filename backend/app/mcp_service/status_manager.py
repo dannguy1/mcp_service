@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 from dotenv import load_dotenv
 from typing import Dict, Any
+import json
 
 # Load environment variables
 load_dotenv()
@@ -93,7 +94,9 @@ class MCPStatusManager:
     def update_status(self, status, error=None):
         """Update service status in Redis"""
         try:
-            self.redis_client.set(self.status_key, status)
+            # Serialize dicts to JSON
+            value = json.dumps(status) if isinstance(status, (dict, list)) else status
+            self.redis_client.set(self.status_key, value)
             if error:
                 self.redis_client.set(self.error_key, str(error))
             else:
@@ -204,16 +207,16 @@ class MCPStatusManager:
         """Update status in Redis."""
         try:
             # Store status in Redis with timestamp
+            # Serialize dict values to JSON for hset
+            mapping = {k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in status.items()}
             self.redis_client.hset(
                 'mcp_service:status:mcp',
-                mapping=status
+                mapping=mapping
             )
             # Set expiry for status (1 hour)
             self.redis_client.expire('mcp_service:status:mcp', 3600)
-            
             # Update service status
             self.update_status(status['status'])
-            
             # Update health status
             self.redis_client.set(self.health_key, str(status['status'] == 'healthy').lower())
         except Exception as e:

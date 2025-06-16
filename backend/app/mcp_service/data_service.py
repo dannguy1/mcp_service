@@ -1,9 +1,10 @@
 import logging
 import redis
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from app.services.status_manager import ServiceStatusManager
 from datetime import datetime, timedelta
+import asyncpg
 
 logger = logging.getLogger(__name__)
 
@@ -64,47 +65,156 @@ class DataService:
             self.status_manager.update_status('error', str(e))
             raise
 
+    def is_running(self) -> bool:
+        """Check if the service is running."""
+        try:
+            # Check if Redis is connected
+            self.redis_client.ping()
+            return True
+        except Exception as e:
+            logger.error(f"DataService health check failed: {e}")
+            return False
+
     async def get_logs_by_program(
         self,
-        start_time: str,
-        end_time: str,
-        programs: List[str]
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+        programs: Optional[List[str]]
     ) -> List[Dict[str, Any]]:
         """
-        Get logs for specific programs within a time range.
+        Get logs for specific programs within a time range from the remote PostgreSQL database.
         
         Args:
-            start_time: Start time in ISO format
-            end_time: End time in ISO format
-            programs: List of program names to filter by
+            start_time: Start time as datetime object (None for no lower bound)
+            end_time: End time as datetime object (None for no upper bound)
+            programs: List of program names to filter by (None for all programs)
             
         Returns:
             List of log entries matching the criteria
         """
         try:
-            logs = []
-            start_dt = datetime.fromisoformat(start_time)
-            end_dt = datetime.fromisoformat(end_time)
+            # Connect to the remote PostgreSQL database
+            conn = await asyncpg.connect(
+                host=self.db_config['host'],
+                port=self.db_config['port'],
+                user=self.db_config['user'],
+                password=self.db_config['password'],
+                database=self.db_config['database']
+            )
             
-            # For each program, get logs from Redis
-            for program in programs:
-                # Get all logs for this program
-                program_logs = self.redis_client.lrange(f"logs:{program}", 0, -1)
+            try:
+                # Build query based on whether time constraints and program filters are provided
+                if start_time is not None and end_time is not None:
+                    if programs is not None:
+                        # Both start/end time and programs provided
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp >= $1 AND timestamp <= $2
+                            AND process_name = ANY($3::text[])
+                            ORDER BY timestamp DESC
+                        """
+                        params = [start_time, end_time, programs]
+                    else:
+                        # Only time constraints, no program filter
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp >= $1 AND timestamp <= $2
+                            ORDER BY timestamp DESC
+                        """
+                        params = [start_time, end_time]
+                elif start_time is not None:
+                    if programs is not None:
+                        # Only start time and programs provided
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp >= $1
+                            AND process_name = ANY($2::text[])
+                            ORDER BY timestamp DESC
+                        """
+                        params = [start_time, programs]
+                    else:
+                        # Only start time, no program filter
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp >= $1
+                            ORDER BY timestamp DESC
+                        """
+                        params = [start_time]
+                elif end_time is not None:
+                    if programs is not None:
+                        # Only end time and programs provided
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp <= $1
+                            AND process_name = ANY($2::text[])
+                            ORDER BY timestamp DESC
+                        """
+                        params = [end_time, programs]
+                    else:
+                        # Only end time, no program filter
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE timestamp <= $1
+                            ORDER BY timestamp DESC
+                        """
+                        params = [end_time]
+                else:
+                    if programs is not None:
+                        # Only programs provided, no time constraints
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            WHERE process_name = ANY($1::text[])
+                            ORDER BY timestamp DESC
+                        """
+                        params = [programs]
+                    else:
+                        # No constraints - get all logs
+                        query = """
+                            SELECT 
+                                id, device_id, device_ip, timestamp, log_level, 
+                                process_name, message, raw_message, structured_data,
+                                pushed_to_ai, pushed_at, push_attempts, last_push_error
+                            FROM log_entries
+                            ORDER BY timestamp DESC
+                        """
+                        params = []
                 
-                # Filter logs by time range
-                for log_str in program_logs:
-                    try:
-                        log = eval(log_str)  # Convert string representation to dict
-                        log_time = datetime.fromisoformat(log['timestamp'])
-                        
-                        if start_dt <= log_time <= end_dt:
-                            logs.append(log)
-                    except Exception as e:
-                        logger.error(f"Error parsing log entry: {e}")
-                        continue
-            
-            logger.info(f"Retrieved {len(logs)} logs for programs {programs}")
-            return logs
+                logs = await conn.fetch(query, *params)
+                logs = [dict(record) for record in logs]
+                
+                logger.info(f"Retrieved {len(logs)} logs for programs {programs if programs else 'all'}")
+                return logs
+                
+            finally:
+                await conn.close()
             
         except Exception as e:
             logger.error(f"Error getting logs by program: {e}")

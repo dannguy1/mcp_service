@@ -174,11 +174,14 @@ class ModelManager:
         
         # Update model registry status in Redis
         for model_id, model_data in self.model_registry.items():
+            # Determine if the model should be running based on its status
+            is_running = model_data['status'] in ['active', 'analyzing', 'initialized']
+            
             self._update_model_status(model_id, {
                 'id': model_id,
                 'name': model_id,
                 'status': model_data['status'],
-                'is_running': False,
+                'is_running': is_running,
                 'last_run': None,
                 'capabilities': model_data['capabilities'],
                 'description': model_data['description']
@@ -308,6 +311,10 @@ class ModelManager:
             self.logger.error(f"Health check failed: {e}")
             return False
 
+    def is_running(self) -> bool:
+        """Check if the model manager is running."""
+        return self.health_check()
+
     def get_all_models(self) -> Dict[str, Any]:
         """Get all registered models with their current status."""
         models = []
@@ -327,39 +334,18 @@ class ModelManager:
                         try:
                             agent_status = json.loads(status_data)
                             self.logger.debug(f"Retrieved status from Redis: {agent_status}")
-                            # Map agent status to frontend status
-                            if agent_status['status'] in ['active', 'analyzing', 'initialized']:
-                                status = 'active'
-                            elif agent_status['status'] == 'error':
-                                status = 'error'
-                            else:
-                                status = 'inactive'
-                            self.logger.debug(f"Mapped status {agent_status['status']} to {status}")
+                            # Use the status directly from Redis since it's already mapped
+                            status = agent_status.get('status', status)
+                            self.logger.debug(f"Using status from Redis: {status}")
                         except json.JSONDecodeError:
                             self.logger.error(f"Failed to parse JSON from Redis for {model_id}")
-                            status = 'inactive'
+                            # Keep the registry status if Redis parsing fails
                     else:
                         self.logger.debug(f"No status found in Redis for key: {key}")
-                        # Try alternative key format
-                        alt_key = f"mcp:model:wifi_agent:status"
-                        self.logger.debug(f"Trying alternative key: {alt_key}")
-                        alt_status = self.redis_client.get(alt_key)
-                        if alt_status:
-                            try:
-                                agent_status = json.loads(alt_status)
-                                self.logger.debug(f"Retrieved status from alternative key: {agent_status}")
-                                if agent_status['status'] in ['active', 'analyzing', 'initialized']:
-                                    status = 'active'
-                                elif agent_status['status'] == 'error':
-                                    status = 'error'
-                                else:
-                                    status = 'inactive'
-                                self.logger.debug(f"Mapped status {agent_status['status']} to {status}")
-                            except json.JSONDecodeError:
-                                self.logger.error(f"Failed to parse JSON from Redis for {model_id}")
-                                status = 'inactive'
+                        # Keep the registry status if no Redis data
                 except Exception as e:
                     self.logger.error(f"Error getting Redis status for {model_id}: {e}")
+                    # Keep the registry status if Redis error
             
             self.logger.info(f"Final status for {model_id} after Redis check: {status}")
             
@@ -385,6 +371,126 @@ class ModelManager:
         # Log the final response data
         self.logger.info(f"Preparing model data for API: {json.dumps(response, indent=2)}")
         return response
+
+    def get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
+        """Get detailed information about a specific model."""
+        try:
+            # Check if model exists in registry
+            if model_id not in self.model_registry:
+                self.logger.warning(f"Model {model_id} not found in registry")
+                return None
+            
+            model_info = self.model_registry[model_id]
+            
+            # Get current status from Redis
+            status = model_info.get('status', 'active')
+            if self.redis_client:
+                try:
+                    key = f"mcp:model:{model_id}:status"
+                    status_data = self.redis_client.get(key)
+                    if status_data:
+                        try:
+                            agent_status = json.loads(status_data)
+                            # Use the status directly from Redis since it's already mapped
+                            status = agent_status.get('status', status)
+                        except json.JSONDecodeError:
+                            self.logger.error(f"Failed to parse JSON from Redis for {model_id}")
+                            # Keep the registry status if Redis parsing fails
+                except Exception as e:
+                    self.logger.error(f"Error getting Redis status for {model_id}: {e}")
+                    # Keep the registry status if Redis error
+            
+            # Get additional info from memory if available
+            memory_info = {}
+            if model_id in self.models:
+                memory_info = {
+                    'is_running': self.models[model_id]['entry'].get('is_running', False),
+                    'last_run': self.models[model_id]['entry'].get('last_run'),
+                    'agent_class': self.models[model_id]['agent'].__class__.__name__
+                }
+            
+            # Build comprehensive model info
+            detailed_info = {
+                'id': model_id,
+                'name': model_info.get('name', model_id),
+                'version': model_info['version'],
+                'created_at': model_info['created_at'],
+                'status': status,
+                'description': model_info.get('description', ''),
+                'capabilities': model_info.get('capabilities', []),
+                'metrics': model_info['metrics'],
+                'configuration': {
+                    'type': 'wifi_anomaly_detection',
+                    'framework': 'scikit-learn',
+                    'input_features': ['authentication_failures', 'deauth_requests', 'beacon_frames'],
+                    'output_classes': ['normal', 'anomaly']
+                },
+                'performance': {
+                    'accuracy': model_info['metrics']['accuracy'],
+                    'false_positive_rate': model_info['metrics']['false_positive_rate'],
+                    'false_negative_rate': model_info['metrics']['false_negative_rate'],
+                    'total_predictions': 0,
+                    'last_updated': model_info['created_at']
+                },
+                'runtime_info': memory_info
+            }
+            
+            self.logger.info(f"Retrieved detailed info for model {model_id}")
+            return detailed_info
+            
+        except Exception as e:
+            self.logger.error(f"Error getting model info for {model_id}: {e}")
+            return None
+
+    def activate_model(self, model_id: str) -> bool:
+        """Activate a model."""
+        try:
+            if model_id not in self.model_registry:
+                self.logger.warning(f"Model {model_id} not found in registry")
+                return False
+            
+            # Update registry status
+            self.model_registry[model_id]['status'] = 'active'
+            
+            # Update Redis status
+            if model_id in self.models:
+                model_entry = self.models[model_id]['entry']
+                model_entry['status'] = 'active'
+                model_entry['is_running'] = True
+                model_entry['last_run'] = datetime.now().isoformat()
+                self._update_model_status(model_id, model_entry)
+            
+            self.logger.info(f"Model {model_id} activated successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error activating model {model_id}: {e}")
+            return False
+
+    def deactivate_model(self, model_id: str) -> bool:
+        """Deactivate a model."""
+        try:
+            if model_id not in self.model_registry:
+                self.logger.warning(f"Model {model_id} not found in registry")
+                return False
+            
+            # Update registry status
+            self.model_registry[model_id]['status'] = 'inactive'
+            
+            # Update Redis status
+            if model_id in self.models:
+                model_entry = self.models[model_id]['entry']
+                model_entry['status'] = 'inactive'
+                model_entry['is_running'] = False
+                model_entry['last_run'] = datetime.now().isoformat()
+                self._update_model_status(model_id, model_entry)
+            
+            self.logger.info(f"Model {model_id} deactivated successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error deactivating model {model_id}: {e}")
+            return False
 
 # Create the singleton instance
 model_manager = ModelManager()

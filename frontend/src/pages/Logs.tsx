@@ -240,15 +240,15 @@ const Logs: React.FC = () => {
                   <td>
                     <Badge
                       bg={
-                        log.log_level === 'ERROR' ? 'danger' :
-                        log.log_level === 'WARNING' ? 'warning' :
-                        log.log_level === 'INFO' ? 'info' : 'secondary'
+                        log.level === 'ERROR' ? 'danger' :
+                        log.level === 'WARNING' ? 'warning' :
+                        log.level === 'INFO' ? 'info' : 'secondary'
                       }
                     >
-                      {log.log_level}
+                      {log.level}
                     </Badge>
                   </td>
-                  <td>{log.process_name}</td>
+                  <td>{log.process}</td>
                   <td>{log.message}</td>
                   <td>
                     <Badge

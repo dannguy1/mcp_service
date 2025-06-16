@@ -10,7 +10,7 @@ from .status_manager import ServiceStatusManager
 logger = logging.getLogger(__name__)
 
 class DataService:
-    def __init__(self, config):
+    def __init__(self, config, redis_client=None):
         self.db_config = config.db
         self.redis_config = config.redis
         self.sqlite_config = config.sqlite
@@ -18,7 +18,7 @@ class DataService:
         self.pool = None
         self.redis = None
         self.sqlite_conn = None
-        self.status_manager = ServiceStatusManager('data_source')
+        self.status_manager = ServiceStatusManager('data_source', redis_client)
 
     async def start(self):
         try:
