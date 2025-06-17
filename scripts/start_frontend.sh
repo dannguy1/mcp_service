@@ -37,19 +37,19 @@ fi
 # Function to check if a port is in use
 check_port() {
     if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null ; then
-        return 0
+        return 0  # Port is in use
     else
-        return 1
+        return 1  # Port is available
     fi
 }
 
 # Check if port 3000 is available
-if ! check_port 3000; then
-    echo "Starting frontend development server on port 3000..."
-    npm run dev
-    exit 0
-else
+if check_port 3000; then
     echo "Error: Port 3000 is already in use"
     echo "Please stop the process using port 3000 or modify the frontend configuration to use a different port."
     exit 1
+else
+    echo "Starting frontend development server on port 3000..."
+    npm run dev
+    exit 0
 fi

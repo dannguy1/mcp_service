@@ -51,6 +51,32 @@ A Modular, Extensible AI Processing Service for network log analysis.
 - **API Documentation**: http://localhost:5000/api/v1/docs
 - **Health Check**: http://localhost:5000/api/v1/health
 
+## Enhanced Startup Process
+
+The development startup script (`start_dev.sh`) has been enhanced with the following improvements:
+
+### Health Checks
+- **Backend Health Check**: Waits for the backend API to be fully ready before starting the frontend
+- **Frontend Health Check**: Verifies the frontend is accessible before completing startup
+- **Service Dependencies**: Checks Redis and Node.js availability before starting services
+
+### Port Management
+- **Port Availability**: Checks if required ports (5000, 3000) are available before starting services
+- **Process Cleanup**: Automatically stops existing processes using required ports
+- **Background Mode**: Runs backend in background mode for better process management
+
+### Error Handling
+- **Graceful Failures**: Provides clear error messages and cleanup on startup failures
+- **Dependency Checks**: Verifies all required dependencies are installed
+- **Fallback Options**: Provides alternatives when optional dependencies (like curl) are missing
+
+### Testing Startup
+You can test the startup improvements:
+```bash
+# Run startup tests
+./scripts/test_startup.sh
+```
+
 ## Development Setup
 
 ### Prerequisites
@@ -169,6 +195,55 @@ npm test
 ```
 
 ## Troubleshooting
+
+### Startup Issues
+
+#### Multiple Startup Attempts Required
+If the UI doesn't come up on the first try:
+1. **Check the startup logs** for specific error messages
+2. **Verify dependencies** are installed:
+   ```bash
+   ./scripts/test_startup.sh
+   ```
+3. **Check port availability**:
+   ```bash
+   lsof -i :5000  # Check backend port
+   lsof -i :3000  # Check frontend port
+   ```
+4. **Restart Redis** if needed:
+   ```bash
+   sudo systemctl restart redis-server
+   ```
+
+#### Backend Health Check Failures
+If the backend health check fails:
+1. **Check backend logs**:
+   ```bash
+   tail -f backend/backend.log
+   ```
+2. **Verify database connection**:
+   ```bash
+   ./scripts/run_verify_data_source.sh
+   ```
+3. **Check Redis connection**:
+   ```bash
+   redis-cli ping
+   ```
+
+#### Frontend Health Check Failures
+If the frontend health check fails:
+1. **Check frontend logs** in the terminal where `npm run dev` is running
+2. **Verify Node.js installation**:
+   ```bash
+   node --version
+   npm --version
+   ```
+3. **Reinstall dependencies**:
+   ```bash
+   cd frontend
+   rm -rf node_modules package-lock.json
+   npm install
+   ```
 
 ### CORS Issues
 If you encounter CORS errors:
