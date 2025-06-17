@@ -244,6 +244,67 @@ This guide covers common issues you might encounter while running the WiFi Anoma
 2. Enable model quantization
 3. Use model caching
 
+## Common Issues and Solutions
+
+### Frontend Issues
+
+#### "npm: command not found" Error
+
+**Problem**: When running `./scripts/start_frontend.sh`, you get an error that npm is not found.
+
+**Solution**: Node.js and npm are not installed on your system.
+
+**Fix**: Run the Node.js installation script:
+```bash
+./scripts/install_nodejs.sh
+```
+
+This script will:
+- Install Node.js LTS version (currently v22.x)
+- Install npm package manager
+- Update npm to the latest version
+- Verify the installation
+
+**Alternative Manual Installation**:
+```bash
+# For Raspberry Pi (ARM)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Or download from https://nodejs.org/
+```
+
+**Verification**: After installation, you should see:
+```bash
+$ node --version
+v22.16.0
+$ npm --version
+11.4.2
+```
+
+#### Port 3000 Already in Use
+
+**Problem**: Frontend fails to start because port 3000 is already occupied.
+
+**Solution**: 
+1. Find the process using port 3000:
+   ```bash
+   lsof -i :3000
+   ```
+2. Stop the process or kill it:
+   ```bash
+   kill -9 <PID>
+   ```
+3. Or modify the frontend configuration to use a different port.
+
+### Backend Issues
+
+[Add backend-specific troubleshooting here]
+
+### Redis Issues
+
+[Add Redis-specific troubleshooting here]
+
 ## Getting Help
 
 If you're still experiencing issues:

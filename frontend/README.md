@@ -1,54 +1,119 @@
-# React + TypeScript + Vite
+# MCP Service Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite frontend for the MCP Service application.
 
-Currently, two official plugins are available:
+## Quick Start
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Prerequisites
+- Node.js 16+ and npm
+- Backend service running on port 5000
 
-## Expanding the ESLint configuration
+### Installation
+```bash
+# Install dependencies
+npm install
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+# Start development server
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The frontend will be available at http://localhost:3000
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Environment Configuration
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+Create a `.env` file in the frontend directory with the following variables:
+
+```env
+# API Configuration
+VITE_API_BASE_URL=http://localhost:5000/api/v1
+
+# Feature Flags
+VITE_ENABLE_WEBSOCKETS=true
+VITE_ENABLE_ANALYTICS=true
 ```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `VITE_API_BASE_URL` | Backend API base URL | `http://localhost:5000/api/v1` |
+| `VITE_ENABLE_WEBSOCKETS` | Enable WebSocket connections | `true` |
+| `VITE_ENABLE_ANALYTICS` | Enable analytics tracking | `true` |
+
+## Development
+
+### Available Scripts
+
+```bash
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Run tests
+npm test
+
+# Lint code
+npm run lint
+```
+
+### Project Structure
+
+```
+src/
+├── components/          # React components
+│   ├── common/         # Shared components
+│   ├── dashboard/      # Dashboard components
+│   ├── export/         # Export functionality
+│   ├── layout/         # Layout components
+│   └── models/         # Model management
+├── hooks/              # Custom React hooks
+├── pages/              # Page components
+├── services/           # API services
+├── styles/             # CSS styles
+└── types.ts            # TypeScript type definitions
+```
+
+## API Integration
+
+The frontend communicates with the backend API through the `services/api.ts` module. The API base URL is configured via the `VITE_API_BASE_URL` environment variable.
+
+### CORS Configuration
+
+The backend is configured to allow CORS requests from the frontend. If you encounter CORS issues:
+
+1. Ensure the frontend URL is in the backend's CORS allowlist
+2. Check that `VITE_API_BASE_URL` is correctly set
+3. Verify the backend is running on the expected port
+
+## Building for Production
+
+```bash
+# Build the application
+npm run build
+
+# The built files will be in the dist/ directory
+```
+
+## Troubleshooting
+
+### CORS Issues
+- Check that the backend CORS configuration includes your frontend URL
+- Verify the API base URL in your `.env` file
+- Ensure the backend is running and accessible
+
+### Build Issues
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Check Node.js version compatibility
+- Verify all environment variables are set correctly
+
+## Contributing
+
+1. Follow the existing code style and structure
+2. Add TypeScript types for new components and functions
+3. Test your changes thoroughly
+4. Update documentation as needed

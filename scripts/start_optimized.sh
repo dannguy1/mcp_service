@@ -13,11 +13,23 @@ echo "[INFO] Starting MCP Service in optimized mode for low-performance device..
 # Load optimized environment variables
 if [ -f ".env.low_performance" ]; then
     echo "[INFO] Loading optimized environment variables..."
-    export $(grep -v '^#' .env.low_performance | xargs)
+    set -a
+    source .env.low_performance
+    set +a
 else
     echo "[ERROR] Optimized environment file not found"
     exit 1
 fi
+
+# Function to check if a port is in use
+check_port() {
+    local port=$1
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null ; then
+        return 0
+    else
+        return 1
+    fi
+}
 
 # Check system resources
 check_system_resources() {
@@ -48,39 +60,57 @@ check_system_resources() {
 start_services() {
     echo "[INFO] Starting services in optimized order..."
     
-    # Start Redis with optimized config
-    if [ -f "data/redis/redis.low_performance.conf" ]; then
-        echo "[INFO] Starting Redis with optimized configuration..."
-        redis-server data/redis/redis.low_performance.conf &
-        echo $! > redis.pid
-        sleep 3
+    # Check if Redis is running as a system service
+    echo "[INFO] Checking if Redis is running..."
+    if ! redis-cli ping | grep -q PONG; then
+        echo "[ERROR] Redis is not running on port 6379."
+        echo "[INFO] Please start Redis with: sudo systemctl start redis-server"
+        echo "[INFO] Or check status with: sudo systemctl status redis-server"
+        exit 1
+    fi
+    echo "[INFO] Redis is running and ready."
+
+    # Wait for Redis to be ready
+    echo "[INFO] Waiting for Redis to be ready..."
+    until redis-cli ping | grep -q PONG; do
+        echo "[INFO] Redis is not ready yet. Waiting..."
+        sleep 1
+    done
+    echo "[INFO] Redis is ready. Starting backend..."
+
+    # Start backend with minimal workers (port 5000)
+    if check_port 5000; then
+        echo "[WARN] Port 5000 is already in use. Skipping backend startup."
+    else
+        echo "[INFO] Starting backend with minimal workers..."
+        cd backend
+        source ../venv/bin/activate
+        uvicorn app.main:app --host 0.0.0.0 --port 5000 --workers 1 --log-level warning &
+        echo $! > ../backend.pid
+        cd ..
+        sleep 5
     fi
     
-    # Start backend with minimal workers
-    echo "[INFO] Starting backend with minimal workers..."
-    cd backend
-    source ../venv/bin/activate
-    uvicorn app.main:app --host 0.0.0.0 --port 5000 --workers 1 --log-level warning &
-    echo $! > ../backend.pid
-    cd ..
-    sleep 5
-    
-    # Start MCP service
+    # Start MCP service (background service, no web port)
     echo "[INFO] Starting MCP service..."
     cd backend
     source ../venv/bin/activate
-    python app/core/mcp_service.py &
+    python -m app.core.mcp_service &
     echo $! > ../mcp_service.pid
     cd ..
     sleep 3
     
-    # Start frontend only if enabled
+    # Start frontend only if enabled (port 3000)
     if [ "${ENABLE_FRONTEND:-false}" = "true" ]; then
-        echo "[INFO] Starting frontend..."
-        cd frontend
-        npm run dev -- --port 3000 --host 0.0.0.0 &
-        echo $! > ../frontend.pid
-        cd ..
+        if check_port 3000; then
+            echo "[WARN] Port 3000 is already in use. Skipping frontend startup."
+        else
+            echo "[INFO] Starting frontend..."
+            cd frontend
+            npm run dev -- --port 3000 --host 0.0.0.0 &
+            echo $! > ../frontend.pid
+            cd ..
+        fi
     fi
 }
 
@@ -91,7 +121,7 @@ main() {
     
     echo "[SUCCESS] All services started in optimized mode"
     echo "[INFO] Backend: http://localhost:5000"
-    echo "[INFO] MCP Service: http://localhost:5555"
+    echo "[INFO] MCP Service: Background service (no web interface)"
     if [ "${ENABLE_FRONTEND:-false}" = "true" ]; then
         echo "[INFO] Frontend: http://localhost:3000"
     fi

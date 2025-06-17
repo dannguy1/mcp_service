@@ -4,6 +4,10 @@ set -e
 
 echo "[INFO] Setting up development environment..."
 
+# Install system dependencies
+sudo apt-get update
+sudo apt-get install -y redis-server postgresql-client sqlite3
+
 # Create virtual environment if it doesn't exist
 if [ ! -d "venv" ]; then
     echo "[INFO] Creating Python virtual environment..."
@@ -22,5 +26,13 @@ pip install --upgrade pip
 echo "[INFO] Installing Python dependencies..."
 pip install -r backend/requirements.txt
 
+# Install development dependencies if they exist
+if [ -f "backend/requirements-dev.txt" ]; then
+    echo "[INFO] Installing development dependencies..."
+    pip install -r backend/requirements-dev.txt
+fi
+
 echo "[INFO] Development environment setup complete!"
-echo "[INFO] You can now run ./scripts/start_mcp_service.sh" 
+echo "[INFO] Remember to activate the virtual environment before running scripts:"
+echo "[INFO]   source venv/bin/activate"
+echo "[INFO] You can now run ./scripts/start_dev.sh or ./scripts/start_optimized.sh" 

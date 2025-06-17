@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://192.168.10.8:5000/api/v1';
+// Use environment variable or fallback to localhost for development
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1';
+
+console.log('API Base URL:', API_BASE_URL);
 
 interface LogFilters {
     startDate?: string;

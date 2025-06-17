@@ -90,20 +90,8 @@ stop_service_by_name "MCP Service" "python.*mcp_service.py"
 stop_service_by_pid "Backend" "backend_start.pid"
 stop_service_by_name "Backend" "uvicorn.*app.main:app"
 
-# Stop infrastructure services
-echo "[INFO] Stopping infrastructure services..."
-
-# Stop Grafana
-stop_service_by_pid "Grafana" "grafana.pid"
-stop_service_by_name "Grafana" "grafana-server"
-
-# Stop Prometheus
-stop_service_by_pid "Prometheus" "prometheus.pid"
-stop_service_by_name "Prometheus" "prometheus"
-
-# Stop Redis
-stop_service_by_pid "Redis" "redis.pid"
-stop_service_by_name "Redis" "redis-server"
+# Note: External services (Redis, Prometheus, Grafana) are managed outside this script
+echo "[INFO] External services (Redis, Prometheus, Grafana) are managed externally. Use systemctl or your preferred method to stop them if needed."
 
 # Clean up any remaining PID files
 echo "[INFO] Cleaning up PID files..."
@@ -111,7 +99,7 @@ rm -f *.pid
 
 # Check if any services are still running
 echo "[INFO] Checking for any remaining processes..."
-remaining_processes=$(pgrep -f "uvicorn\|mcp_service\|redis-server\|prometheus\|grafana-server\|npm.*dev" 2>/dev/null || true)
+remaining_processes=$(pgrep -f "uvicorn\|mcp_service\|npm.*dev" 2>/dev/null || true)
 
 if [ -n "$remaining_processes" ]; then
     echo "[WARN] Some processes are still running:"
@@ -120,7 +108,7 @@ if [ -n "$remaining_processes" ]; then
     done
     echo "[INFO] You may need to manually stop these processes"
 else
-    echo "[INFO] All services have been stopped successfully"
+    echo "[INFO] All application services have been stopped successfully"
 fi
 
 # Clean up temporary files
@@ -128,4 +116,4 @@ echo "[INFO] Cleaning up temporary files..."
 rm -f *.log
 rm -f nohup.out
 
-echo "[SUCCESS] All services stopped and cleaned up" 
+echo "[SUCCESS] All application services stopped and cleaned up" 

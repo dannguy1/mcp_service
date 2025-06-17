@@ -20,13 +20,22 @@ from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
 import argparse
 
-import psycopg2
-import yaml
-from psycopg2.extras import RealDictCursor
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
-import asyncpg
+# Check for required dependencies
+try:
+    import psycopg2
+    import yaml
+    from psycopg2.extras import RealDictCursor
+    from sqlalchemy import create_engine, text
+    from sqlalchemy.engine import Engine
+    from sqlalchemy.exc import SQLAlchemyError
+    import asyncpg
+except ImportError as e:
+    print(f"❌ Missing required dependency: {e}")
+    print("💡 Please ensure you have activated the virtual environment:")
+    print("   source venv/bin/activate")
+    print("💡 Then install dependencies:")
+    print("   pip install -r backend/requirements.txt")
+    sys.exit(1)
 
 # Add backend directory to Python path
 backend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend')
