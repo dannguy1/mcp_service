@@ -507,4 +507,115 @@ async def deploy_model(model_id: str):
         # This would implement model deployment logic
         return {"status": "success", "message": f"Model {model_id} deployed"}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/models/current")
+async def get_current_model():
+    """Get current model information"""
+    try:
+        # Get current model info from the enhanced ModelManager
+        from app.components.model_manager import ModelManager
+        from app.models.config import ModelConfig
+        
+        config = ModelConfig()
+        model_manager = ModelManager(config)
+        current_model_info = model_manager.get_model_info()
+        
+        if not current_model_info:
+            return {"message": "No model currently loaded"}
+        
+        return current_model_info
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/models/{version}/load")
+async def load_model_version(version: str):
+    """Load a specific model version"""
+    try:
+        from app.components.model_manager import ModelManager
+        from app.models.config import ModelConfig
+        
+        config = ModelConfig()
+        model_manager = ModelManager(config)
+        
+        # Find model path
+        models = await model_manager.list_models()
+        model_info = next((m for m in models if m['version'] == version), None)
+        
+        if not model_info:
+            raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Load the model
+        success = await model_manager.load_model_version(version)
+        
+        if success:
+            return {
+                "version": version,
+                "status": "loaded",
+                "model_info": model_manager.get_model_info()
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to load model")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/models/analyze")
+async def analyze_logs(logs: List[Dict[str, Any]]):
+    """Analyze logs with current model"""
+    try:
+        from app.components.model_manager import ModelManager
+        from app.models.config import ModelConfig
+        from app.components.feature_extractor import FeatureExtractor
+        import numpy as np
+        
+        config = ModelConfig()
+        model_manager = ModelManager(config)
+        
+        # Check if model is loaded
+        if not model_manager.is_model_loaded():
+            raise HTTPException(status_code=400, detail="No model loaded")
+        
+        # Extract features from logs
+        feature_extractor = FeatureExtractor()
+        features = []
+        
+        for log in logs:
+            # Extract features from log entry
+            log_features = feature_extractor.extract_features(log)
+            features.append(log_features)
+        
+        if not features:
+            raise HTTPException(status_code=400, detail="No valid features extracted from logs")
+        
+        # Convert to numpy array
+        features_array = np.array(features)
+        
+        # Make predictions
+        predictions = await model_manager.predict(features_array)
+        probabilities = await model_manager.predict_proba(features_array)
+        
+        # Format results
+        results = []
+        for i, log in enumerate(logs):
+            prediction = predictions[i] if i < len(predictions) else 0
+            prob = probabilities[i][0] if i < len(probabilities) and len(probabilities[i]) > 0 else 0
+            
+            results.append({
+                "log_entry": log,
+                "analysis_result": {
+                    "prediction": int(prediction),
+                    "anomaly_score": float(prob),
+                    "is_anomaly": bool(prediction == 1),
+                    "model_version": model_manager.current_model_version,
+                    "timestamp": datetime.now().isoformat()
+                },
+                "analysis_timestamp": datetime.now().isoformat(),
+                "model_version": model_manager.current_model_version
+            })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error analyzing logs: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 

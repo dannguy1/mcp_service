@@ -1,0 +1,12 @@
+{
+  "models": [
+    {
+      "version": "20250618_151129",
+      "path": "models/test_model_20250618_151129",
+      "status": "available",
+      "created_at": "2025-06-18T15:11:29.391988",
+      "model_type": "IsolationForest"
+    }
+  ],
+  "last_updated": "2025-06-18T15:11:29.392006"
+}

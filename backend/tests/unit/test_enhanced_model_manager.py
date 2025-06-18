@@ -5,7 +5,9 @@ import tempfile
 import shutil
 from pathlib import Path
 from datetime import datetime
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock, AsyncMock, mock_open
+import joblib
+import os
 
 from app.components.model_manager import ModelManager
 from app.models.config import ModelConfig, StorageConfig, IntegrationConfig
@@ -13,15 +15,47 @@ from app.models.config import ModelConfig, StorageConfig, IntegrationConfig
 @pytest.fixture
 def model_config():
     """Create a test ModelConfig."""
-    return ModelConfig(
-        storage=StorageConfig(directory="test_models"),
-        integration=IntegrationConfig(training_service_path="/tmp/test_training")
-    )
+    config = ModelConfig()
+    config.storage.directory = "/tmp/test_models"
+    return config
 
 @pytest.fixture
 def model_manager(model_config):
     """Create a ModelManager instance for testing."""
     return ModelManager(config=model_config)
+
+@pytest.fixture
+def mock_model():
+    """Create a mock model for testing."""
+    model = MagicMock()
+    model.predict.return_value = np.array([1, 0, 1])
+    model.predict_proba.return_value = np.array([[0.2, 0.8], [0.9, 0.1], [0.3, 0.7]])
+    model.score_samples.return_value = np.array([-0.5, -1.2, -0.8])
+    return model
+
+@pytest.fixture
+def mock_metadata():
+    """Create mock model metadata."""
+    return {
+        "model_info": {
+            "version": "1.0.0",
+            "model_type": "IsolationForest",
+            "created_at": datetime.now().isoformat()
+        },
+        "training_info": {
+            "training_samples": 1000,
+            "feature_names": ["feature1", "feature2", "feature3"]
+        },
+        "evaluation_info": {
+            "basic_metrics": {
+                "accuracy": 0.95,
+                "precision": 0.92,
+                "recall": 0.88,
+                "f1_score": 0.90,
+                "roc_auc": 0.94
+            }
+        }
+    }
 
 @pytest.fixture
 def sample_model():
@@ -282,4 +316,271 @@ class TestEnhancedModelManager:
         assert model_manager.is_model_loaded() is False
         
         model_manager.model_loaded = True
-        assert model_manager.is_model_loaded() is True 
+        assert model_manager.is_model_loaded() is True
+
+    @pytest.mark.asyncio
+    async def test_load_model_success(self, model_manager, mock_model, mock_metadata):
+        """Test successful model loading."""
+        with patch('joblib.load') as mock_load, \
+             patch('builtins.open', mock_open(read_data=json.dumps(mock_metadata))), \
+             patch('pathlib.Path.exists', return_value=True):
+            
+            mock_load.return_value = mock_model
+            
+            # Test loading model
+            result = await model_manager.load_model("/tmp/test_model.joblib")
+            
+            assert result is True
+            assert model_manager.model_loaded is True
+            assert model_manager.current_model is mock_model
+            assert model_manager.current_model_version == "1.0.0"
+            assert model_manager.feature_names == ["feature1", "feature2", "feature3"]
+
+    @pytest.mark.asyncio
+    async def test_load_model_file_not_found(self, model_manager):
+        """Test model loading with non-existent file."""
+        with patch('pathlib.Path.exists', return_value=False):
+            result = await model_manager.load_model("/tmp/nonexistent.joblib")
+            assert result is False
+            assert model_manager.model_loaded is False
+
+    @pytest.mark.asyncio
+    async def test_load_model_version_success(self, model_manager, mock_model, mock_metadata):
+        """Test loading model by version."""
+        with patch('joblib.load') as mock_load, \
+             patch('builtins.open', mock_open(read_data=json.dumps(mock_metadata))), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch.object(model_manager, 'list_models') as mock_list_models:
+            
+            mock_load.return_value = mock_model
+            mock_list_models.return_value = [
+                {
+                    'version': '1.0.0',
+                    'path': '/tmp/models/1.0.0'
+                }
+            ]
+            
+            result = await model_manager.load_model_version('1.0.0')
+            assert result is True
+            assert model_manager.model_loaded is True
+
+    @pytest.mark.asyncio
+    async def test_load_model_version_not_found(self, model_manager):
+        """Test loading non-existent model version."""
+        with patch.object(model_manager, 'list_models') as mock_list_models:
+            mock_list_models.return_value = []
+            
+            result = await model_manager.load_model_version('nonexistent')
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_predict_success(self, model_manager, mock_model):
+        """Test successful prediction."""
+        model_manager.current_model = mock_model
+        model_manager.model_loaded = True
+        
+        features = np.array([[1, 2, 3], [4, 5, 6]])
+        result = await model_manager.predict(features)
+        
+        assert result is not None
+        mock_model.predict.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_predict_no_model_loaded(self, model_manager):
+        """Test prediction without loaded model."""
+        features = np.array([[1, 2, 3]])
+        
+        with pytest.raises(RuntimeError, match="No model loaded"):
+            await model_manager.predict(features)
+
+    @pytest.mark.asyncio
+    async def test_predict_proba_success(self, model_manager, mock_model):
+        """Test successful probability prediction."""
+        model_manager.current_model = mock_model
+        model_manager.model_loaded = True
+        
+        features = np.array([[1, 2, 3]])
+        result = await model_manager.predict_proba(features)
+        
+        assert result is not None
+        mock_model.predict_proba.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_predict_proba_with_score_samples(self, model_manager):
+        """Test probability prediction with score_samples method."""
+        model = MagicMock()
+        model.predict_proba = None
+        model.score_samples.return_value = np.array([-0.5, -1.2])
+        
+        model_manager.current_model = model
+        model_manager.model_loaded = True
+        
+        features = np.array([[1, 2, 3], [4, 5, 6]])
+        result = await model_manager.predict_proba(features)
+        
+        assert result is not None
+        assert result.shape == (2, 1)
+
+    @pytest.mark.asyncio
+    async def test_predict_proba_no_support(self, model_manager):
+        """Test probability prediction with unsupported model."""
+        model = MagicMock()
+        model.predict_proba = None
+        model.score_samples = None
+        
+        model_manager.current_model = model
+        model_manager.model_loaded = True
+        
+        features = np.array([[1, 2, 3]])
+        
+        with pytest.raises(RuntimeError, match="Model does not support probability predictions"):
+            await model_manager.predict_proba(features)
+
+    @pytest.mark.asyncio
+    async def test_list_models_empty(self, model_manager):
+        """Test listing models when none exist."""
+        with patch('pathlib.Path.exists', return_value=False):
+            result = await model_manager.list_models()
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_list_models_with_data(self, model_manager, mock_metadata):
+        """Test listing models with existing data."""
+        registry_data = {
+            "1.0.0": {
+                "path": "/tmp/models/1.0.0",
+                "created_at": "2024-01-01T00:00:00",
+                "status": "available",
+                "last_updated": "2024-01-01T00:00:00"
+            }
+        }
+        
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch('builtins.open', mock_open(read_data=json.dumps(registry_data))), \
+             patch('pathlib.Path.exists', side_effect=lambda x: str(x).endswith('metadata.json')):
+            
+            result = await model_manager.list_models()
+            assert len(result) == 1
+            assert result[0]['version'] == '1.0.0'
+
+    def test_get_model_info_no_model(self, model_manager):
+        """Test getting model info when no model is loaded."""
+        result = model_manager.get_model_info()
+        assert result is None
+
+    def test_get_model_info_with_model(self, model_manager, mock_model):
+        """Test getting model info when model is loaded."""
+        model_manager.current_model = mock_model
+        model_manager.model_loaded = True
+        model_manager.current_model_version = "1.0.0"
+        model_manager.feature_names = ["feature1", "feature2"]
+        model_manager.current_model_metadata = {"test": "data"}
+        
+        result = model_manager.get_model_info()
+        
+        assert result is not None
+        assert result['version'] == "1.0.0"
+        assert result['model_type'] == "MagicMock"
+        assert result['feature_names'] == ["feature1", "feature2"]
+
+    @pytest.mark.asyncio
+    async def test_deploy_model_success(self, model_manager):
+        """Test successful model deployment."""
+        with patch.object(model_manager, 'load_model_version', return_value=True), \
+             patch.object(model_manager, '_update_deployment_status'), \
+             patch.object(model_manager, '_update_model_registry'):
+            
+            result = await model_manager.deploy_model("1.0.0")
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_deploy_model_failure(self, model_manager):
+        """Test model deployment failure."""
+        with patch.object(model_manager, 'load_model_version', return_value=False):
+            result = await model_manager.deploy_model("1.0.0")
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_rollback_model_success(self, model_manager):
+        """Test successful model rollback."""
+        with patch('pathlib.Path.exists', return_value=True), \
+             patch.object(model_manager, 'load_model_version', return_value=True), \
+             patch.object(model_manager, '_update_deployment_status'):
+            
+            result = await model_manager.rollback_model("1.0.0")
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_rollback_model_not_found(self, model_manager):
+        """Test rollback with non-existent model."""
+        with patch('pathlib.Path.exists', return_value=False):
+            result = await model_manager.rollback_model("nonexistent")
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_import_model_from_training_service(self, model_manager):
+        """Test importing model from training service."""
+        with patch.object(model_manager, '_validate_imported_model', return_value={'is_valid': True}), \
+             patch('pathlib.Path.exists', return_value=True), \
+             patch('shutil.copytree'), \
+             patch.object(model_manager, '_update_import_metadata'), \
+             patch.object(model_manager, '_update_model_registry'):
+            
+            result = await model_manager.import_model_from_training_service("/tmp/training_model")
+            
+            assert result is not None
+            assert 'imported_version' in result
+            assert 'local_path' in result
+            assert result['status'] == 'imported'
+
+    @pytest.mark.asyncio
+    async def test_import_model_validation_failure(self, model_manager):
+        """Test model import with validation failure."""
+        with patch.object(model_manager, '_validate_imported_model', return_value={'is_valid': False, 'errors': ['test error']}):
+            
+            with pytest.raises(ValueError, match="Model validation failed"):
+                await model_manager.import_model_from_training_service("/tmp/training_model")
+
+    @pytest.mark.asyncio
+    async def test_scaler_integration(self, model_manager, mock_model):
+        """Test model prediction with scaler."""
+        scaler = MagicMock()
+        scaler.transform.return_value = np.array([[1, 2, 3]])
+        
+        model_manager.current_model = mock_model
+        model_manager.current_scaler = scaler
+        model_manager.model_loaded = True
+        
+        features = np.array([[1, 2, 3]])
+        
+        # Test that scaler is used in prediction
+        result = await model_manager.predict(features)
+        
+        scaler.transform.assert_called_once()
+        mock_model.predict.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_error_handling_in_predict(self, model_manager, mock_model):
+        """Test error handling in prediction."""
+        model_manager.current_model = mock_model
+        model_manager.model_loaded = True
+        
+        mock_model.predict.side_effect = Exception("Prediction error")
+        
+        features = np.array([[1, 2, 3]])
+        
+        with pytest.raises(Exception, match="Prediction error"):
+            await model_manager.predict(features)
+
+    @pytest.mark.asyncio
+    async def test_error_handling_in_predict_proba(self, model_manager, mock_model):
+        """Test error handling in probability prediction."""
+        model_manager.current_model = mock_model
+        model_manager.model_loaded = True
+        
+        mock_model.predict_proba.side_effect = Exception("Probability error")
+        
+        features = np.array([[1, 2, 3]])
+        
+        with pytest.raises(Exception, match="Probability error"):
+            await model_manager.predict_proba(features) 

@@ -212,13 +212,52 @@ export const endpoints = {
     return api.get<ModelValidationReport>(`/model-management/${version}/validation-report`).then(res => res.data);
   },
 
+  // Cleanup operations
   cleanupTransferHistory: (daysToKeep: number = 30) => {
-    console.log("Cleaning up transfer history");
+    console.log("Cleaning up transfer history, keeping days:", daysToKeep);
     return api.delete(`/model-management/transfer-history?days_to_keep=${daysToKeep}`).then(res => res.data);
   },
 
   cleanupPerformanceMetrics: (daysToKeep: number = 30) => {
-    console.log("Cleaning up performance metrics");
+    console.log("Cleaning up performance metrics, keeping days:", daysToKeep);
     return api.delete(`/model-management/performance/cleanup?days_to_keep=${daysToKeep}`).then(res => res.data);
+  },
+
+  // Training service endpoints
+  getTrainingServiceModels: () => {
+    console.log("Fetching training service models...");
+    return api.get('/model-management/training-service/models').then(res => res.data);
+  },
+
+  importLatestModel: (validate: boolean = true) => {
+    console.log("Importing latest model, validate:", validate);
+    return api.post(`/model-management/import-latest?validate=${validate}`).then(res => res.data);
+  },
+
+  importModelFromTrainingService: (modelPath: string, validate: boolean = true) => {
+    console.log("Importing model from training service:", modelPath);
+    return api.post(`/model-management/import/${encodeURIComponent(modelPath)}?validate=${validate}`).then(res => res.data);
+  },
+
+  validateTrainingServiceConnection: () => {
+    console.log("Validating training service connection...");
+    return api.get('/model-management/training-service/connection').then(res => res.data);
+  },
+
+  // Model analysis endpoint
+  analyzeLogs: (logs: LogEntry[]) => {
+    console.log("Analyzing logs with current model...");
+    return api.post('/api/v1/models/analyze', logs).then(res => res.data);
+  },
+
+  // Model loading and deployment
+  loadModelVersion: (version: string) => {
+    console.log("Loading model version:", version);
+    return api.post(`/api/v1/models/${version}/load`).then(res => res.data);
+  },
+
+  getCurrentModel: () => {
+    console.log("Getting current model info...");
+    return api.get('/api/v1/models/current').then(res => res.data);
   },
 };
