@@ -3,316 +3,340 @@ import json
 import uuid
 import logging
 import gzip
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from pathlib import Path
-from sqlalchemy import select, and_
-from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
+import yaml
+import csv
+import zipfile
+import tempfile
 
 from app.models.export import ExportConfig, ExportMetadata
 from app.services.export.data_validator import DataValidator
 from app.services.export.data_transformer import DataTransformer
-from app.db import get_db
-from app.models.log import LogEntry
-from app.models.anomaly import AnomalyDetection
-from app.models.ip import IPAddress
+from app.services.export.status_manager import ExportStatusManager
+from app.mcp_service.data_service import DataService
 
 logger = logging.getLogger(__name__)
 
 class DataExporter:
-    """Exports data for training purposes."""
-    
-    def __init__(self, config: ExportConfig):
-        self.config = config
-        self.validator = DataValidator(config.validation_level)
-        self.transformer = DataTransformer(config)
-        self.export_dir = Path("exports")
-        self.export_dir.mkdir(exist_ok=True)
+    """Exports data from the remote PostgreSQL database to various formats."""
 
-    def _write_data(self, data: List[Dict[str, Any]], file_path: Path) -> int:
-        """Write data to file with optional compression."""
-        if self.config.compression:
-            with gzip.open(file_path, 'wt', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+    def __init__(self, config_path: str = "app/config/data_source_config.yaml"):
+        self.config_path = config_path
+        self.data_service = None
+        self.db_config = None
+        self._load_config()
+
+    def _load_config(self):
+        """Load database configuration from YAML file."""
+        try:
+            config_path = Path(self.config_path)
+            if not config_path.exists():
+                raise FileNotFoundError(f"Configuration file not found: {config_path}")
+            
+            with open(config_path, "r") as f:
+                self.db_config = yaml.safe_load(f)
+            
+            logger.info("Database configuration loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load configuration: {e}")
+            raise
+
+    async def _initialize_data_service(self):
+        """Initialize the DataService with database connection."""
+        if self.data_service is None:
+            try:
+                # Create DataService instance with config
+                self.data_service = DataService(self.db_config)
+                await self.data_service.start()
+                logger.info("DataService initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize DataService: {e}")
+                raise
+
+    async def export_data(
+        self,
+        export_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        programs: Optional[List[str]] = None,
+        format: str = "json",
+        progress_callback: Optional[callable] = None
+    ) -> Dict[str, Any]:
+        """
+        Export data from the remote PostgreSQL database.
+        
+        Args:
+            export_id: Unique identifier for this export
+            start_date: Start date for data range (None for no lower bound)
+            end_date: End date for data range (None for no upper bound)
+            programs: List of program names to filter by (None for all programs)
+            format: Export format ('json', 'csv', 'zip')
+            progress_callback: Callback function for progress updates
+            
+        Returns:
+            Dictionary containing export metadata and file path
+        """
+        try:
+            await self._initialize_data_service()
+            
+            # Update progress
+            if progress_callback:
+                progress_callback(export_id, 10, "Connecting to database...")
+            
+            # Get logs from the real database using DataService
+            logs = await self.data_service.get_logs_by_program(
+                start_time=start_date,
+                end_time=end_date,
+                programs=programs
+            )
+            
+            if progress_callback:
+                progress_callback(export_id, 30, f"Retrieved {len(logs)} log entries")
+            
+            if not logs:
+                logger.warning("No logs found for the specified criteria")
+                return {
+                    "export_id": export_id,
+                    "status": "completed",
+                    "records_exported": 0,
+                    "file_path": None,
+                    "message": "No data found for export criteria"
+                }
+            
+            # Update progress
+            if progress_callback:
+                progress_callback(export_id, 50, "Processing data...")
+            
+            # Process and format the data
+            processed_data = await self._process_logs(logs)
+            
+            if progress_callback:
+                progress_callback(export_id, 70, "Generating export file...")
+            
+            # Generate export file
+            file_path = await self._generate_export_file(
+                processed_data, export_id, format
+            )
+            
+            if progress_callback:
+                progress_callback(export_id, 90, "Finalizing export...")
+            
+            # Create export metadata
+            export_metadata = {
+                "export_id": export_id,
+                "status": "completed",
+                "created_at": datetime.now().isoformat(),
+                "start_date": start_date.isoformat() if start_date else None,
+                "end_date": end_date.isoformat() if end_date else None,
+                "programs": programs,
+                "format": format,
+                "records_exported": len(logs),
+                "file_path": file_path,
+                "file_size": os.path.getsize(file_path) if file_path else 0
+            }
+            
+            # Store final metadata in Redis
+            ExportStatusManager.store_export_metadata(export_id, export_metadata)
+            
+            if progress_callback:
+                progress_callback(export_id, 100, "Export completed successfully")
+            
+            logger.info(f"Export {export_id} completed: {len(logs)} records exported")
+            return export_metadata
+            
+        except Exception as e:
+            logger.error(f"Export failed for {export_id}: {e}")
+            if progress_callback:
+                progress_callback(export_id, -1, f"Export failed: {str(e)}")
+            raise
+
+    async def _process_logs(self, logs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Process and clean log data for export.
+        
+        Args:
+            logs: Raw log entries from database
+            
+        Returns:
+            Processed log entries ready for export
+        """
+        processed_logs = []
+        
+        for log in logs:
+            try:
+                # Clean and structure the log entry
+                processed_log = {
+                    "id": log.get("id"),
+                    "device_id": log.get("device_id"),
+                    "device_ip": log.get("device_ip"),
+                    "timestamp": log.get("timestamp").isoformat() if log.get("timestamp") else None,
+                    "log_level": log.get("log_level"),
+                    "process_name": log.get("process_name"),
+                    "message": log.get("message"),
+                    "raw_message": log.get("raw_message"),
+                    "structured_data": self._parse_structured_data(log.get("structured_data")),
+                    "pushed_to_ai": log.get("pushed_to_ai"),
+                    "pushed_at": log.get("pushed_at").isoformat() if log.get("pushed_at") else None,
+                    "push_attempts": log.get("push_attempts"),
+                    "last_push_error": log.get("last_push_error")
+                }
+                
+                processed_logs.append(processed_log)
+                
+            except Exception as e:
+                logger.warning(f"Failed to process log entry {log.get('id')}: {e}")
+                continue
+        
+        return processed_logs
+
+    def _parse_structured_data(self, structured_data: Any) -> Dict[str, Any]:
+        """Parse structured data from database format."""
+        if not structured_data:
+            return {}
+        
+        try:
+            if isinstance(structured_data, str):
+                return json.loads(structured_data)
+            elif isinstance(structured_data, dict):
+                return structured_data
+            else:
+                return {"raw_data": str(structured_data)}
+        except Exception as e:
+            logger.warning(f"Failed to parse structured data: {e}")
+            return {"parse_error": str(e), "raw_data": str(structured_data)}
+
+    async def _generate_export_file(
+        self, 
+        data: List[Dict[str, Any]], 
+        export_id: str, 
+        format: str
+    ) -> str:
+        """
+        Generate export file in the specified format.
+        
+        Args:
+            data: Processed data to export
+            export_id: Export identifier
+            format: Export format
+            
+        Returns:
+            Path to the generated file
+        """
+        # Create exports directory if it doesn't exist
+        exports_dir = Path("exports")
+        exports_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if format.lower() == "json":
+            file_path = exports_dir / f"export_{export_id}_{timestamp}.json"
+            await self._export_to_json(data, file_path)
+            
+        elif format.lower() == "csv":
+            file_path = exports_dir / f"export_{export_id}_{timestamp}.csv"
+            await self._export_to_csv(data, file_path)
+            
+        elif format.lower() == "zip":
+            file_path = exports_dir / f"export_{export_id}_{timestamp}.zip"
+            await self._export_to_zip(data, file_path)
+            
         else:
-            with open(file_path, 'w') as f:
-                json.dump(data, f, indent=2)
-        return file_path.stat().st_size
+            raise ValueError(f"Unsupported export format: {format}")
+        
+        logger.info(f"Export file generated: {file_path}")
+        return str(file_path)
 
-    async def export_logs(self, start_date: datetime, end_date: datetime) -> ExportMetadata:
-        """Export log entries."""
+    async def _export_to_json(self, data: List[Dict[str, Any]], file_path: Path):
+        """Export data to JSON format."""
+        export_data = {
+            "export_metadata": {
+                "created_at": datetime.now().isoformat(),
+                "total_records": len(data),
+                "format": "json"
+            },
+            "data": data
+        }
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+    async def _export_to_csv(self, data: List[Dict[str, Any]], file_path: Path):
+        """Export data to CSV format."""
+        if not data:
+            return
+        
+        # Get all unique field names
+        fieldnames = set()
+        for record in data:
+            fieldnames.update(record.keys())
+        
+        fieldnames = sorted(list(fieldnames))
+        
+        with open(file_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for record in data:
+                # Ensure all fields are present
+                row = {field: record.get(field, '') for field in fieldnames}
+                writer.writerow(row)
+
+    async def _export_to_zip(self, data: List[Dict[str, Any]], file_path: Path):
+        """Export data to ZIP format containing JSON and CSV files."""
+        with zipfile.ZipFile(file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add JSON file
+            json_data = {
+                "export_metadata": {
+                    "created_at": datetime.now().isoformat(),
+                    "total_records": len(data),
+                    "format": "zip"
+                },
+                "data": data
+            }
+            
+            zipf.writestr("data.json", json.dumps(json_data, indent=2, ensure_ascii=False))
+            
+            # Add CSV file
+            if data:
+                fieldnames = set()
+                for record in data:
+                    fieldnames.update(record.keys())
+                fieldnames = sorted(list(fieldnames))
+                
+                csv_content = []
+                csv_content.append(','.join(fieldnames))
+                
+                for record in data:
+                    row = [str(record.get(field, '')) for field in fieldnames]
+                    csv_content.append(','.join(row))
+                
+                zipf.writestr("data.csv", '\n'.join(csv_content))
+
+    async def cleanup_old_exports(self, max_age_days: int = 7):
+        """Clean up old export files."""
         try:
-            # Generate export ID
-            export_id = str(uuid.uuid4())
+            exports_dir = Path("exports")
+            if not exports_dir.exists():
+                return
             
-            # Initialize metadata
-            metadata = ExportMetadata(
-                export_id=export_id,
-                data_version="1.0.0",
-                export_config=self.config.dict(),
-                record_count=0,
-                file_size=0,
-                status="running"
-            )
-
-            # Create export directory
-            export_path = self.export_dir / f"logs_{export_id}"
-            export_path.mkdir(exist_ok=True)
-
-            # Export data in batches
-            total_records = 0
-            batch_number = 0
+            cutoff_time = datetime.now() - timedelta(days=max_age_days)
+            deleted_count = 0
             
-            while True:
-                # Fetch batch of logs
-                logs = await self._fetch_logs(start_date, end_date, batch_number)
-                if not logs:
-                    break
-
-                # Validate and transform batch
-                valid_logs = []
-                for log in logs:
-                    validation = self.validator.validate_log_entry(log)
-                    if validation.is_valid:
-                        transformed = self.transformer.transform("log_entry", log)
-                        valid_logs.append(transformed)
-
-                # Write batch to file
-                if valid_logs:
-                    batch_file = export_path / f"batch_{batch_number}.json"
-                    if self.config.compression:
-                        batch_file = batch_file.with_suffix('.json.gz')
-                    file_size = self._write_data(valid_logs, batch_file)
-                    total_records += len(valid_logs)
-
-                batch_number += 1
-
-            # Update metadata
-            metadata.record_count = total_records
-            metadata.file_size = self._get_export_size(export_path)
-            metadata.status = "completed"
-
-            # Save metadata
-            metadata_file = export_path / "metadata.json"
-            with open(metadata_file, "w") as f:
-                json.dump(metadata.dict(), f, indent=2)
-
-            return metadata
-
+            for file_path in exports_dir.glob("export_*"):
+                if file_path.stat().st_mtime < cutoff_time.timestamp():
+                    file_path.unlink()
+                    deleted_count += 1
+            
+            if deleted_count > 0:
+                logger.info(f"Cleaned up {deleted_count} old export files")
+                
         except Exception as e:
-            logger.error(f"Export failed: {str(e)}")
-            if metadata:
-                metadata.status = "failed"
-                metadata.error_message = str(e)
-            raise
+            logger.error(f"Error cleaning up old exports: {e}")
 
-    async def export_anomalies(self, start_date: datetime, end_date: datetime) -> ExportMetadata:
-        """Export anomaly detection results."""
-        try:
-            # Generate export ID
-            export_id = str(uuid.uuid4())
-            
-            # Initialize metadata
-            metadata = ExportMetadata(
-                export_id=export_id,
-                data_version="1.0.0",
-                export_config=self.config.dict(),
-                record_count=0,
-                file_size=0,
-                status="running"
-            )
-
-            # Create export directory
-            export_path = self.export_dir / f"anomalies_{export_id}"
-            export_path.mkdir(exist_ok=True)
-
-            # Export data in batches
-            total_records = 0
-            batch_number = 0
-            
-            while True:
-                # Fetch batch of anomalies
-                anomalies = await self._fetch_anomalies(start_date, end_date, batch_number)
-                if not anomalies:
-                    break
-
-                # Validate and transform batch
-                valid_anomalies = []
-                for anomaly in anomalies:
-                    validation = self.validator.validate_anomaly(anomaly)
-                    if validation.is_valid:
-                        transformed = self.transformer.transform("anomaly", anomaly)
-                        valid_anomalies.append(transformed)
-
-                # Write batch to file
-                if valid_anomalies:
-                    batch_file = export_path / f"batch_{batch_number}.json"
-                    if self.config.compression:
-                        batch_file = batch_file.with_suffix('.json.gz')
-                    file_size = self._write_data(valid_anomalies, batch_file)
-                    total_records += len(valid_anomalies)
-
-                batch_number += 1
-
-            # Update metadata
-            metadata.record_count = total_records
-            metadata.file_size = self._get_export_size(export_path)
-            metadata.status = "completed"
-
-            # Save metadata
-            metadata_file = export_path / "metadata.json"
-            with open(metadata_file, "w") as f:
-                json.dump(metadata.dict(), f, indent=2)
-
-            return metadata
-
-        except Exception as e:
-            logger.error(f"Export failed: {str(e)}")
-            if metadata:
-                metadata.status = "failed"
-                metadata.error_message = str(e)
-            raise
-
-    async def export_ips(self, start_date: datetime, end_date: datetime) -> ExportMetadata:
-        """Export IP address records."""
-        try:
-            # Generate export ID
-            export_id = str(uuid.uuid4())
-            
-            # Initialize metadata
-            metadata = ExportMetadata(
-                export_id=export_id,
-                data_version="1.0.0",
-                export_config=self.config.dict(),
-                record_count=0,
-                file_size=0,
-                status="running"
-            )
-
-            # Create export directory
-            export_path = self.export_dir / f"ips_{export_id}"
-            export_path.mkdir(exist_ok=True)
-
-            # Export data in batches
-            total_records = 0
-            batch_number = 0
-            
-            while True:
-                # Fetch batch of IPs
-                ips = await self._fetch_ips(start_date, end_date, batch_number)
-                if not ips:
-                    break
-
-                # Validate and transform batch
-                valid_ips = []
-                for ip in ips:
-                    validation = self.validator.validate_ip(ip)
-                    if validation.is_valid:
-                        transformed = self.transformer.transform("ip", ip)
-                        valid_ips.append(transformed)
-
-                # Write batch to file
-                if valid_ips:
-                    batch_file = export_path / f"batch_{batch_number}.json"
-                    if self.config.compression:
-                        batch_file = batch_file.with_suffix('.json.gz')
-                    file_size = self._write_data(valid_ips, batch_file)
-                    total_records += len(valid_ips)
-
-                batch_number += 1
-
-            # Update metadata
-            metadata.record_count = total_records
-            metadata.file_size = self._get_export_size(export_path)
-            metadata.status = "completed"
-
-            # Save metadata
-            metadata_file = export_path / "metadata.json"
-            with open(metadata_file, "w") as f:
-                json.dump(metadata.dict(), f, indent=2)
-
-            return metadata
-
-        except Exception as e:
-            logger.error(f"Export failed: {str(e)}")
-            if metadata:
-                metadata.status = "failed"
-                metadata.error_message = str(e)
-            raise
-
-    async def _fetch_logs(self, start_date: datetime, end_date: datetime, batch_number: int) -> List[Dict[str, Any]]:
-        """Fetch a batch of log entries."""
-        try:
-            # Calculate offset and limit for pagination
-            offset = batch_number * self.config.batch_size
-            limit = self.config.batch_size
-
-            # Start with base query
-            query = self.db.query(LogEntry).filter(
-                LogEntry.timestamp >= start_date,
-                LogEntry.timestamp <= end_date
-            )
-            
-            # Add process filtering if specified
-            if hasattr(self.config, 'processes') and self.config.processes:
-                query = query.filter(LogEntry.process_name.in_(self.config.processes))
-            
-            # Execute query with pagination
-            logs = query.offset(offset).limit(limit).all()
-            
-            # Convert to dictionaries
-            return [log.to_dict() for log in logs]
-            
-        except Exception as e:
-            logger.error(f"Error fetching logs: {str(e)}")
-            raise
-
-    async def _fetch_anomalies(self, start_date: datetime, end_date: datetime, batch_number: int) -> List[Dict[str, Any]]:
-        """Fetch a batch of anomaly detection results."""
-        async with AsyncSession(get_db()) as session:
-            # Calculate offset and limit for pagination
-            offset = batch_number * self.config.batch_size
-            limit = self.config.batch_size
-
-            # Query anomalies within date range
-            query = select(AnomalyDetection).where(
-                and_(
-                    AnomalyDetection.timestamp >= start_date,
-                    AnomalyDetection.timestamp <= end_date
-                )
-            ).offset(offset).limit(limit)
-
-            result = await session.execute(query)
-            anomalies = result.scalars().all()
-
-            # Convert to dictionaries
-            return [anomaly.to_dict() for anomaly in anomalies]
-
-    async def _fetch_ips(self, start_date: datetime, end_date: datetime, batch_number: int) -> List[Dict[str, Any]]:
-        """Fetch a batch of IP address records."""
-        async with AsyncSession(get_db()) as session:
-            # Calculate offset and limit for pagination
-            offset = batch_number * self.config.batch_size
-            limit = self.config.batch_size
-
-            # Query IPs within date range
-            query = select(IPAddress).where(
-                and_(
-                    IPAddress.last_seen >= start_date,
-                    IPAddress.last_seen <= end_date
-                )
-            ).offset(offset).limit(limit)
-
-            result = await session.execute(query)
-            ips = result.scalars().all()
-
-            # Convert to dictionaries
-            return [ip.to_dict() for ip in ips]
-
-    def _get_export_size(self, export_path: Path) -> int:
-        """Calculate total size of exported files."""
-        total_size = 0
-        for file in export_path.glob("**/*"):
-            if file.is_file():
-                total_size += file.stat().st_size
-        return total_size 
+    async def close(self):
+        """Close database connections."""
+        if self.data_service:
+            await self.data_service.stop() 

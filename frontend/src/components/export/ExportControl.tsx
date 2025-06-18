@@ -8,38 +8,34 @@ import dayjs from 'dayjs';
 const { RangePicker } = DatePicker;
 
 interface ExportConfig {
-  startDate: string;
-  endDate: string;
+  dateRange?: [dayjs.Dayjs, dayjs.Dayjs];
   dataTypes: string[];
   batchSize: number;
   includeMetadata: boolean;
   validationLevel: string;
   outputFormat: string;
   compression: boolean;
-  processes: string[];
+  processes: string;
 }
 
 interface ExportControlProps {
-  onExportCreated?: (exportId: string) => void;
+  // Removed onExportCreated prop as it's no longer needed
 }
 
-const ExportControl: React.FC<ExportControlProps> = ({ onExportCreated }) => {
+const ExportControl: React.FC<ExportControlProps> = () => {
   const [form] = Form.useForm();
   const { createExport, isExporting } = useExport();
   const [messageApi, contextHolder] = message.useMessage();
 
   const handleExport = async (values: ExportConfig) => {
     try {
-      setExporting(true);
-      
       // Parse comma-separated process names
       const processes = values.processes
         ? values.processes.split(',').map(p => p.trim()).filter(p => p)
-        : undefined;
+        : [];
 
-      const response = await createExport({
-        start_date: values.dateRange[0].toISOString(),
-        end_date: values.dateRange[1].toISOString(),
+      // Handle optional date range
+      const exportConfig: any = {
         data_types: values.dataTypes,
         batch_size: values.batchSize,
         include_metadata: values.includeMetadata,
@@ -47,15 +43,20 @@ const ExportControl: React.FC<ExportControlProps> = ({ onExportCreated }) => {
         output_format: values.outputFormat,
         compression: values.compression,
         processes
-      });
+      };
 
-      messageApi.success('Export started successfully');
-      onExportCreated?.(response.export_id);
+      // Only add date range if specified
+      if (values.dateRange && values.dateRange.length === 2) {
+        exportConfig.start_date = values.dateRange[0].toISOString();
+        exportConfig.end_date = values.dateRange[1].toISOString();
+      }
+
+      await createExport(exportConfig);
+
+      messageApi.success('Export started successfully! Check the Export History tab to monitor progress.');
     } catch (error) {
       messageApi.error('Failed to start export');
       console.error('Export error:', error);
-    } finally {
-      setExporting(false);
     }
   };
 
@@ -73,13 +74,13 @@ const ExportControl: React.FC<ExportControlProps> = ({ onExportCreated }) => {
           validationLevel: 'basic',
           outputFormat: 'json',
           compression: false,
-          processes: []
+          processes: ''
         }}
       >
         <Form.Item
           name="dateRange"
-          label="Date Range"
-          rules={[{ required: true, message: 'Please select date range' }]}
+          label="Date Range (Optional)"
+          tooltip="Leave empty to export all data. Select a range to export data within specific dates."
         >
           <RangePicker
             showTime

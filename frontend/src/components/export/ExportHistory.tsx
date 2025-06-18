@@ -8,22 +8,17 @@ const { Text } = Typography;
 
 interface ExportRecord {
   export_id: string;
-  data_version: string;
-  export_config: {
-    start_date: string;
-    end_date: string;
-    data_types: string[];
-    batch_size: number;
-    include_metadata: boolean;
-    validation_level: string;
-    output_format: string;
-    compression: boolean;
-  };
-  record_count: number;
-  file_size: number;
+  created_at: string | null;
+  updated_at: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  created_at: string;
-  updated_at: string;
+  data_types: string[];
+  config: any;
+  record_counts: Record<string, number>;
+  file_sizes: Record<string, number>;
+  error_message: string | null;
+  is_compressed: boolean;
+  total_records: number;
+  total_size: number;
 }
 
 interface ExportHistoryProps {
@@ -31,9 +26,10 @@ interface ExportHistoryProps {
 }
 
 const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
-  const { listExports, deleteExport } = useExport();
+  const { listExports, deleteExport, downloadExport } = useExport();
   const [exports, setExports] = useState<ExportRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -70,6 +66,18 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
     }
   };
 
+  const handleDownload = async (exportId: string) => {
+    setDownloading(exportId);
+    try {
+      await downloadExport(exportId);
+    } catch (error) {
+      console.error('Failed to download export:', error);
+      // You could add a notification here to show the error to the user
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   const handleViewStatus = (exportId: string) => {
     onExportSelect?.(exportId);
   };
@@ -88,23 +96,40 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
     {
       title: 'Date Range',
       key: 'date_range',
-      render: (record: ExportRecord) => (
-        <Space direction="vertical">
-          <Text>From: {dayjs(record.export_config.start_date).format('YYYY-MM-DD HH:mm')}</Text>
-          <Text>To: {dayjs(record.export_config.end_date).format('YYYY-MM-DD HH:mm')}</Text>
-        </Space>
-      )
+      render: (record: ExportRecord) => {
+        const config = record.config || {};
+        const startDate = config.start_date;
+        const endDate = config.end_date;
+        
+        if (!startDate && !endDate) {
+          return <Text type="secondary">No date range specified</Text>;
+        }
+        
+        return (
+          <Space direction="vertical">
+            {startDate && <Text>From: {dayjs(startDate).format('YYYY-MM-DD HH:mm')}</Text>}
+            {endDate && <Text>To: {dayjs(endDate).format('YYYY-MM-DD HH:mm')}</Text>}
+          </Space>
+        );
+      }
     },
     {
       title: 'Data Types',
       key: 'data_types',
-      render: (record: ExportRecord) => (
-        <Space>
-          {record.export_config.data_types.map(type => (
-            <Tag key={type} color="blue">{type}</Tag>
-          ))}
-        </Space>
-      )
+      render: (record: ExportRecord) => {
+        const dataTypes = record.data_types || [];
+        if (dataTypes.length === 0) {
+          return <Text type="secondary">No data types specified</Text>;
+        }
+        
+        return (
+          <Space>
+            {dataTypes.map(type => (
+              <Tag key={type} color="blue">{type}</Tag>
+            ))}
+          </Space>
+        );
+      }
     },
     {
       title: 'Status',
@@ -122,27 +147,31 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
     },
     {
       title: 'Records',
-      dataIndex: 'record_count',
-      key: 'record_count',
-      render: (count: number) => count.toLocaleString()
+      dataIndex: 'total_records',
+      key: 'total_records',
+      render: (count: number) => (count || 0).toLocaleString()
     },
     {
       title: 'Size',
-      dataIndex: 'file_size',
-      key: 'file_size',
+      dataIndex: 'total_size',
+      key: 'total_size',
       render: (size: number) => {
-        if (size === 0) return '0 B';
+        const sizeInBytes = size || 0;
+        if (sizeInBytes === 0) return '0 B';
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(size) / Math.log(k));
-        return `${parseFloat((size / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+        const i = Math.floor(Math.log(sizeInBytes) / Math.log(k));
+        return `${parseFloat((sizeInBytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
       }
     },
     {
       title: 'Created',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
+      render: (date: string | null) => {
+        if (!date) return <Text type="secondary">N/A</Text>;
+        return dayjs(date).format('YYYY-MM-DD HH:mm:ss');
+      }
     },
     {
       title: 'Actions',
@@ -159,7 +188,9 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
             <Tooltip title="Download">
               <Button
                 icon={<DownloadOutlined />}
-                onClick={() => window.open(`/api/export/${record.export_id}/download`)}
+                loading={downloading === record.export_id}
+                disabled={downloading !== null}
+                onClick={() => handleDownload(record.export_id)}
               />
             </Tooltip>
           )}

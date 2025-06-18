@@ -17,22 +17,50 @@ This document outlines the updated plan to enhance the export functionality of t
    - `ExportMetadata` and `ExportConfig` Pydantic models
 4. **Service Architecture**: Async database operations with SQLAlchemy
 5. **Basic API Structure**: FastAPI app with health checks and metrics
+6. **Frontend Components**: ExportControl, ExportStatus, and ExportHistory components exist
 
 ### 🔄 Partially Implemented Components
 1. **Export API Endpoints**: Core services exist but API endpoints are missing
 2. **Status Tracking**: Database model exists but real-time updates not implemented
-3. **Frontend Integration**: Basic hooks exist but UI components need completion
+3. **Frontend Integration**: Components exist but not integrated into main app routing
 
 ### ❌ Missing Components
 1. **Export API Router**: No FastAPI router for export endpoints
 2. **Background Task Processing**: No async export processing
 3. **Real-time Status Updates**: No WebSocket or polling mechanism
-4. **Frontend Export UI**: No complete export interface
-5. **Date Range Flexibility**: Current implementation requires date ranges
+4. **Date Range Flexibility**: Current implementation requires date ranges
+5. **Service Integration**: Export services not wired into main FastAPI app
+
+## Critical Gaps to Address (Based on Code Review)
+
+### 1. **Missing Export API Router** ❌
+**Issue**: No `backend/app/api/endpoints/export.py` exists
+**Impact**: Frontend components can't communicate with backend
+**Solution**: Create export router with proper FastAPI endpoints
+
+### 2. **ExportConfig Model Requires Date Ranges** ❌
+**Issue**: Current model requires `start_date` and `end_date` (not optional)
+**Impact**: Can't export all data without specifying date range
+**Solution**: Make date ranges optional and add flexible filtering
+
+### 3. **No Background Task Processing** ❌
+**Issue**: Current DataExporter methods are synchronous
+**Impact**: Export operations block the API
+**Solution**: Implement FastAPI background tasks
+
+### 4. **Export Services Not Integrated** ❌
+**Issue**: Export services exist but not wired into main FastAPI app
+**Impact**: Services can't be accessed via API
+**Solution**: Integrate services into main application
+
+### 5. **Frontend Components Not Routed** ❌
+**Issue**: Export components exist but not in main app routing
+**Impact**: Users can't access export functionality
+**Solution**: Add export routes to frontend routing
 
 ## Updated Implementation Phases
 
-### Phase 1: Export API Integration (Priority: High)
+### Phase 1: Export API Integration (Priority: Critical)
 **Goal**: Create FastAPI endpoints for export functionality
 
 #### 1.1 Create Export Router
@@ -41,6 +69,7 @@ This document outlines the updated plan to enhance the export functionality of t
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from typing import List, Optional
 from datetime import datetime
+import uuid
 
 from app.models.export import ExportConfig, ExportMetadata
 from app.services.export.data_exporter import DataExporter
@@ -55,6 +84,9 @@ async def create_export(
 ) -> ExportMetadata:
     """Create a new export job"""
     try:
+        # Generate export ID
+        export_id = str(uuid.uuid4())
+        
         # Initialize exporter
         exporter = DataExporter(config)
         
@@ -63,7 +95,7 @@ async def create_export(
         
         # Return initial metadata
         return ExportMetadata(
-            export_id=str(uuid.uuid4()),
+            export_id=export_id,
             data_version="1.0.0",
             export_config=config.dict(),
             record_count=0,
@@ -95,6 +127,29 @@ async def list_exports(
         return [status.to_dict() for status in statuses]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{export_id}/progress")
+async def get_export_progress(export_id: str):
+    """Get detailed export progress"""
+    try:
+        status = await ExportStatusManager.get_status(export_id)
+        if not status:
+            raise HTTPException(status_code=404, detail="Export not found")
+            
+        return {
+            "export_id": export_id,
+            "status": status.status,
+            "progress": getattr(status, 'progress', {}),
+            "current_batch": getattr(status, 'current_batch', 0),
+            "total_batches": getattr(status, 'total_batches', 0),
+            "processed_records": status.total_records,
+            "total_records": status.total_records,
+            "start_time": status.created_at.isoformat(),
+            "end_time": status.updated_at.isoformat() if status.status in ["completed", "failed"] else None,
+            "error_message": status.error_message
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 ```
 
 #### 1.2 Update Main FastAPI App
@@ -102,13 +157,17 @@ async def list_exports(
 # backend/app/main.py - Add to existing imports
 from app.api.endpoints.export import router as export_router
 
-# Add to existing app
+# Add to existing app (after other router includes)
 app.include_router(export_router, prefix="/api/v1")
 ```
 
 #### 1.3 Enhanced ExportConfig Model
 ```python
 # backend/app/models/export.py - Update ExportConfig
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+from pydantic import BaseModel, Field, validator
+
 class ExportConfig(BaseModel):
     """Configuration for data export."""
     start_date: Optional[datetime] = Field(None, description="Start date for data export (optional)")
@@ -128,6 +187,13 @@ class ExportConfig(BaseModel):
         for data_type in v:
             if data_type not in valid_types:
                 raise ValueError(f"Invalid data type: {data_type}")
+        return v
+    
+    @validator('end_date')
+    def validate_date_range(cls, v, values):
+        if v and 'start_date' in values and values['start_date']:
+            if v <= values['start_date']:
+                raise ValueError("End date must be after start date")
         return v
 ```
 
@@ -328,193 +394,43 @@ class ExportStatusManager:
         })
 ```
 
-#### 3.2 Status Polling Endpoint
-```python
-# backend/app/api/endpoints/export.py - Add new endpoint
-@router.get("/{export_id}/progress")
-async def get_export_progress(export_id: str):
-    """Get detailed export progress"""
-    try:
-        status = await ExportStatusManager.get_status(export_id)
-        if not status:
-            raise HTTPException(status_code=404, detail="Export not found")
-            
-        return {
-            "export_id": export_id,
-            "status": status.status,
-            "progress": status.progress or {},
-            "current_batch": getattr(status, 'current_batch', 0),
-            "total_batches": getattr(status, 'total_batches', 0),
-            "processed_records": status.processed_records,
-            "total_records": status.total_records,
-            "start_time": status.created_at.isoformat(),
-            "end_time": status.updated_at.isoformat() if status.status in ["completed", "failed"] else None,
-            "error_message": status.error_message
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+### Phase 4: Frontend Integration (Priority: Medium)
+**Goal**: Integrate export components into main application
+
+#### 4.1 Add Export Routes to Frontend
+```typescript
+// frontend/src/routes.tsx - Add export route
+import ExportPage from './pages/ExportPage';
+
+// Add to routes array
+{
+  path: '/export',
+  element: <ExportPage />,
+  label: 'Export'
+}
 ```
 
-### Phase 4: Frontend Export Interface (Priority: Medium)
-**Goal**: Create complete frontend interface for export functionality
-
-#### 4.1 Export Control Component
+#### 4.2 Update API Service
 ```typescript
-// frontend/src/components/export/ExportControl.tsx
-import React, { useState } from 'react';
-import { useExport } from '../../hooks/useExport';
-
-interface ExportConfig {
-  startDate?: Date;
-  endDate?: Date;
-  dataTypes: string[];
-  filters: Record<string, any>;
-  batchSize: number;
-  includeMetadata: boolean;
-  outputFormat: string;
-  compression: boolean;
-}
-
-export const ExportControl: React.FC = () => {
-  const [config, setConfig] = useState<ExportConfig>({
-    dataTypes: ['logs'],
-    filters: {},
-    batchSize: 1000,
-    includeMetadata: true,
-    outputFormat: 'json',
-    compression: false
-  });
+// frontend/src/services/api.ts - Add export endpoints
+export const endpoints = {
+  // ... existing endpoints
   
-  const { createExport, isExporting } = useExport();
+  // Export endpoints
+  createExport: (config: ExportConfig) =>
+    api.post<ExportRecord>('/export', config).then(res => res.data),
   
-  const handleExport = async () => {
-    try {
-      const result = await createExport(config);
-      // Handle success
-    } catch (error) {
-      // Handle error
-    }
-  };
+  getExportStatus: (exportId: string) =>
+    api.get<ExportStatus>(`/export/${exportId}/status`).then(res => res.data),
   
-  return (
-    <div className="export-control">
-      <h3>Export Data for AI Training</h3>
-      
-      {/* Date Range (Optional) */}
-      <div className="form-group">
-        <label>Date Range (Optional)</label>
-        <input
-          type="datetime-local"
-          onChange={(e) => setConfig({...config, startDate: new Date(e.target.value)})}
-        />
-        <input
-          type="datetime-local"
-          onChange={(e) => setConfig({...config, endDate: new Date(e.target.value)})}
-        />
-      </div>
-      
-      {/* Data Types */}
-      <div className="form-group">
-        <label>Data Types</label>
-        {['logs', 'anomalies', 'ips'].map(type => (
-          <label key={type}>
-            <input
-              type="checkbox"
-              checked={config.dataTypes.includes(type)}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setConfig({...config, dataTypes: [...config.dataTypes, type]});
-                } else {
-                  setConfig({...config, dataTypes: config.dataTypes.filter(t => t !== type)});
-                }
-              }}
-            />
-            {type}
-          </label>
-        ))}
-      </div>
-      
-      {/* Export Button */}
-      <button 
-        onClick={handleExport}
-        disabled={isExporting || config.dataTypes.length === 0}
-      >
-        {isExporting ? 'Exporting...' : 'Start Export'}
-      </button>
-    </div>
-  );
-};
-```
-
-#### 4.2 Export Status Component
-```typescript
-// frontend/src/components/export/ExportStatus.tsx
-import React, { useEffect, useState } from 'react';
-import { useExport } from '../../hooks/useExport';
-
-interface ExportStatus {
-  exportId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  progress: Record<string, number>;
-  processedRecords: number;
-  totalRecords: number;
-  startTime: string;
-  endTime?: string;
-  errorMessage?: string;
-}
-
-export const ExportStatus: React.FC<{ exportId: string }> = ({ exportId }) => {
-  const [status, setStatus] = useState<ExportStatus | null>(null);
-  const { getExportStatus } = useExport();
+  getExportProgress: (exportId: string) =>
+    api.get<ExportProgress>(`/export/${exportId}/progress`).then(res => res.data),
   
-  useEffect(() => {
-    const pollStatus = async () => {
-      try {
-        const result = await getExportStatus(exportId);
-        setStatus(result);
-        
-        // Continue polling if export is running
-        if (result.status === 'running') {
-          setTimeout(pollStatus, 2000);
-        }
-      } catch (error) {
-        console.error('Failed to fetch export status:', error);
-      }
-    };
-    
-    pollStatus();
-  }, [exportId]);
+  listExports: (params?: { limit?: number; offset?: number }) =>
+    api.get<ListExportsResponse>('/export', { params }).then(res => res.data),
   
-  if (!status) return <div>Loading...</div>;
-  
-  return (
-    <div className="export-status">
-      <h4>Export Status: {status.status}</h4>
-      
-      {/* Progress Bars */}
-      {Object.entries(status.progress).map(([type, progress]) => (
-        <div key={type} className="progress-bar">
-          <label>{type}: {progress.toFixed(1)}%</label>
-          <div className="progress">
-            <div 
-              className="progress-fill" 
-              style={{width: `${progress}%`}}
-            />
-          </div>
-        </div>
-      ))}
-      
-      {/* Record Count */}
-      <p>Processed: {status.processedRecords} / {status.totalRecords} records</p>
-      
-      {/* Error Display */}
-      {status.errorMessage && (
-        <div className="error">
-          <strong>Error:</strong> {status.errorMessage}
-        </div>
-      )}
-    </div>
-  );
+  deleteExport: (exportId: string) =>
+    api.delete(`/export/${exportId}`).then(res => res.data),
 };
 ```
 
@@ -604,46 +520,31 @@ class TestExportAPI:
         assert data["export_id"] == export_id
 ```
 
-### Phase 6: Documentation and Deployment (Priority: Low)
-**Goal**: Complete documentation and deployment preparation
+## Implementation Checklist
 
-#### 6.1 API Documentation
-- Update OpenAPI documentation
-- Create usage examples
-- Document error codes and responses
+### Week 1: API Integration (Critical)
+- [ ] Create `backend/app/api/endpoints/export.py` router
+- [ ] Update `ExportConfig` model to support optional date ranges
+- [ ] Add export router to main FastAPI app
+- [ ] Test basic API endpoints
 
-#### 6.2 User Guide
-- Create step-by-step export guide
-- Document configuration options
-- Provide troubleshooting guide
-
-## Implementation Order and Timeline
-
-### Week 1: API Integration
-- [ ] Create export router (`backend/app/api/endpoints/export.py`)
-- [ ] Update main FastAPI app to include export routes
-- [ ] Update ExportConfig model for optional date ranges
-- [ ] Basic API testing
-
-### Week 2: Enhanced Data Exporter
-- [ ] Update DataExporter for flexible date ranges
-- [ ] Implement batch processing with progress tracking
-- [ ] Add comprehensive error handling
+### Week 2: Enhanced Data Exporter (High)
+- [ ] Add `export_data()` method to DataExporter
+- [ ] Implement flexible data fetching with optional date ranges
+- [ ] Add progress tracking integration
 - [ ] Unit tests for exporter
 
-### Week 3: Status Tracking
+### Week 3: Status Tracking (Medium)
 - [ ] Enhance ExportStatusManager with progress updates
-- [ ] Implement real-time status endpoints
-- [ ] Add status polling mechanism
-- [ ] Integration tests
+- [ ] Add progress polling endpoint
+- [ ] Integration tests for status tracking
 
-### Week 4: Frontend Interface
-- [ ] Create ExportControl component
-- [ ] Create ExportStatus component
-- [ ] Implement export history view
-- [ ] Frontend testing
+### Week 4: Frontend Integration (Medium)
+- [ ] Add export routes to frontend routing
+- [ ] Update API service with export endpoints
+- [ ] Test frontend-backend integration
 
-### Week 5: Testing and Polish
+### Week 5: Testing and Polish (Low)
 - [ ] Comprehensive testing suite
 - [ ] Performance optimization
 - [ ] Documentation updates

@@ -89,4 +89,47 @@ export const endpoints = {
     api.post('/auth/change-password', data).then((res) => res.data),
   getServerStatus: () =>
     api.get<ServerStatus>('/server/status').then((res) => res.data),
+  
+  // Export endpoints
+  createExport: (config: any) => {
+    console.log("Creating export with config:", config);
+    return api.post('/export', config).then(res => res.data);
+  },
+  
+  getExportStatus: (exportId: string) => {
+    console.log("Getting export status for:", exportId);
+    return api.get(`/export/${exportId}/status`).then(res => res.data);
+  },
+  
+  getExportProgress: (exportId: string) => {
+    console.log("Getting export progress for:", exportId);
+    return api.get(`/export/${exportId}/progress`).then(res => res.data);
+  },
+  
+  listExports: (params?: { limit?: number; offset?: number }) => {
+    console.log("Listing exports with params:", params);
+    return api.get('/export', { params }).then(res => res.data);
+  },
+  
+  deleteExport: (exportId: string) => {
+    console.log("Deleting export:", exportId);
+    return api.delete(`/export/${exportId}`).then(res => res.data);
+  },
+  
+  downloadExport: (exportId: string) => {
+    console.log("Downloading export:", exportId);
+    return api.get(`/export/download/${exportId}`, {
+      responseType: 'blob'
+    }).then(res => res.data);
+  },
+  
+  cleanupExports: () => {
+    console.log("Cleaning up exports");
+    return api.post('/export/cleanup').then(res => res.data);
+  },
+  
+  getExportStats: () => {
+    console.log("Getting export stats");
+    return api.get('/export/stats').then(res => res.data);
+  },
 };

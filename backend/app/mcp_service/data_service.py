@@ -93,6 +93,12 @@ class DataService:
             List of log entries matching the criteria
         """
         try:
+            # Ensure datetime objects are timezone-naive for PostgreSQL compatibility
+            if start_time is not None and start_time.tzinfo is not None:
+                start_time = start_time.replace(tzinfo=None)
+            if end_time is not None and end_time.tzinfo is not None:
+                end_time = end_time.replace(tzinfo=None)
+            
             # Connect to the remote PostgreSQL database
             conn = await asyncpg.connect(
                 host=self.db_config['host'],

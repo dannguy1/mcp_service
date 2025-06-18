@@ -1,18 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Tabs, Space, Typography } from 'antd';
 import ExportControl from '../components/export/ExportControl';
-import ExportStatus from '../components/export/ExportStatus';
 import ExportHistory from '../components/export/ExportHistory';
+import ExportCleanup from '../components/export/ExportCleanup';
 
 const { Title } = Typography;
 
 const ExportPage: React.FC = () => {
-  const [activeExportId, setActiveExportId] = useState<string | null>(null);
-
-  const handleExportCreated = (exportId: string) => {
-    setActiveExportId(exportId);
-  };
-
   const items = [
     {
       key: 'control',
@@ -20,22 +14,8 @@ const ExportPage: React.FC = () => {
       children: (
         <Space direction="vertical" style={{ width: '100%' }}>
           <Title level={2}>Create New Export</Title>
-          <ExportControl onExportCreated={handleExportCreated} />
+          <ExportControl />
         </Space>
-      )
-    },
-    {
-      key: 'status',
-      label: 'Export Status',
-      children: activeExportId ? (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Title level={2}>Export Status</Title>
-          <ExportStatus exportId={activeExportId} />
-        </Space>
-      ) : (
-        <Typography.Text type="secondary">
-          No active export. Create a new export to view status.
-        </Typography.Text>
       )
     },
     {
@@ -44,7 +24,17 @@ const ExportPage: React.FC = () => {
       children: (
         <Space direction="vertical" style={{ width: '100%' }}>
           <Title level={2}>Export History</Title>
-          <ExportHistory onExportSelect={setActiveExportId} />
+          <ExportHistory />
+        </Space>
+      )
+    },
+    {
+      key: 'cleanup',
+      label: 'Management',
+      children: (
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Title level={2}>Export Management</Title>
+          <ExportCleanup />
         </Space>
       )
     }
