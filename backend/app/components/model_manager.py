@@ -215,15 +215,23 @@ class ModelManager:
     async def load_model_version(self, version: str) -> bool:
         """Load a specific model version."""
         try:
-            model_dir = self.models_directory / version
-            if not model_dir.exists():
-                logger.error(f"Model version directory not found: {version}")
+            # Find the model in the registry
+            models = await self.list_models()
+            model_info = next((m for m in models if m['version'] == version), None)
+            
+            if not model_info:
+                logger.error(f"Model version not found in registry: {version}")
                 return False
             
-            model_path = model_dir / "model.joblib"
-            scaler_path = model_dir / "scaler.joblib"
+            model_path = Path(model_info['path'])
+            if not model_path.exists():
+                logger.error(f"Model directory not found: {model_path}")
+                return False
             
-            return await self.load_model(str(model_path), str(scaler_path) if scaler_path.exists() else None)
+            model_file = model_path / "model.joblib"
+            scaler_file = model_path / "scaler.joblib"
+            
+            return await self.load_model(str(model_file), str(scaler_file) if scaler_file.exists() else None)
             
         except Exception as e:
             logger.error(f"Error loading model version {version}: {e}")
@@ -323,45 +331,73 @@ class ModelManager:
         try:
             models = []
             
+            logger.info(f"Listing models from directory: {self.models_directory}")
+            logger.info(f"Registry file path: {self.model_registry_file}")
+            
             # Load registry
             registry = {}
             if self.model_registry_file.exists():
+                logger.info("Registry file exists, loading...")
                 with open(self.model_registry_file, 'r') as f:
                     registry = json.load(f)
+                logger.info(f"Loaded registry: {registry}")
+            else:
+                logger.warning("Registry file does not exist")
+            
+            # Handle different registry formats
+            if 'models' in registry:
+                # New format with models array
+                model_list = registry['models']
+                logger.info(f"Using new format, found {len(model_list)} models")
+            else:
+                # Old format with version keys
+                model_list = [{'version': version, **info} for version, info in registry.items()]
+                logger.info(f"Using old format, found {len(model_list)} models")
             
             # Get model information
-            for version, info in registry.items():
-                model_dir = Path(info['path'])
+            for model_info in model_list:
+                version = model_info['version']
+                model_path = model_info['path']
+                model_dir = Path(model_path)
                 metadata_path = model_dir / "metadata.json"
                 
-                model_info = {
+                logger.info(f"Processing model: {version} at {model_path}")
+                
+                model_data = {
                     'version': version,
-                    'path': info['path'],
-                    'status': info['status'],
-                    'created_at': info['created_at'],
-                    'last_updated': info['last_updated']
+                    'path': model_path,
+                    'status': model_info.get('status', 'available'),
+                    'created_at': model_info.get('created_at', ''),
+                    'last_updated': model_info.get('last_updated', ''),
+                    'model_type': model_info.get('model_type', 'Unknown')
                 }
                 
                 # Load additional metadata if available
                 if metadata_path.exists():
+                    logger.info(f"Loading metadata from: {metadata_path}")
                     with open(metadata_path, 'r') as f:
                         metadata = json.load(f)
                     
-                    model_info.update({
+                    model_data.update({
                         'model_type': metadata.get('model_info', {}).get('model_type', 'Unknown'),
-                        'training_samples': metadata.get('training_info', {}).get('training_samples', 0),
+                        'training_samples': metadata.get('training_info', {}).get('n_samples', 0),
                         'evaluation_metrics': metadata.get('evaluation_info', {}).get('basic_metrics', {}),
                         'feature_count': len(metadata.get('training_info', {}).get('feature_names', []))
                     })
+                else:
+                    logger.warning(f"Metadata file not found: {metadata_path}")
                 
-                models.append(model_info)
+                models.append(model_data)
             
             # Sort by creation date (newest first)
-            models.sort(key=lambda x: x['created_at'], reverse=True)
+            models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+            logger.info(f"Returning {len(models)} models")
             return models
             
         except Exception as e:
             logger.error(f"Error listing models: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
     
     async def predict(self, features: np.ndarray) -> np.ndarray:
