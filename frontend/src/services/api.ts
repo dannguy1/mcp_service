@@ -1,5 +1,23 @@
 import axios from "axios";
-import type { DashboardData, LogsResponse, ModelsResponse, ServerStats, Anomaly, Log, Model, ServerStatus, ChangePasswordForm, ModelInfo } from "./types";
+import type { 
+  DashboardData, 
+  LogsResponse, 
+  ModelsResponse, 
+  ServerStats, 
+  Anomaly, 
+  Log, 
+  Model, 
+  ServerStatus, 
+  ChangePasswordForm, 
+  ModelInfo,
+  ModelValidationResult,
+  ModelPerformanceMetrics,
+  ModelDriftResult,
+  ModelTransferHistory,
+  ModelCompatibilityResult,
+  ModelValidationReport,
+  ModelPerformanceReport
+} from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api/v1";
 
@@ -131,5 +149,76 @@ export const endpoints = {
   getExportStats: () => {
     console.log("Getting export stats");
     return api.get('/export/stats').then(res => res.data);
+  },
+
+  // Enhanced Model Management endpoints
+  validateModel: (version: string) => {
+    console.log("Validating model:", version);
+    return api.post<ModelValidationResult>(`/model-management/${version}/validate`).then(res => res.data);
+  },
+
+  deployModelVersion: (version: string) => {
+    console.log("Deploying model version:", version);
+    return api.post(`/model-management/${version}/deploy`).then(res => res.data);
+  },
+
+  rollbackModel: (version: string) => {
+    console.log("Rolling back to model version:", version);
+    return api.post(`/model-management/${version}/rollback`).then(res => res.data);
+  },
+
+  getTransferHistory: () => {
+    console.log("Fetching transfer history...");
+    return api.get<ModelTransferHistory[]>('/model-management/transfer-history').then(res => res.data);
+  },
+
+  listEnhancedModels: () => {
+    console.log("Fetching enhanced models...");
+    return api.get('/model-management/models').then(res => res.data);
+  },
+
+  getEnhancedModelInfo: (version: string) => {
+    console.log("Fetching enhanced model info for:", version);
+    return api.get(`/model-management/models/${version}`).then(res => res.data);
+  },
+
+  getModelPerformance: (version: string) => {
+    console.log("Fetching model performance for:", version);
+    return api.get<ModelPerformanceMetrics>(`/model-management/performance/${version}`).then(res => res.data);
+  },
+
+  getAllModelPerformance: () => {
+    console.log("Fetching all model performance...");
+    return api.get<ModelPerformanceMetrics[]>('/model-management/performance').then(res => res.data);
+  },
+
+  checkModelDrift: (version: string) => {
+    console.log("Checking model drift for:", version);
+    return api.post<ModelDriftResult>(`/model-management/performance/${version}/check-drift`).then(res => res.data);
+  },
+
+  generatePerformanceReport: (version: string) => {
+    console.log("Generating performance report for:", version);
+    return api.get<ModelPerformanceReport>(`/model-management/performance/${version}/report`).then(res => res.data);
+  },
+
+  validateModelCompatibility: (version: string, targetFeatures: string[]) => {
+    console.log("Validating model compatibility for:", version);
+    return api.post<ModelCompatibilityResult>(`/model-management/${version}/validate-compatibility`, targetFeatures).then(res => res.data);
+  },
+
+  generateValidationReport: (version: string) => {
+    console.log("Generating validation report for:", version);
+    return api.get<ModelValidationReport>(`/model-management/${version}/validation-report`).then(res => res.data);
+  },
+
+  cleanupTransferHistory: (daysToKeep: number = 30) => {
+    console.log("Cleaning up transfer history");
+    return api.delete(`/model-management/transfer-history?days_to_keep=${daysToKeep}`).then(res => res.data);
+  },
+
+  cleanupPerformanceMetrics: (daysToKeep: number = 30) => {
+    console.log("Cleaning up performance metrics");
+    return api.delete(`/model-management/performance/cleanup?days_to_keep=${daysToKeep}`).then(res => res.data);
   },
 };

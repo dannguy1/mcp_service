@@ -28,4 +28,15 @@ def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
     # Add handler to logger
     logger.addHandler(console_handler)
     
-    return logger 
+    return logger
+
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger instance.
+    
+    Args:
+        name: Name of the logger
+        
+    Returns:
+        logging.Logger: Logger instance
+    """
+    return logging.getLogger(name) 

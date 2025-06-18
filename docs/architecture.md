@@ -34,6 +34,29 @@ The AI Processing Service is a standalone, Dockerized application that interface
 - **Training Environment**: High-performance machine for model training, exporting logs, and deploying models.
 - **Export Consumers**: External systems that consume exported data for analysis, training, or compliance purposes.
 
+### Training Service Independence
+
+The training service functionality has been intentionally excluded from the MCP service frontend to maintain proper architectural boundaries:
+
+- **Separation of Concerns**: The training service may be deployed on a separate server and should have its own independent UI
+- **No Service Co-location Assumptions**: This design prevents unnecessary coupling and architectural assumptions about service deployment
+- **Independent Development**: Each service can evolve independently without affecting the other
+- **Scalability**: Services can be scaled independently based on their specific resource requirements
+
+The MCP service frontend focuses on:
+- Model management and deployment
+- Performance monitoring
+- Anomaly detection and analysis
+- Data export functionality
+
+The training service should provide its own UI for:
+- Model training workflows
+- Training data management
+- Model validation and testing
+- Training job monitoring
+
+This architectural decision ensures that each service remains focused on its core responsibilities and can be deployed, scaled, and maintained independently.
+
 ### Diagram
 ```mermaid
 flowchart TD
@@ -540,3 +563,32 @@ def test_create_export():
 ## 14. Conclusion
 
 The Modular AI Processing Service integrates a centralized `DataService`, pluggable agents (`WiFiAgent`), a comprehensive export system, and a decoupled training/deployment workflow to deliver efficient, extensible anomaly detection. By using direct method calls, disk-based model storage, minimal schema dependency, and background task processing, it meets the requirements for remote operation, resource efficiency on the Raspberry Pi 5, plug-and-play modularity, and comprehensive data export capabilities. The architecture supports future enhancements (e.g., new agents, real-time streaming, additional export formats) while maintaining compatibility with the Log Monitor framework.
+
+## Overview
+
+The MCP Service is designed as a modular system with clear separation of concerns between different components.
+
+## Service Separation
+
+### Training Service Independence
+
+The training service functionality has been intentionally excluded from the MCP service frontend to maintain proper architectural boundaries:
+
+- **Separation of Concerns**: The training service may be deployed on a separate server and should have its own independent UI
+- **No Service Co-location Assumptions**: This design prevents unnecessary coupling and architectural assumptions about service deployment
+- **Independent Development**: Each service can evolve independently without affecting the other
+- **Scalability**: Services can be scaled independently based on their specific resource requirements
+
+The MCP service frontend focuses on:
+- Model management and deployment
+- Performance monitoring
+- Anomaly detection and analysis
+- Data export functionality
+
+The training service should provide its own UI for:
+- Model training workflows
+- Training data management
+- Model validation and testing
+- Training job monitoring
+
+This architectural decision ensures that each service remains focused on its core responsibilities and can be deployed, scaled, and maintained independently.

@@ -1,4 +1,4 @@
-version: '1.0.0'
+version: '2.0.0'
 model:
   type: isolation_forest
   n_estimators: 100
@@ -25,6 +25,9 @@ storage:
   directory: models
   version_format: '%Y%m%d_%H%M%S'
   keep_last_n_versions: 5
+  backup_enabled: true
+  compression: true
+  retention_days: 30
 evaluation:
   metrics:
     - accuracy
@@ -36,7 +39,25 @@ evaluation:
     precision: 0.7
     recall: 0.7
     f1_score: 0.7
+integration:
+  training_service_path: /home/dannguyen/WNC/mcp_training
+  auto_import: false
+  import_interval: 3600
+  validate_imports: true
+monitoring:
+  enable_drift_detection: true
+  drift_threshold: 0.1
+  performance_tracking: true
+  resource_monitoring: true
+  model_health_checks: true
+  alerting:
+    enabled: true
+    email_notifications: false
+    slack_notifications: false
 logging:
   level: INFO
   format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  file: logs/model_training.log
+  file: logs/model_inference.log
+  rotation:
+    max_size: 100MB
+    backup_count: 10

@@ -21,8 +21,9 @@ from app.config.config import config
 from app.db import get_db_connection
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-# Import export router
+# Import routers
 from app.api.endpoints.export import router as export_router
+from app.api.endpoints.model_management import router as model_management_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -75,8 +76,9 @@ os.makedirs(static_dir, exist_ok=True)
 # Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-# Include export router
+# Include routers
 app.include_router(export_router, prefix="/api/v1")
+app.include_router(model_management_router, prefix="/api/v1/model-management")
 
 # Root endpoint
 @app.get("/")

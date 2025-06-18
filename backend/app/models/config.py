@@ -30,26 +30,72 @@ class StorageConfig(BaseModel):
     directory: str = Field(default="models", description="Directory to save models")
     version_format: str = Field(default="%Y%m%d_%H%M%S", description="Version format string")
     keep_last_n_versions: int = Field(default=5, description="Number of versions to keep")
+    backup_enabled: bool = Field(default=True, description="Enable model backup")
+    compression: bool = Field(default=True, description="Enable model compression")
+    retention_days: int = Field(default=30, description="Model retention period in days")
 
 class EvaluationConfig(BaseModel):
     """Model evaluation configuration."""
     metrics: List[str] = Field(default_factory=list, description="Evaluation metrics")
     thresholds: Dict[str, float] = Field(default_factory=dict, description="Performance thresholds")
 
+class IntegrationConfig(BaseModel):
+    """Integration configuration for training service."""
+    training_service_path: str = Field(default="/home/dannguyen/WNC/mcp_training", 
+                                      description="Path to training service")
+    auto_import: bool = Field(default=False, description="Auto-import new models")
+    import_interval: int = Field(default=3600, description="Import check interval (seconds)")
+    validate_imports: bool = Field(default=True, description="Validate imported models")
+
+class MonitoringConfig(BaseModel):
+    """Monitoring configuration for model inference."""
+    enable_drift_detection: bool = Field(default=True, description="Enable drift detection")
+    drift_threshold: float = Field(default=0.1, description="Drift detection threshold")
+    performance_tracking: bool = Field(default=True, description="Enable performance tracking")
+    resource_monitoring: bool = Field(default=True, description="Enable resource monitoring")
+    model_health_checks: bool = Field(default=True, description="Enable model health checks")
+    alerting: Dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": True,
+        "email_notifications": False,
+        "slack_notifications": False
+    }, description="Alerting configuration")
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
     level: str = Field(default="INFO", description="Logging level")
     format: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s", description="Log format")
     file: str = Field(default="logs/model_training.log", description="Log file path")
+    rotation: Dict[str, Any] = Field(default_factory=lambda: {
+        "max_size": "100MB",
+        "backup_count": 10
+    }, description="Log rotation configuration")
 
 class ModelConfig(BaseModel):
-    """Configuration for model training and serving."""
-    version: str = Field(default="", description="Model version identifier")
+    """Enhanced configuration for model management and inference."""
+    version: str = Field(default="2.0.0", description="Configuration version")
+    
+    # Model parameters
     model: ModelParameters = Field(default_factory=ModelParameters)
+    
+    # Feature configuration
     features: FeatureConfig = Field(default_factory=FeatureConfig)
+    
+    # Training configuration
     training: TrainingConfig = Field(default_factory=TrainingConfig)
+    
+    # Storage configuration
     storage: StorageConfig = Field(default_factory=StorageConfig)
+    
+    # Evaluation configuration
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
+    
+    # Integration configuration
+    integration: IntegrationConfig = Field(default_factory=IntegrationConfig)
+    
+    # Monitoring configuration
+    monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
+    
+    # Logging configuration
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     
     model_config = {
