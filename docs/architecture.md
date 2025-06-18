@@ -11,6 +11,7 @@ This document provides a comprehensive architecture for the **Modular, Extensibl
 - **Local Storage**: Store anomalies in a local SQLite database for better performance and independence.
 - **Remote Operation**: Support secure, reliable access to a remote database and external training environments.
 - **Robustness**: Include health checks, graceful shutdowns, and error handling for production reliability.
+- **Data Export**: Provide comprehensive data export capabilities for training and analysis purposes.
 
 ### Key Features
 - Centralized `DataService` for database and cache access.
@@ -19,10 +20,11 @@ This document provides a comprehensive architecture for the **Modular, Extensibl
 - Disk-based model storage (`/app/models`) for external training.
 - Secure PostgreSQL connectivity with Redis caching and retry logic.
 - Lightweight health check endpoint for Docker monitoring.
+- **Data Export System**: Complete export functionality with background processing, status tracking, and multiple output formats.
 
 ## 2. System Context
 
-The AI Processing Service is a standalone, Dockerized application that interfaces with external systems, including a PostgreSQL database (read-only), notification services, and a training environment. It operates independently of the Syslog Service, which collects logs.
+The AI Processing Service is a standalone, Dockerized application that interfaces with external systems, including a PostgreSQL database (read-only), notification services, a training environment, and export consumers. It operates independently of the Syslog Service, which collects logs.
 
 ### External Components
 - **PostgreSQL Database**: Stores logs (`log_entries`), accessible locally (e.g., Raspberry Pi) or remotely (e.g., cloud-hosted).
@@ -30,6 +32,7 @@ The AI Processing Service is a standalone, Dockerized application that interface
 - **Syslog Service**: External process populating `log_entries` via syslog-ng.
 - **Notification Systems**: Email (SMTP) or Slack for anomaly alerts.
 - **Training Environment**: High-performance machine for model training, exporting logs, and deploying models.
+- **Export Consumers**: External systems that consume exported data for analysis, training, or compliance purposes.
 
 ### Diagram
 ```mermaid
@@ -44,8 +47,15 @@ flowchart TD
             SQLiteDB[(SQLite DB\n/app/data/mcp_anomalies.db)]
             ModelStorage[(Disk Model Storage\n/app/models)]
         end
+        subgraph Export["Export System"]
+            DataExporter["DataExporter"]
+            ExportStatusManager["ExportStatusManager"]
+            DataValidator["DataValidator"]
+            DataTransformer["DataTransformer"]
+        end
         Cache[(Redis Cache)]
         Health["Health Endpoint"]
+        FastAPI["FastAPI Web Server"]
     end
 
     subgraph External["External Systems"]
@@ -53,6 +63,7 @@ flowchart TD
         Syslog["Syslog Service"]
         Notify["Notification Systems"]
         Trainer["Training Environment"]
+        ExportConsumers["Export Consumers"]
     end
 
     Syslog -->|Store Logs| SourceDB
@@ -66,11 +77,15 @@ flowchart TD
     Trainer -->|Export Logs| SourceDB
     Trainer -->|Deploy Models| ModelStorage
     Health -->|Check Status| DataService
+    FastAPI -->|Export API| ExportConsumers
+    DataExporter -->|Read Data| DataService
+    DataExporter -->|Store Status| Cache
+    DataExporter -->|Generate Files| ExportConsumers
 ```
 
 ## 3. Architecture
 
-The service runs as a single process within a Docker container, comprising a centralized `DataService`, pluggable agents, shared components, and a health check endpoint. Communication between components uses direct method calls, eliminating the need for inter-service messaging.
+The service runs as a single process within a Docker container, comprising a centralized `DataService`, pluggable agents, shared components, a comprehensive export system, and a health check endpoint. Communication between components uses direct method calls, eliminating the need for inter-service messaging.
 
 ### Components
 1. **DataService**:
@@ -112,10 +127,24 @@ The service runs as a single process within a Docker container, comprising a cen
    - Prevents overload (CPU > 80%, memory > 70%)
    - Location: `/mcp_service/components/resource_monitor.py`
 
-8. **Health Endpoint**:
-   - Lightweight `aiohttp` server on port 5555
-   - Verifies service health and database connectivity
-   - Location: `/mcp_service/mcp_service.py`
+8. **Export System**:
+   - **DataExporter**: Main export logic with batch processing and multiple output formats
+   - **ExportStatusManager**: Real-time status tracking using Redis
+   - **DataValidator**: Data quality validation and metrics
+   - **DataTransformer**: Data standardization and transformation
+   - **ExportCleanupService**: Automated cleanup of old export files
+   - Location: `/app/services/export/`
+
+9. **FastAPI Web Server**:
+   - RESTful API endpoints for service management and data export
+   - Background task processing for export operations
+   - CORS support for frontend integration
+   - Location: `/app/main.py`
+
+10. **Health Endpoint**:
+    - Lightweight health check on port 5555
+    - Verifies service health and database connectivity
+    - Location: `/mcp_service/mcp_service.py`
 
 ## 4. Data Flow
 
@@ -149,6 +178,51 @@ sequenceDiagram
             Agent->>Notify: Send Alerts
         end
     end
+```
+
+### Export Data Flow
+```mermaid
+sequenceDiagram
+    participant Client as Export Client
+    participant API as FastAPI Server
+    participant Exporter as DataExporter
+    participant DS as DataService
+    participant PG as PostgreSQL
+    participant Status as ExportStatusManager
+    participant Cache as Redis Cache
+    participant Files as Export Files
+
+    Client->>API: POST /api/v1/export/ (ExportConfig)
+    API->>Status: Create export status
+    Status->>Cache: Store metadata
+    API->>Exporter: Background task: export_data()
+    API-->>Client: Return export_id (202 Accepted)
+    
+    loop Background Processing
+        Exporter->>DS: get_logs_by_program()
+        DS->>PG: Query with filters
+        PG-->>DS: Return logs
+        DS-->>Exporter: Return logs
+        Exporter->>Exporter: Validate & transform data
+        Exporter->>Files: Write batch files
+        Exporter->>Status: Update progress
+        Status->>Cache: Store progress
+    end
+    
+    Exporter->>Status: Mark completed
+    Status->>Cache: Store final status
+    
+    Client->>API: GET /api/v1/export/{id}/status
+    API->>Status: Get status
+    Status->>Cache: Retrieve metadata
+    Cache-->>Status: Return metadata
+    Status-->>API: Return status
+    API-->>Client: Return export status
+    
+    Client->>API: GET /api/v1/export/download/{id}
+    API->>Files: Retrieve file
+    Files-->>API: Return file
+    API-->>Client: File download
 ```
 
 ## 5. Database Schema
@@ -237,6 +311,9 @@ mcp:node_exporter:status    # Node exporter status
 mcp:node_exporter:health    # Node exporter health
 mcp:node_exporter:error     # Last node exporter error
 mcp:node_exporter:last_check # Timestamp of last check
+
+# Export Status Keys
+export:metadata:{export_id}  # Export metadata and status
 ```
 
 ### Status Values
@@ -291,6 +368,12 @@ SERVICE_HOST=0.0.0.0
 SERVICE_PORT=5555
 LOG_LEVEL=INFO
 ANALYSIS_INTERVAL=300
+
+# Export Configuration
+EXPORT_BATCH_SIZE=1000
+EXPORT_MAX_FILE_SIZE=100MB
+EXPORT_RETENTION_DAYS=7
+EXPORT_CLEANUP_INTERVAL=3600
 ```
 
 ## 8. Deployment
@@ -314,9 +397,11 @@ services:
       - REDIS_PORT=${REDIS_PORT}
     ports:
       - "5555:5555"
+      - "5000:5000"  # FastAPI web server
     volumes:
       - models:/app/models
       - anomaly_data:/app/data
+      - exports:/app/exports  # Export file storage
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5555/health"]
       interval: 30s
@@ -329,9 +414,10 @@ services:
 volumes:
   models:
   anomaly_data:
+  exports:
 ```
 
-## 8. Resource Optimization
+## 9. Resource Optimization
 
 - **Direct Calls**: Eliminates MQTT overhead (~20MB memory)
 - **Database**: 
@@ -341,8 +427,9 @@ volumes:
 - **Model Storage**: Disk-based, no database overhead
 - **Polling**: 5-minute intervals
 - **ResourceMonitor**: Prevents overload
+- **Export Processing**: Background tasks with batch processing to minimize memory usage
 
-## 9. Security
+## 10. Security
 
 - **Database**: 
   - PostgreSQL: SSL/TLS, read-only access
@@ -350,15 +437,18 @@ volumes:
 - **Model Files**: SFTP for secure transfers
 - **Credentials**: Environment variables
 - **Health Endpoint**: Read-only, no sensitive data
+- **Export Files**: Secure file storage with access controls
 
-## 10. Extensibility
+## 11. Extensibility
 
 - **New Agents**: Implement `BaseAgent`
 - **New Features**: Extend `DataService` methods
 - **Real-Time**: Add streaming via WebSockets
 - **Backup**: Add periodic SQLite backups
+- **Export Formats**: Extend DataExporter with new output formats
+- **Export Filters**: Add custom filtering capabilities
 
-## 11. Implementation Steps
+## 12. Implementation Steps
 
 1. **Configure PostgreSQL**:
    - Verify read-only access to `log_entries`
@@ -378,8 +468,9 @@ volumes:
    - Verify log retrieval
    - Test anomaly detection
    - Check health endpoints
+   - Validate export functionality
 
-## 12. Testing
+## 13. Testing
 ### Unit Tests
 ```python
 # mcp_service/tests/test_data_service.py
@@ -422,6 +513,30 @@ async def test_wifi_agent_cycle():
     await service.stop()
 ```
 
-## 13. Conclusion
+### Export Tests
+```python
+# tests/integration/test_export_api.py
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
 
-The Modular AI Processing Service integrates a centralized `DataService`, pluggable agents (`WiFiAgent`), and a decoupled training/deployment workflow to deliver efficient, extensible anomaly detection. By using direct method calls, disk-based model storage, and minimal schema dependency, it meets the requirements for remote operation, resource efficiency on the Raspberry Pi 5, and plug-and-play modularity. The architecture supports future enhancements (e.g., new agents, real-time streaming) while maintaining compatibility with the Log Monitor framework.
+client = TestClient(app)
+
+def test_create_export():
+    """Test creating an export job."""
+    response = client.post("/api/v1/export/", json={
+        "data_types": ["logs"],
+        "batch_size": 100,
+        "include_metadata": True,
+        "output_format": "json",
+        "compression": False
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert "export_id" in data
+    assert data["status"] == "pending"
+```
+
+## 14. Conclusion
+
+The Modular AI Processing Service integrates a centralized `DataService`, pluggable agents (`WiFiAgent`), a comprehensive export system, and a decoupled training/deployment workflow to deliver efficient, extensible anomaly detection. By using direct method calls, disk-based model storage, minimal schema dependency, and background task processing, it meets the requirements for remote operation, resource efficiency on the Raspberry Pi 5, plug-and-play modularity, and comprehensive data export capabilities. The architecture supports future enhancements (e.g., new agents, real-time streaming, additional export formats) while maintaining compatibility with the Log Monitor framework.
