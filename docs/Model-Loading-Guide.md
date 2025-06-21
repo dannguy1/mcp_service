@@ -1,11 +1,12 @@
 # Model Loading Guide
 
-This guide explains how to load new trained models into the MCP (Model Control Protocol) service system.
+This guide explains how to load new trained models into the MCP (Model Context Protocol) service system.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
+- [Model Package Format](#model-package-format)
 - [Model Loading Methods](#model-loading-methods)
 - [Model Directory Structure](#model-directory-structure)
 - [API Endpoints](#api-endpoints)
@@ -17,168 +18,148 @@ This guide explains how to load new trained models into the MCP (Model Control P
 
 ## Overview
 
-The MCP service supports multiple methods for loading trained models, from simple file placement to automated imports from training services. The system automatically validates models, manages versions, and provides performance monitoring capabilities.
+The MCP service loads models that are packaged by the MCP Training Service. These packages are self-contained ZIP archives that include the trained model, scaler, metadata, validation scripts, and integration examples. The MCP system supports multiple loading methods, automatic validation, version management, and performance monitoring.
 
 ## Prerequisites
 
 - MCP service is running and accessible
-- Trained model file(s) are available
+- Deployable model package ZIP file (see [Model Package Format](#model-package-format))
 - Proper permissions to access model directories
-- Model is compatible with the current feature set
+- Model is compatible with the current feature set and MCP protocol
+
+## Model Package Format
+
+Models must be packaged as described in the [Deployable Model Package Specification](./Deployable-Package-Specification.md):
+
+- **Format**: ZIP archive (e.g., `model_20241201_143022_deployment.zip`)
+- **Contents**:
+  - `model.joblib`: Trained model (required)
+  - `scaler.joblib`: Feature scaler (optional)
+  - `metadata.json`: Model metadata (required)
+  - `deployment_manifest.json`: Deployment configuration and integrity info (required)
+  - `validate_model.py`: Model validation script (required)
+  - `inference_example.py`: Production-ready inference class (required)
+  - `requirements.txt`: Python dependencies (required)
+  - `README.md`: Documentation (required)
+
+**See the Deployable Model Package Specification for full details on file structure and requirements.**
 
 ## Model Loading Methods
 
-### Method 1: Direct File Placement (Simplest)
+### Method 1: Direct Package Placement
 
-This is the most straightforward method for loading models.
+1. **Copy the model package ZIP file** (e.g., `model_20241201_143022_deployment.zip`) to a location on the host filesystem accessible by the MCP backend (e.g., `/home/user/models/`).
 
-#### Steps:
-
-1. **Navigate to the MCP service directory:**
+2. **Extract the model package:**
    ```bash
-   cd /home/dannguyen/WNC/mcp_service
+   unzip model_20241201_143022_deployment.zip -d backend/models/model_20241201_143022
    ```
 
-2. **Copy your trained model to the models directory:**
+3. **Verify package contents:**
    ```bash
-   # For a single model file
-   cp /path/to/your/trained_model.pkl backend/models/
-   
-   # For a model directory with multiple files
-   cp -r /path/to/your/model_directory backend/models/
+   ls backend/models/model_20241201_143022/
+   # Should include model.joblib, scaler.joblib, metadata.json, deployment_manifest.json, etc.
    ```
 
-3. **Restart the service to load the new model:**
+4. **(Recommended) Run validation script:**
    ```bash
-   # Restart the backend service
+   cd backend/models/model_20241201_143022
+   pip install -r requirements.txt
+   python validate_model.py
+   ```
+
+5. **Restart the MCP service to load the new model:**
+   ```bash
    docker-compose restart backend
    ```
 
 #### Advantages:
-- Simple and direct
-- No additional configuration required
-- Works with any model format
+- Ensures all required files are present and validated
+- No manual file copying or renaming inside the container
+- Supports versioned model directories
 
 #### Disadvantages:
 - Manual process
-- No automatic validation
 - Requires service restart
 
 ### Method 2: Using the Model Management API
 
-The system provides REST API endpoints for automated model management.
+The MCP backend provides REST API endpoints for automated model import and deployment.
 
-#### A. Import Latest Model from Training Service
+#### A. Import Model Package
+
+1. **Copy the model package ZIP file to the host filesystem.**
+2. **Use the API to import the model:**
+   ```bash
+   curl -X POST "http://localhost:5000/api/v1/model-management/import" \
+     -F "file=@/path/to/model_20241201_143022_deployment.zip"
+   ```
+   - The backend will extract, analyze, and validate the model package.
+   - If a model of the same type already exists, it will be replaced by the new one.
+
+#### B. Deploy a Model Version
 
 ```bash
-# Import the latest available model
-curl -X POST "http://localhost:5000/api/v1/model-management/import-latest" \
-  -H "Content-Type: application/json" \
-  -d '{"validate": true}'
+curl -X POST "http://localhost:5000/api/v1/model-management/{version}/deploy"
 ```
 
-#### B. Import Specific Model
+#### C. Validate a Model
 
 ```bash
-# Import a specific model by path
-curl -X POST "http://localhost:5000/api/v1/model-management/import/path/to/model" \
-  -H "Content-Type: application/json" \
-  -d '{"validate": true}'
-```
-
-#### C. Deploy a Model Version
-
-```bash
-# Deploy a specific model version
-curl -X POST "http://localhost:5000/api/v1/model-management/{version}/deploy" \
-  -H "Content-Type: application/json"
+curl -X POST "http://localhost:5000/api/v1/model-management/{version}/validate"
 ```
 
 #### Advantages:
-- Automated process
-- Built-in validation
-- Version management
-- Transfer history tracking
+- Automated validation and registration
+- Version management and rollback support
+- Transfer and deployment history tracking
 
 #### Disadvantages:
-- Requires API access
-- More complex setup
+- Requires API access and authentication
 
 ### Method 3: Using the Frontend UI
 
-The MCP service provides a web interface for model management.
-
-#### Steps:
-
-1. **Access the Models page** in the MCP service frontend
-2. **Use the "Import Latest" button** to import the newest model
-3. **Deploy the model** using the deploy button in the model list
+1. **Copy the model package ZIP file to the host filesystem.**
+2. **Access the Models page** in the MCP service frontend.
+3. **Select the model package ZIP file** using the "Import Model" button.
+4. **The UI will analyze the package, display its metadata, and allow you to confirm import.**
+5. **If a model of the same type exists, it will be replaced.**
+6. **Deploy or validate the model** using the UI controls.
 
 #### Advantages:
 - User-friendly interface
-- Visual feedback
-- No command-line knowledge required
+- Visual feedback and status
+- No command-line required
 
 #### Disadvantages:
-- Requires web browser access
 - Limited to available UI features
 
-### Method 4: Automated Import from Training Service
+---
 
-The system can automatically import models from a configured training service.
+> **Note:**  
+> The MCP system does **not** automatically scan or import models from the training service or any external directory.  
+> All model imports must be initiated by a user via the UI or API, and the model package must be manually copied to the host filesystem first.
 
-#### Configuration:
-
-The training service path is configured in `backend/app/config/model_config.yaml`:
-
-```yaml
-integration:
-  training_service_path: /home/dannguyen/WNC/mcp_training
-  auto_import: false
-  import_interval: 3600
-  validate_imports: true
-```
-
-#### Commands:
-
-1. **Check available models:**
-   ```bash
-   curl "http://localhost:5000/api/v1/model-management/training-service/models"
-   ```
-
-2. **Validate training service connection:**
-   ```bash
-   curl "http://localhost:5000/api/v1/model-management/training-service/connection"
-   ```
-
-3. **Import the latest model:**
-   ```bash
-   curl -X POST "http://localhost:5000/api/v1/model-management/import-latest"
-   ```
+---
 
 ## Model Directory Structure
 
-Based on the configuration, models should be placed in:
-```
-/home/dannguyen/WNC/mcp_service/backend/models/
-```
-
-### Expected Structure:
+Models should be placed in versioned subdirectories under:
 
 ```
 backend/models/
-├── model_v1.pkl                    # Model file
-├── model_v2.pkl                    # Another model version
-├── wifi_anomaly_model.pkl          # WiFi-specific model
-├── metadata.json                   # Model metadata (optional)
-└── model_registry.json            # Model registry (auto-generated)
+└── model_{version}/
+    ├── model.joblib
+    ├── scaler.joblib
+    ├── metadata.json
+    ├── deployment_manifest.json
+    ├── validate_model.py
+    ├── inference_example.py
+    ├── requirements.txt
+    └── README.md
 ```
 
-### Model File Requirements:
-
-- **Format**: Compatible with scikit-learn (typically `.pkl`)
-- **Features**: Must match the expected feature set
-- **Metadata**: Optional but recommended for enhanced management
+- The MCP backend will automatically discover and manage models in this structure after import.
 
 ## API Endpoints
 
@@ -188,8 +169,7 @@ backend/models/
 |----------|--------|-------------|
 | `/api/v1/model-management/models` | GET | List all available models |
 | `/api/v1/model-management/models/{version}` | GET | Get model information |
-| `/api/v1/model-management/import-latest` | POST | Import latest model |
-| `/api/v1/model-management/import/{path}` | POST | Import specific model |
+| `/api/v1/model-management/import` | POST | Import model package (ZIP) |
 | `/api/v1/model-management/{version}/deploy` | POST | Deploy model version |
 | `/api/v1/model-management/{version}/rollback` | POST | Rollback to version |
 | `/api/v1/model-management/{version}/validate` | POST | Validate model |
@@ -203,125 +183,48 @@ backend/models/
 | `/api/v1/model-management/performance/{version}/check-drift` | POST | Check model drift |
 | `/api/v1/model-management/performance/{version}/report` | GET | Generate performance report |
 
-### Training Service Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/model-management/training-service/models` | GET | List training service models |
-| `/api/v1/model-management/training-service/connection` | GET | Validate training service connection |
-
 ## Frontend UI
 
 ### Models Page
 
-The Models page in the MCP service frontend provides:
-
-- **Model List**: View all available models with their status
-- **Import Latest**: Import the newest model from training service
+- **Model List**: View all available models and their status
+- **Import Model**: Upload new model package ZIP files from the host filesystem
 - **Deploy/Rollback**: Manage model deployment
 - **Validation**: Validate model quality and performance
 - **Performance**: View model performance metrics
 
 ### Performance Tab
 
-The Performance tab shows:
-
 - **Total Inferences**: Number of times each model has been used
 - **Average Inference Time**: Model performance speed
 - **Anomaly Rate**: Percentage of predictions that are anomalies
 - **Performance Trends**: Whether performance is improving or degrading
 
-## Validation and Deployment Process
+## Validation and Deployment
 
-When a new model is loaded, the system performs the following steps:
+When a new model package is loaded, the MCP system performs:
 
-### 1. Model Validation
-
-- **Format Check**: Verify model file format and structure
-- **Feature Compatibility**: Ensure model expects the correct features
-- **Quality Assessment**: Evaluate model quality metrics
-- **Performance Testing**: Test model performance on sample data
-
-### 2. Model Registration
-
-- **Version Assignment**: Assign unique version identifier
-- **Metadata Extraction**: Extract model metadata
-- **Registry Update**: Update model registry
-- **History Recording**: Record model transfer history
-
-### 3. Model Deployment
-
-- **Status Update**: Update model status to "deployed"
-- **Service Integration**: Integrate model with inference services
-- **Performance Monitoring**: Start monitoring model performance
-- **Health Checks**: Perform initial health checks
+1. **Integrity Check**: Verifies SHA256 hashes for all files (see `deployment_manifest.json`)
+2. **Model Loading**: Loads `model.joblib` and (if present) `scaler.joblib`
+3. **Feature Compatibility**: Ensures model expects the correct features (see `metadata.json`)
+4. **Validation Script**: Optionally runs `validate_model.py` for functional testing
+5. **Registration**: Updates the model registry and assigns a version
+6. **Deployment**: Deploys the model for inference (manual or automatic)
+7. **Monitoring**: Starts performance and drift monitoring
 
 ## Monitoring and Performance
 
-### Performance Metrics
-
-The system tracks the following metrics for each model:
-
-- **Total Inferences**: Number of predictions made
-- **Average Inference Time**: Time taken for predictions
-- **Anomaly Rate**: Percentage of anomaly predictions
-- **Throughput**: Predictions per second
-- **Error Rate**: Failed predictions
-
-### Drift Detection
-
-The system monitors for model drift by tracking:
-
-- **Feature Drift**: Changes in input feature distributions
-- **Prediction Drift**: Changes in prediction patterns
-- **Performance Drift**: Degradation in model performance
-
-### Alerts and Notifications
-
-Configure alerts for:
-
-- **Model Loading Failures**: Failed model loading attempts
-- **High Inference Latency**: Slow model performance
-- **Model Errors**: Inference errors and exceptions
-- **Model Drift**: Performance degradation over time
+- **Performance Metrics**: Total inferences, average inference time, anomaly rate, throughput, error rate
+- **Drift Detection**: Feature, prediction, and performance drift
+- **Alerts**: Model loading failures, high latency, errors, drift
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### 1. Model Not Loading
-
-**Symptoms:**
-- Model doesn't appear in the model list
-- Service fails to start
-
-**Solutions:**
-- Check model file format and permissions
-- Verify model compatibility with feature set
-- Check service logs for errors
-
-#### 2. Model Validation Failures
-
-**Symptoms:**
-- Import fails with validation errors
-- Model quality metrics below thresholds
-
-**Solutions:**
-- Review model training process
-- Check feature engineering consistency
-- Retrain model with better data
-
-#### 3. Performance Issues
-
-**Symptoms:**
-- High inference latency
-- Low throughput
-- High error rates
-
-**Solutions:**
-- Optimize model architecture
-- Check resource constraints
-- Monitor system performance
+- **Model Not Loading**: Check package structure, file permissions, and logs
+- **Validation Failures**: Run `validate_model.py` and review output
+- **Performance Issues**: Monitor resource usage and adjust batch size
 
 ### Debug Commands
 
@@ -347,91 +250,33 @@ curl "http://localhost:5000/api/v1/model-management/models"
 ### Complete Model Loading Workflow
 
 ```bash
-# 1. Check current models
-curl "http://localhost:5000/api/v1/model-management/models"
+# 1. Copy model package to host filesystem
+cp /path/from/training/model_20241201_143022_deployment.zip /host/path/
 
-# 2. Import latest model from training service
-curl -X POST "http://localhost:5000/api/v1/model-management/import-latest"
+# 2. Import model package via API
+curl -X POST "http://localhost:5000/api/v1/model-management/import" \
+  -F "file=@/host/path/model_20241201_143022_deployment.zip"
 
-# 3. List models again to see the new model
+# 3. List models
 curl "http://localhost:5000/api/v1/model-management/models"
 
 # 4. Validate the new model
-curl -X POST "http://localhost:5000/api/v1/model-management/{new_version}/validate"
+curl -X POST "http://localhost:5000/api/v1/model-management/20241201_143022/validate"
 
 # 5. Deploy the new model
-curl -X POST "http://localhost:5000/api/v1/model-management/{new_version}/deploy"
+curl -X POST "http://localhost:5000/api/v1/model-management/20241201_143022/deploy"
 
 # 6. Check model performance
-curl "http://localhost:5000/api/v1/model-management/performance/{new_version}"
-
-# 7. Monitor for drift
-curl -X POST "http://localhost:5000/api/v1/model-management/performance/{new_version}/check-drift"
+curl "http://localhost:5000/api/v1/model-management/performance/20241201_143022"
 ```
 
 ### Manual Model Placement Example
 
 ```bash
-# Copy model file
-cp /path/to/new_model.pkl backend/models/wifi_anomaly_model_v2.pkl
-
-# Restart service
+cp /path/from/training/model_20241201_143022_deployment.zip /host/path/
+unzip model_20241201_143022_deployment.zip -d backend/models/model_20241201_143022
 docker-compose restart backend
-
-# Verify model is loaded
 curl "http://localhost:5000/api/v1/model-management/models"
-```
-
-### Training Service Integration Example
-
-```bash
-# Check training service connection
-curl "http://localhost:5000/api/v1/model-management/training-service/connection"
-
-# List available models in training service
-curl "http://localhost:5000/api/v1/model-management/training-service/models"
-
-# Import latest model
-curl -X POST "http://localhost:5000/api/v1/model-management/import-latest"
-
-# Deploy the imported model
-curl -X POST "http://localhost:5000/api/v1/model-management/{version}/deploy"
-```
-
-## Configuration
-
-### Model Configuration File
-
-The model configuration is defined in `backend/app/config/model_config.yaml`:
-
-```yaml
-storage:
-  directory: models
-  version_format: '%Y%m%d_%H%M%S'
-  keep_last_n_versions: 5
-  backup_enabled: true
-
-integration:
-  training_service_path: /home/dannguyen/WNC/mcp_training
-  auto_import: false
-  import_interval: 3600
-  validate_imports: true
-
-monitoring:
-  enable_drift_detection: true
-  drift_threshold: 0.1
-  performance_tracking: true
-```
-
-### Environment Variables
-
-Set these environment variables for customization:
-
-```bash
-export MCP_MODEL_DIR=/custom/model/path
-export MCP_TRAINING_SERVICE_PATH=/custom/training/path
-export MCP_VALIDATE_IMPORTS=true
-export MCP_AUTO_IMPORT=false
 ```
 
 ## Best Practices
@@ -439,7 +284,7 @@ export MCP_AUTO_IMPORT=false
 1. **Always validate models** before deployment in production
 2. **Keep model versions** for rollback capability
 3. **Monitor performance** after model deployment
-4. **Use descriptive naming** for model files
+4. **Use descriptive naming** for model directories
 5. **Document model changes** in transfer history
 6. **Test models** on sample data before deployment
 7. **Set up alerts** for model performance issues
@@ -456,4 +301,4 @@ For additional support:
 
 ---
 
-*Last updated: January 2025*
+*Last updated: June 2025*
