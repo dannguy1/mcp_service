@@ -43,6 +43,41 @@ check_port() {
     fi
 }
 
+# Function to stop existing frontend process
+stop_frontend() {
+    if [ -f "frontend.pid" ]; then
+        PID=$(cat frontend.pid)
+        if ps -p $PID > /dev/null 2>&1; then
+            echo "Stopping existing frontend process (PID: $PID)..."
+            kill $PID
+            # Wait for process to stop
+            local count=0
+            while ps -p $PID > /dev/null 2>&1 && [ $count -lt 10 ]; do
+                sleep 1
+                count=$((count + 1))
+            done
+            if ps -p $PID > /dev/null 2>&1; then
+                echo "Force killing process..."
+                kill -9 $PID
+            fi
+            echo "Frontend process stopped."
+        else
+            echo "Found stale PID file. Removing..."
+        fi
+        rm -f frontend.pid
+    fi
+    # Also check for any process using port 3000
+    local port_pid=$(lsof -ti :3000 2>/dev/null)
+    if [ ! -z "$port_pid" ]; then
+        echo "Found process $port_pid using port 3000. Stopping..."
+        kill $port_pid
+        sleep 2
+    fi
+}
+
+# Stop any existing frontend process
+stop_frontend
+
 # Check if port 3000 is available
 if ! check_port 3000; then
     if [ "$BACKGROUND" = true ]; then
