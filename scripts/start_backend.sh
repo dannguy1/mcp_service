@@ -104,23 +104,12 @@ else
 fi
 
 # Set environment variables
-export ENVIRONMENT=development
-export HOST=0.0.0.0
-export PORT=$PORT
-export LOG_LEVEL=info
-export RELOAD=true
-export REDIS_HOST=localhost
-export REDIS_PORT=6379
-export REDIS_DB=0
-export DB_HOST=192.168.10.14
-export DB_PORT=5432
-export DB_NAME=netmonitor_db
-export DB_USER=netmonitor_user
-export DB_PASSWORD=netmonitor_password
-export DB_MIN_CONNECTIONS=5
-export DB_MAX_CONNECTIONS=20
-export DB_POOL_TIMEOUT=30
-export CORS_ORIGINS=http://localhost:3000
+# Load environment variables from .env file
+if [ -f ".env" ]; then
+    echo "Loading environment variables from .env file..."
+    export $(grep -v '^#' .env | xargs)
+fi
+
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 # Start the FastAPI development server
@@ -129,7 +118,7 @@ if [ "$BACKGROUND" = true ]; then
     # Run in background and redirect output to a log file
     LOG_FILE="backend.log"
     echo "Running in background mode. Logs will be written to $LOG_FILE"
-    nohup uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload --log-level info > "$LOG_FILE" 2>&1 &
+    nohup uvicorn app.main:app --host $HOST --port $PORT --reload --log-level $LOG_LEVEL > "$LOG_FILE" 2>&1 &
     echo $! > backend.pid
     
     # Wait for server to start
@@ -147,5 +136,5 @@ else
     echo "Starting FastAPI development server..."
     echo "API documentation available at: http://localhost:$PORT/api/v1/docs"
     echo "Health check available at: http://localhost:$PORT/api/v1/health"
-    uvicorn app.main:app --host 0.0.0.0 --port $PORT --reload --log-level info
+    uvicorn app.main:app --host $HOST --port $PORT --reload --log-level $LOG_LEVEL
 fi

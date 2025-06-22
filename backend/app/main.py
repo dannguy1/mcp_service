@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 import psutil
 from sqlalchemy import text
 import json
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Import existing components
 from app.mcp_service.data_service import DataService
@@ -59,9 +63,13 @@ app = FastAPI(
 )
 
 # Configure CORS
+# Parse CORS origins from environment variable or use defaults
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://192.168.10.8:3000,http://192.168.10.12:3000")
+allowed_origins = [origin.strip() for origin in cors_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://192.168.10.8:3000")],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

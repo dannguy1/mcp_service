@@ -10,7 +10,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DB_HOST=192.168.10.14
+      - DB_HOST=localhost
       - DB_PORT=5432
       - DB_NAME=netmonitor_db
       - DB_USER=netmonitor_user

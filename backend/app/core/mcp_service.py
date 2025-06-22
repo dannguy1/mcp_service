@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 import os
 import redis
+from dotenv import load_dotenv
 
 from config.config import config
 from app.mcp_service.data_service import DataService
@@ -11,6 +12,9 @@ from app.mcp_service.agents.wifi_agent import WiFiAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor
 from app.mcp_service.components.model_manager import ModelManager
 from app.services.status_manager import ServiceStatusManager
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
