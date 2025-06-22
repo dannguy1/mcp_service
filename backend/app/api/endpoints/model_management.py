@@ -1,11 +1,14 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, File, UploadFile
 from typing import List, Dict, Any, Optional
 import logging
 from datetime import datetime
+import tempfile
+import os
 
 from ...services.model_transfer_service import ModelTransferService
 from ...services.model_validator import ModelValidator
 from ...services.model_performance_monitor import ModelPerformanceMonitor
+from ...services.model_loader import ModelLoader
 from ...components.model_manager import ModelManager
 from ...models.config import ModelConfig
 
@@ -23,6 +26,48 @@ async def get_training_service_models() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error getting training service models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/import")
+async def import_model_package(
+    file: UploadFile = File(...),
+    validate: bool = True
+) -> Dict[str, Any]:
+    """Import a model package ZIP file."""
+    try:
+        # File validation
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
+        
+        # Initialize model loader for validation
+        model_loader = ModelLoader()
+        
+        # Validate file
+        content = await file.read()
+        if not model_loader.validate_uploaded_file(file.filename, len(content)):
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid file. Must be a ZIP file following naming convention: model_{version}_deployment.zip"
+            )
+        
+        # Save to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+            tmp_file.write(content)
+            tmp_file_path = tmp_file.name
+        
+        try:
+            # Process the model package
+            result = await model_loader.process_model_package(tmp_file_path, validate)
+            return result
+        finally:
+            # Cleanup temporary file
+            if os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error importing model package: {e}")
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
 @router.post("/import/{model_path:path}")
 async def import_model_from_training_service(model_path: str, 
@@ -132,6 +177,10 @@ async def list_models() -> List[Dict[str, Any]]:
     try:
         config = ModelConfig()
         model_manager = ModelManager(config)
+        
+        # Scan for new models first
+        await model_manager.scan_model_directory()
+        
         models = await model_manager.list_models()
         return models
     except Exception as e:

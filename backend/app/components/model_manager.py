@@ -331,74 +331,80 @@ class ModelManager:
         try:
             models = []
             
-            logger.info(f"Listing models from directory: {self.models_directory}")
-            logger.info(f"Registry file path: {self.model_registry_file}")
-            
-            # Load registry
-            registry = {}
+            # Load registry if it exists
             if self.model_registry_file.exists():
-                logger.info("Registry file exists, loading...")
                 with open(self.model_registry_file, 'r') as f:
                     registry = json.load(f)
-                logger.info(f"Loaded registry: {registry}")
-            else:
-                logger.warning("Registry file does not exist")
+                
+                for version, model_info in registry.items():
+                    model_path = Path(model_info['path'])
+                    if model_path.exists():
+                        # Load metadata if available
+                        metadata_path = model_path / 'metadata.json'
+                        metadata = {}
+                        if metadata_path.exists():
+                            with open(metadata_path, 'r') as f:
+                                metadata = json.load(f)
+                        
+                        models.append({
+                            'version': version,
+                            'path': str(model_path),
+                            'status': model_info['status'],
+                            'created_at': model_info['created_at'],
+                            'last_updated': model_info['last_updated'],
+                            'import_method': model_info.get('import_method', 'unknown'),
+                            'metadata': metadata
+                        })
             
-            # Handle different registry formats
-            if 'models' in registry:
-                # New format with models array
-                model_list = registry['models']
-                logger.info(f"Using new format, found {len(model_list)} models")
-            else:
-                # Old format with version keys
-                model_list = [{'version': version, **info} for version, info in registry.items()]
-                logger.info(f"Using old format, found {len(model_list)} models")
-            
-            # Get model information
-            for model_info in model_list:
-                version = model_info['version']
-                model_path = model_info['path']
-                model_dir = Path(model_path)
-                metadata_path = model_dir / "metadata.json"
-                
-                logger.info(f"Processing model: {version} at {model_path}")
-                
-                model_data = {
-                    'version': version,
-                    'path': model_path,
-                    'status': model_info.get('status', 'available'),
-                    'created_at': model_info.get('created_at', ''),
-                    'last_updated': model_info.get('last_updated', ''),
-                    'model_type': model_info.get('model_type', 'Unknown')
-                }
-                
-                # Load additional metadata if available
-                if metadata_path.exists():
-                    logger.info(f"Loading metadata from: {metadata_path}")
-                    with open(metadata_path, 'r') as f:
-                        metadata = json.load(f)
-                    
-                    model_data.update({
-                        'model_type': metadata.get('model_info', {}).get('model_type', 'Unknown'),
-                        'training_samples': metadata.get('training_info', {}).get('n_samples', 0),
-                        'evaluation_metrics': metadata.get('evaluation_info', {}).get('basic_metrics', {}),
-                        'feature_count': len(metadata.get('training_info', {}).get('feature_names', []))
-                    })
-                else:
-                    logger.warning(f"Metadata file not found: {metadata_path}")
-                
-                models.append(model_data)
-            
-            # Sort by creation date (newest first)
-            models.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-            logger.info(f"Returning {len(models)} models")
             return models
             
         except Exception as e:
             logger.error(f"Error listing models: {e}")
-            import traceback
-            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
+    
+    async def scan_model_directory(self) -> List[Dict[str, Any]]:
+        """Scan models directory for new models."""
+        models = []
+        
+        if not self.models_directory.exists():
+            return models
+        
+        for model_dir in self.models_directory.iterdir():
+            if model_dir.is_dir() and model_dir.name.startswith('model_'):
+                try:
+                    # Check if already registered
+                    if not await self._is_model_registered(model_dir.name):
+                        # Validate and register new model
+                        validation_result = await self._validate_imported_model(str(model_dir))
+                        if validation_result['is_valid']:
+                            await self._update_model_registry(model_dir, 'available')
+                            models.append({
+                                'version': model_dir.name,
+                                'path': str(model_dir),
+                                'status': 'available',
+                                'imported_at': datetime.now().isoformat()
+                            })
+                            logger.info(f"Discovered and registered new model: {model_dir.name}")
+                        else:
+                            logger.warning(f"Model {model_dir.name} failed validation: {validation_result['errors']}")
+                except Exception as e:
+                    logger.warning(f"Error processing model directory {model_dir}: {e}")
+        
+        return models
+    
+    async def _is_model_registered(self, version: str) -> bool:
+        """Check if a model version is already registered."""
+        try:
+            if not self.model_registry_file.exists():
+                return False
+            
+            with open(self.model_registry_file, 'r') as f:
+                registry = json.load(f)
+            
+            return version in registry
+        except Exception as e:
+            logger.error(f"Error checking model registration: {e}")
+            return False
     
     async def predict(self, features: np.ndarray) -> np.ndarray:
         """Make predictions using the loaded model."""

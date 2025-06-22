@@ -243,7 +243,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Initialize services on startup"""
+    """Initialize services on startup."""
     try:
         # Start MCP Service components
         await data_service.start()
@@ -252,6 +252,28 @@ async def startup_event():
         model_manager.start()
         status_manager.start_status_updates()
         logger.info("MCP Service components initialized successfully")
+        
+        # Initialize model manager for model scanning
+        from app.components.model_manager import ModelManager
+        from app.models.config import ModelConfig
+        
+        config = ModelConfig()
+        model_manager_instance = ModelManager(config)
+        
+        # Scan for new models
+        new_models = await model_manager_instance.scan_model_directory()
+        if new_models:
+            logger.info(f"Found {len(new_models)} new models during startup")
+        
+        # Load the most recent deployed model
+        models = await model_manager_instance.list_models()
+        deployed_models = [m for m in models if m['status'] == 'deployed']
+        
+        if deployed_models:
+            latest_model = max(deployed_models, key=lambda x: x['imported_at'])
+            await model_manager_instance.load_model_version(latest_model['version'])
+            logger.info(f"Loaded deployed model: {latest_model['version']}")
+        
     except Exception as e:
         logger.error(f"Failed to initialize MCP Service components: {e}", exc_info=True)
         raise

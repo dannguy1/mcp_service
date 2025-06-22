@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Logs from './pages/Logs';
 import Anomalies from './pages/Anomalies';
+import Models from './pages/Models';
 import EnhancedModels from './pages/EnhancedModels';
 import ServerStatus from './pages/ServerStatus';
 import Settings from './pages/Settings';
@@ -17,7 +18,8 @@ const AppRoutes: React.FC = () => {
         <Route index element={<Dashboard />} />
         <Route path="logs" element={<Logs />} />
         <Route path="anomalies" element={<Anomalies />} />
-        <Route path="models" element={<EnhancedModels />} />
+        <Route path="models" element={<Models />} />
+        <Route path="enhanced-models" element={<EnhancedModels />} />
         <Route path="server" element={<ServerStatus />} />
         <Route path="settings" element={<Settings />} />
         <Route path="export" element={<ExportPage />} />

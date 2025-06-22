@@ -46,9 +46,59 @@ const Models: React.FC = () => {
     }
   };
 
+  const handleDeploy = async (version: string) => {
+    try {
+      await endpoints.deployModelVersion(version);
+      toast.success(`Model ${version} deployed successfully`);
+      refetch();
+    } catch (error) {
+      console.error('Failed to deploy model:', error);
+      toast.error('Failed to deploy model');
+    }
+  };
+
+  const handleRollback = async (version: string) => {
+    try {
+      await endpoints.rollbackModel(version);
+      toast.success(`Rolled back to model ${version}`);
+      refetch();
+    } catch (error) {
+      console.error('Failed to rollback model:', error);
+      toast.error('Failed to rollback model');
+    }
+  };
+
+  const handleValidate = async (version: string) => {
+    try {
+      const result = await endpoints.validateModel(version);
+      if (result.is_valid) {
+        toast.success(`Model ${version} validation passed`);
+      } else {
+        toast.error(`Model ${version} validation failed: ${result.errors.join(', ')}`);
+      }
+    } catch (error) {
+      console.error('Failed to validate model:', error);
+      toast.error('Failed to validate model');
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      
+      // Validate file type
+      if (!file.name.endsWith('.zip')) {
+        toast.error('Please select a ZIP file');
+        return;
+      }
+      
+      // Validate naming convention
+      if (!file.name.match(/^model_.*_deployment\.zip$/)) {
+        toast.error('File must follow naming convention: model_&lt;version&gt;_deployment.zip');
+        return;
+      }
+      
+      setSelectedFile(file);
     }
   };
 
@@ -57,13 +107,17 @@ const Models: React.FC = () => {
     
     try {
       const formData = new FormData();
-      formData.append('model', selectedFile);
-      await endpoints.uploadModel(formData);
+      formData.append('file', selectedFile);
+      
+      const result = await endpoints.importModelPackage(formData);
+      
+      toast.success(`Model imported successfully: ${result.version}`);
       setShowAddModal(false);
       setSelectedFile(null);
       refetch();
     } catch (error) {
       console.error('Failed to upload model:', error);
+      toast.error('Failed to upload model package');
     }
   };
 
@@ -178,13 +232,41 @@ const Models: React.FC = () => {
                         variant="info"
                         size="sm"
                         onClick={() => handleInfo(model.id)}
+                        title="View Details"
                       >
                         <FaInfoCircle />
+                      </Button>
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => handleDeploy(model.version)}
+                        title="Deploy Model"
+                        disabled={model.status === 'deployed'}
+                      >
+                        Deploy
+                      </Button>
+                      <Button
+                        variant="warning"
+                        size="sm"
+                        onClick={() => handleRollback(model.version)}
+                        title="Rollback to this version"
+                        disabled={model.status === 'deployed'}
+                      >
+                        Rollback
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleValidate(model.version)}
+                        title="Validate Model"
+                      >
+                        Validate
                       </Button>
                       <Button
                         variant="danger"
                         size="sm"
                         onClick={() => setShowDeleteModal(model.id)}
+                        title="Delete Model"
                       >
                         <FaTrash />
                       </Button>
@@ -205,12 +287,16 @@ const Models: React.FC = () => {
         <Modal.Body>
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>Model File</Form.Label>
+              <Form.Label>Model Package (ZIP)</Form.Label>
               <Form.Control
                 type="file"
                 onChange={handleFileChange}
-                accept=".joblib,.pkl,.model"
+                accept=".zip"
+                placeholder="Select model package ZIP file"
               />
+              <Form.Text className="text-muted">
+                File must follow naming convention: model_&lt;version&gt;_deployment.zip
+              </Form.Text>
             </Form.Group>
           </Form>
         </Modal.Body>

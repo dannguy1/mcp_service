@@ -256,6 +256,16 @@ export const endpoints = {
     return api.post(`/api/v1/models/${version}/load`).then(res => res.data);
   },
 
+  // Model package import
+  importModelPackage: (formData: FormData) => {
+    console.log("Importing model package...");
+    return api.post('/model-management/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }).then(res => res.data);
+  },
+
   getCurrentModel: () => {
     console.log("Getting current model info...");
     return api.get('/api/v1/models/current').then(res => res.data);
