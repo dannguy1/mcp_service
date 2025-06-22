@@ -65,7 +65,7 @@ stop_mcp_service() {
         rm -f mcp_service.pid
     fi
     # Also check for any process using port 5555
-    local port_pid=$(lsof -ti :5555 2>/dev/null)
+    local port_pid=$(lsof -ti :5555 2>/dev/null || true)
     if [ ! -z "$port_pid" ]; then
         echo "Found process $port_pid using port 5555. Stopping..."
         kill $port_pid
@@ -75,6 +75,22 @@ stop_mcp_service() {
 
 # Stop any existing MCP service process
 stop_mcp_service
+
+# Check for and attempt to kill any process using the target port
+if [ -n "$SERVICE_PORT" ]; then
+    port_pid=$(lsof -ti :$SERVICE_PORT 2>/dev/null || true)
+    if [ ! -z "$port_pid" ]; then
+        echo "Found process $port_pid using port $SERVICE_PORT. Attempting to stop..."
+        kill $port_pid 2>/dev/null
+        sleep 2
+        if ps -p $port_pid > /dev/null 2>&1; then
+            echo "Warning: Could not kill process $port_pid. You may not have permission."
+            echo "Try running: sudo kill -9 $port_pid"
+        else
+            echo "Process $port_pid stopped."
+        fi
+    fi
+fi
 
 # Start the MCP service
 CMD="python3 backend/app/core/mcp_service.py"

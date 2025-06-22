@@ -67,11 +67,17 @@ stop_frontend() {
         rm -f frontend.pid
     fi
     # Also check for any process using port 3000
-    local port_pid=$(lsof -ti :3000 2>/dev/null)
+    local port_pid=$(lsof -ti :3000 2>/dev/null || true)
     if [ ! -z "$port_pid" ]; then
-        echo "Found process $port_pid using port 3000. Stopping..."
-        kill $port_pid
+        echo "Found process $port_pid using port 3000. Attempting to stop..."
+        kill $port_pid 2>/dev/null
         sleep 2
+        if ps -p $port_pid > /dev/null 2>&1; then
+            echo "Warning: Could not kill process $port_pid. You may not have permission."
+            echo "Try running: sudo kill -9 $port_pid"
+        else
+            echo "Process $port_pid stopped."
+        fi
     fi
 }
 
@@ -79,22 +85,20 @@ stop_frontend() {
 stop_frontend
 
 # Check if port 3000 is available
-if ! check_port 3000; then
-    if [ "$BACKGROUND" = true ]; then
-        LOG_FILE="frontend.log"
-        echo "[INFO] Starting frontend in background mode. Logs: $LOG_FILE"
-        nohup npm run dev > "$LOG_FILE" 2>&1 &
-        echo $! > frontend.pid
-        echo "[INFO] Frontend started in background. PID: $(cat frontend.pid)"
-        echo "To stop the service, run: kill $(cat frontend.pid)"
-        echo "To view logs: tail -f $LOG_FILE"
-        exit 0
-    else
-        echo "Starting frontend development server on port 3000..."
-        npm run dev
-        exit 0
-    fi
-else
+if check_port 3000; then
     echo "Error: Port 3000 is already in use"
     exit 1
+fi
+
+if [ "$BACKGROUND" = true ]; then
+    LOG_FILE="frontend.log"
+    echo "[INFO] Starting frontend in background mode. Logs: $LOG_FILE"
+    nohup npm run dev > "$LOG_FILE" 2>&1 &
+    echo $! > frontend.pid
+    echo "[INFO] Frontend started in background. PID: $(cat frontend.pid)"
+    echo "To stop the service, run: kill $(cat frontend.pid)"
+    echo "To view logs: tail -f $LOG_FILE"
+else
+    echo "Starting frontend development server on port 3000..."
+    npm run dev
 fi

@@ -41,7 +41,9 @@ class Config:
         # Service Configuration
         self.SERVICE_HOST = os.getenv('SERVICE_HOST', '0.0.0.0')
         self.SERVICE_PORT = int(os.getenv('SERVICE_PORT', '5555'))
-        self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+        # Convert lowercase log level to uppercase for Python logging
+        log_level = os.getenv('LOG_LEVEL', 'info')
+        self.LOG_LEVEL = log_level.upper()
         self.ANALYSIS_INTERVAL = int(os.getenv('ANALYSIS_INTERVAL', '300'))
 
         # SocketIO Configuration

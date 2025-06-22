@@ -22,7 +22,8 @@ class Config:
     DEBUG = FLASK_ENV == 'development'
 
     # Logging configuration
-    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    log_level = os.getenv('LOG_LEVEL', 'info')
+    LOG_LEVEL = log_level.upper()
 
     # Service timing configuration
     ANALYSIS_INTERVAL = parse_int_with_comment(os.getenv('ANALYSIS_INTERVAL'), 60)  # seconds

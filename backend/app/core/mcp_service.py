@@ -6,7 +6,7 @@ import os
 import redis
 from dotenv import load_dotenv
 
-from config.config import config
+from app.config.config import config
 from app.mcp_service.data_service import DataService
 from app.mcp_service.agents.wifi_agent import WiFiAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor

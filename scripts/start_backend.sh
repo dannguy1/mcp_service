@@ -53,11 +53,17 @@ stop_backend() {
     fi
     
     # Also check for any uvicorn processes on the target port
-    local port_pid=$(lsof -ti :$PORT 2>/dev/null)
+    local port_pid=$(lsof -ti :$PORT 2>/dev/null || true)
     if [ ! -z "$port_pid" ]; then
-        echo "Found process $port_pid using port $PORT. Stopping..."
-        kill $port_pid
+        echo "Found process $port_pid using port $PORT. Attempting to stop..."
+        kill $port_pid 2>/dev/null
         sleep 2
+        if ps -p $port_pid > /dev/null 2>&1; then
+            echo "Warning: Could not kill process $port_pid. You may not have permission."
+            echo "Try running: sudo kill -9 $port_pid"
+        else
+            echo "Process $port_pid stopped."
+        fi
     fi
 }
 
