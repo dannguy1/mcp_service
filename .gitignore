@@ -80,3 +80,4 @@ test_results/
 # OS
 .DS_Store
 Thumbs.db
+*.pid
