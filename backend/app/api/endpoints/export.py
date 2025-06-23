@@ -139,21 +139,25 @@ async def list_exports(
 async def get_export_progress(export_id: str):
     """Get detailed export progress"""
     try:
-        status = await ExportStatusManager.get_status(export_id)
-        if not status:
+        # Get metadata directly from Redis for progress information
+        metadata = ExportStatusManager.get_export_metadata(export_id)
+        if not metadata:
             raise HTTPException(status_code=404, detail="Export not found")
-            
+        
+        # Get status object for additional information
+        status = await ExportStatusManager.get_status(export_id)
+        
         return {
             "export_id": export_id,
-            "status": status.status,
-            "progress": getattr(status, 'progress', {}),
-            "current_batch": getattr(status, 'current_batch', 0),
-            "total_batches": getattr(status, 'total_batches', 0),
-            "processed_records": status.total_records,
-            "total_records": status.total_records,
-            "start_time": status.created_at.isoformat() if status.created_at else None,
-            "end_time": status.updated_at.isoformat() if status.updated_at and status.status in ["completed", "failed"] else None,
-            "error_message": status.error_message
+            "status": metadata.get("status", "pending"),
+            "progress": metadata.get("progress", 0),
+            "current_batch": metadata.get("batch_progress", {}).get("current_batch", 0),
+            "total_batches": metadata.get("batch_progress", {}).get("total_batches", 0),
+            "processed_records": metadata.get("records_exported", 0),
+            "total_records": metadata.get("records_exported", 0),
+            "start_time": metadata.get("created_at"),
+            "end_time": metadata.get("updated_at") if metadata.get("status") in ["completed", "failed"] else None,
+            "error_message": metadata.get("error_message") or metadata.get("status_message")
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

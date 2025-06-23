@@ -1,12 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { FaDownload, FaHistory, FaTrash } from 'react-icons/fa';
 import ExportControl from '../components/export/ExportControl';
 import ExportHistory from '../components/export/ExportHistory';
 import ExportCleanup from '../components/export/ExportCleanup';
+import ExportStatusModal from '../components/export/ExportStatusModal';
 import TabbedLayout from '../components/common/TabbedLayout';
 import type { TabItem } from '../components/common/types';
 
 const ExportPage: React.FC = () => {
+  const [selectedExportId, setSelectedExportId] = useState<string | null>(null);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+
+  const handleExportSelect = (exportId: string) => {
+    setSelectedExportId(exportId);
+    setStatusModalVisible(true);
+  };
+
+  const handleStatusModalClose = () => {
+    setStatusModalVisible(false);
+    setSelectedExportId(null);
+  };
+
   // New Export Tab Content
   const NewExportContent = (
     <div>
@@ -19,7 +33,7 @@ const ExportPage: React.FC = () => {
   const ExportHistoryContent = (
     <div>
       <h4 className="mb-3">Export History</h4>
-      <ExportHistory />
+      <ExportHistory onExportSelect={handleExportSelect} />
     </div>
   );
 
@@ -55,6 +69,12 @@ const ExportPage: React.FC = () => {
   return (
     <div className="container-fluid">
       <TabbedLayout title="Data Export" tabs={tabs} />
+      
+      <ExportStatusModal
+        visible={statusModalVisible}
+        exportId={selectedExportId}
+        onClose={handleStatusModalClose}
+      />
     </div>
   );
 };
