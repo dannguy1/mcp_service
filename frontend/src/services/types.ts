@@ -300,6 +300,9 @@ export interface DatabaseTestResult {
     port: number;
     database: string;
     user: string;
+    error_type?: string;
+    test_query_result?: any;
+    raw_error?: string;
   };
 }
 

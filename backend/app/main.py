@@ -743,19 +743,41 @@ async def test_database_connection(config: Dict[str, Any]):
             if field not in config:
                 raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
         
-        # Test the database connection
+        # Validate field types and values
+        try:
+            port = int(config['port'])
+            if port <= 0 or port > 65535:
+                raise ValueError("Port must be between 1 and 65535")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid port number")
+        
+        if not config['host'] or not config['database'] or not config['user']:
+            raise HTTPException(status_code=400, detail="Host, database name, and user cannot be empty")
+        
+        # Test the database connection with timeout
         try:
             import asyncpg
-            conn = await asyncpg.connect(
-                host=config['host'],
-                port=config['port'],
-                database=config['database'],
-                user=config['user'],
-                password=config['password']
+            import asyncio
+            
+            # Create connection with timeout
+            conn = await asyncio.wait_for(
+                asyncpg.connect(
+                    host=config['host'],
+                    port=port,
+                    database=config['database'],
+                    user=config['user'],
+                    password=config['password'],
+                    timeout=10.0  # 10 second timeout
+                ),
+                timeout=15.0  # Overall timeout including connection establishment
             )
             
             # Test a simple query
-            result = await conn.fetchval('SELECT 1')
+            result = await asyncio.wait_for(
+                conn.fetchval('SELECT 1'),
+                timeout=5.0  # Query timeout
+            )
+            
             await conn.close()
             
             return {
@@ -763,23 +785,101 @@ async def test_database_connection(config: Dict[str, Any]):
                 "message": "Database connection test successful",
                 "details": {
                     "host": config['host'],
-                    "port": config['port'],
+                    "port": port,
                     "database": config['database'],
-                    "user": config['user']
+                    "user": config['user'],
+                    "test_query_result": result
                 }
             }
             
-        except Exception as e:
+        except asyncio.TimeoutError:
             return {
                 "status": "error",
-                "message": f"Database connection test failed: {str(e)}",
+                "message": "Database connection timed out. Please check the host, port, and network connectivity.",
                 "details": {
                     "host": config['host'],
-                    "port": config['port'],
+                    "port": port,
                     "database": config['database'],
-                    "user": config['user']
+                    "user": config['user'],
+                    "error_type": "timeout"
                 }
             }
+        except asyncpg.InvalidPasswordError:
+            return {
+                "status": "error",
+                "message": "Invalid username or password. Please check your credentials.",
+                "details": {
+                    "host": config['host'],
+                    "port": port,
+                    "database": config['database'],
+                    "user": config['user'],
+                    "error_type": "authentication"
+                }
+            }
+        except asyncpg.InvalidCatalogNameError:
+            return {
+                "status": "error",
+                "message": f"Database '{config['database']}' does not exist. Please check the database name.",
+                "details": {
+                    "host": config['host'],
+                    "port": port,
+                    "database": config['database'],
+                    "user": config['user'],
+                    "error_type": "database_not_found"
+                }
+            }
+        except asyncpg.InvalidAuthorizationSpecificationError:
+            return {
+                "status": "error",
+                "message": f"User '{config['user']}' does not exist or has insufficient privileges.",
+                "details": {
+                    "host": config['host'],
+                    "port": port,
+                    "database": config['database'],
+                    "user": config['user'],
+                    "error_type": "user_not_found"
+                }
+            }
+        except asyncpg.ConnectionDoesNotExistError:
+            return {
+                "status": "error",
+                "message": "Unable to establish connection to the database server. Please check the host and port.",
+                "details": {
+                    "host": config['host'],
+                    "port": port,
+                    "database": config['database'],
+                    "user": config['user'],
+                    "error_type": "connection_failed"
+                }
+            }
+        except Exception as e:
+            error_message = str(e)
+            if "connection" in error_message.lower():
+                return {
+                    "status": "error",
+                    "message": f"Connection failed: {error_message}. Please check the host, port, and ensure the database server is running.",
+                    "details": {
+                        "host": config['host'],
+                        "port": port,
+                        "database": config['database'],
+                        "user": config['user'],
+                        "error_type": "connection_error",
+                        "raw_error": error_message
+                    }
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Database connection test failed: {error_message}",
+                    "details": {
+                        "host": config['host'],
+                        "port": port,
+                        "database": config['database'],
+                        "user": config['user'],
+                        "error_type": "unknown",
+                        "raw_error": error_message
+                    }
+                }
             
     except HTTPException:
         raise

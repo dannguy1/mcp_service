@@ -105,13 +105,38 @@ const Settings: React.FC = () => {
     try {
       setTestingConnection(true);
       setTestResult(null);
+      
+      // Validate required fields before testing
+      const requiredFields = ['host', 'port', 'database', 'user', 'password'];
+      const missingFields = requiredFields.filter(field => !databaseConfig[field as keyof DatabaseConfig]);
+      
+      if (missingFields.length > 0) {
+        setTestResult({
+          status: 'error',
+          message: `Missing required fields: ${missingFields.join(', ')}`
+        });
+        return;
+      }
+      
       const result = await endpoints.testDatabaseConnection(databaseConfig);
       setTestResult(result);
     } catch (error: any) {
       console.error('Error testing database connection:', error);
+      
+      // Handle different types of errors
+      let errorMessage = 'Failed to test database connection';
+      
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       setTestResult({
         status: 'error',
-        message: error.response?.data?.detail || 'Failed to test database connection'
+        message: errorMessage
       });
     } finally {
       setTestingConnection(false);
@@ -331,7 +356,31 @@ const Settings: React.FC = () => {
 
         {testResult && (
           <Alert variant={testResult.status === 'success' ? 'success' : 'danger'} className="mb-3">
-            <strong>{testResult.status === 'success' ? 'Success!' : 'Error!'}</strong> {testResult.message}
+            <div>
+              <strong>{testResult.status === 'success' ? 'Success!' : 'Error!'}</strong> {testResult.message}
+              
+              {testResult.details && (
+                <div className="mt-2">
+                  <small className="text-muted">
+                    <strong>Connection Details:</strong><br />
+                    Host: {testResult.details.host} | Port: {testResult.details.port}<br />
+                    Database: {testResult.details.database} | User: {testResult.details.user}
+                    {testResult.details.error_type && (
+                      <>
+                        <br />
+                        <strong>Error Type:</strong> {testResult.details.error_type}
+                      </>
+                    )}
+                    {testResult.details.test_query_result && (
+                      <>
+                        <br />
+                        <strong>Test Query Result:</strong> {testResult.details.test_query_result}
+                      </>
+                    )}
+                  </small>
+                </div>
+              )}
+            </div>
           </Alert>
         )}
 
