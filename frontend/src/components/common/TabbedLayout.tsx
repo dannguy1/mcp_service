@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Nav, Tab } from 'react-bootstrap';
 import type { TabItem } from './types';
 
@@ -18,6 +18,20 @@ const TabbedLayout: React.FC<TabbedLayoutProps> = ({
   className = ''
 }) => {
   const defaultActiveTab = activeTab || tabs[0]?.key || '';
+  const [currentActiveTab, setCurrentActiveTab] = useState(defaultActiveTab);
+
+  // Update currentActiveTab when activeTab prop changes
+  useEffect(() => {
+    if (activeTab && activeTab !== currentActiveTab) {
+      setCurrentActiveTab(activeTab);
+    }
+  }, [activeTab, currentActiveTab]);
+
+  const handleTabSelect = (key: string | null) => {
+    const newActiveTab = key || defaultActiveTab;
+    setCurrentActiveTab(newActiveTab);
+    onTabChange?.(newActiveTab);
+  };
 
   return (
     <div className={`tabbed-layout ${className}`}>
@@ -26,8 +40,8 @@ const TabbedLayout: React.FC<TabbedLayoutProps> = ({
       <Card>
         <Card.Body>
           <Tab.Container 
-            activeKey={defaultActiveTab} 
-            onSelect={(k) => onTabChange?.(k || defaultActiveTab)}
+            activeKey={currentActiveTab} 
+            onSelect={handleTabSelect}
           >
             <div>
               <Nav variant="tabs" className="mb-3">
