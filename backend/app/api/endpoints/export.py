@@ -18,6 +18,31 @@ logger = logging.getLogger(__name__)
 # Initialize cleanup service
 cleanup_service = ExportCleanupService()
 
+def _update_export_progress(export_id: str, progress: int, message: str):
+    """Update export progress while preserving existing metadata."""
+    try:
+        # Get existing metadata
+        existing_metadata = ExportStatusManager.get_export_metadata(export_id)
+        
+        # Create update with progress information
+        progress_update = {
+            "export_id": export_id,
+            "progress": progress,
+            "status_message": message,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        # Merge with existing metadata if it exists
+        if existing_metadata:
+            existing_metadata.update(progress_update)
+            ExportStatusManager.store_export_metadata(export_id, existing_metadata)
+        else:
+            # If no existing metadata, create new with progress info
+            ExportStatusManager.store_export_metadata(export_id, progress_update)
+            
+    except Exception as e:
+        logger.error(f"Error updating export progress for {export_id}: {e}")
+
 @router.post("/", response_model=ExportMetadata)
 async def create_export(
     config: ExportConfig,
@@ -53,9 +78,7 @@ async def create_export(
             end_date=config.end_date,
             programs=config.processes,
             format=config.output_format,
-            progress_callback=lambda eid, progress, message: ExportStatusManager.store_export_metadata(
-                eid, {"export_id": eid, "progress": progress, "status_message": message, "updated_at": datetime.now().isoformat()}
-            )
+            progress_callback=lambda eid, progress, message: _update_export_progress(eid, progress, message)
         )
         
         # Return initial metadata
