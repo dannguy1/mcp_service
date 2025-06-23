@@ -1,51 +1,61 @@
 import React from 'react';
-import { Tabs, Space, Typography } from 'antd';
+import { FaDownload, FaHistory, FaTrash } from 'react-icons/fa';
 import ExportControl from '../components/export/ExportControl';
 import ExportHistory from '../components/export/ExportHistory';
 import ExportCleanup from '../components/export/ExportCleanup';
-
-const { Title } = Typography;
+import TabbedLayout from '../components/common/TabbedLayout';
+import type { TabItem } from '../components/common/types';
 
 const ExportPage: React.FC = () => {
-  const items = [
+  // New Export Tab Content
+  const NewExportContent = (
+    <div>
+      <h4 className="mb-3">Create New Export</h4>
+      <ExportControl />
+    </div>
+  );
+
+  // Export History Tab Content
+  const ExportHistoryContent = (
+    <div>
+      <h4 className="mb-3">Export History</h4>
+      <ExportHistory />
+    </div>
+  );
+
+  // Export Management Tab Content
+  const ExportManagementContent = (
+    <div>
+      <h4 className="mb-3">Export Management</h4>
+      <ExportCleanup />
+    </div>
+  );
+
+  const tabs: TabItem[] = [
     {
       key: 'control',
-      label: 'New Export',
-      children: (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Title level={2}>Create New Export</Title>
-          <ExportControl />
-        </Space>
-      )
+      title: 'New Export',
+      icon: <FaDownload />,
+      content: NewExportContent
     },
     {
       key: 'history',
-      label: 'Export History',
-      children: (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Title level={2}>Export History</Title>
-          <ExportHistory />
-        </Space>
-      )
+      title: 'Export History',
+      icon: <FaHistory />,
+      content: ExportHistoryContent
     },
     {
       key: 'cleanup',
-      label: 'Management',
-      children: (
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Title level={2}>Export Management</Title>
-          <ExportCleanup />
-        </Space>
-      )
+      title: 'Management',
+      icon: <FaTrash />,
+      content: ExportManagementContent
     }
   ];
 
   return (
-    <Tabs
-      defaultActiveKey="control"
-      items={items}
-      style={{ background: '#fff', padding: '24px', borderRadius: '8px' }}
-    />
+    <div className="container-fluid">
+      <TabbedLayout title="Data Export" tabs={tabs} />
+    </div>
   );
 };
 
