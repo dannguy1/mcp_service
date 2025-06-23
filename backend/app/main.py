@@ -649,4 +649,140 @@ async def analyze_logs(logs: List[Dict[str, Any]]):
         
     except Exception as e:
         logger.error(f"Error analyzing logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Database configuration endpoints
+@app.get("/api/v1/settings/database")
+async def get_database_config():
+    """Get current database configuration"""
+    try:
+        return {
+            "host": os.getenv('DB_HOST', 'localhost'),
+            "port": int(os.getenv('DB_PORT', '5432')),
+            "database": os.getenv('DB_NAME', 'netmonitor_db'),
+            "user": os.getenv('DB_USER', 'netmonitor_user'),
+            "password": os.getenv('DB_PASSWORD', 'netmonitor_password'),
+            "min_connections": int(os.getenv('DB_MIN_CONNECTIONS', '5')),
+            "max_connections": int(os.getenv('DB_MAX_CONNECTIONS', '20')),
+            "pool_timeout": int(os.getenv('DB_POOL_TIMEOUT', '30'))
+        }
+    except Exception as e:
+        logger.error(f"Error getting database config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/settings/database")
+async def update_database_config(config: Dict[str, Any]):
+    """Update database configuration"""
+    try:
+        # Validate required fields
+        required_fields = ['host', 'port', 'database', 'user', 'password']
+        for field in required_fields:
+            if field not in config:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Test the new database connection
+        test_config = {
+            'host': config['host'],
+            'port': config['port'],
+            'database': config['database'],
+            'user': config['user'],
+            'password': config['password']
+        }
+        
+        # Try to connect with the new configuration
+        try:
+            import asyncpg
+            conn = await asyncpg.connect(
+                host=test_config['host'],
+                port=test_config['port'],
+                database=test_config['database'],
+                user=test_config['user'],
+                password=test_config['password']
+            )
+            await conn.close()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Database connection test failed: {str(e)}")
+        
+        # If connection test passes, update environment variables
+        # Note: In a production environment, you might want to write to a config file
+        # or use a configuration management system instead of environment variables
+        os.environ['DB_HOST'] = str(config['host'])
+        os.environ['DB_PORT'] = str(config['port'])
+        os.environ['DB_NAME'] = str(config['database'])
+        os.environ['DB_USER'] = str(config['user'])
+        os.environ['DB_PASSWORD'] = str(config['password'])
+        
+        if 'min_connections' in config:
+            os.environ['DB_MIN_CONNECTIONS'] = str(config['min_connections'])
+        if 'max_connections' in config:
+            os.environ['DB_MAX_CONNECTIONS'] = str(config['max_connections'])
+        if 'pool_timeout' in config:
+            os.environ['DB_POOL_TIMEOUT'] = str(config['pool_timeout'])
+        
+        logger.info("Database configuration updated successfully")
+        
+        return {
+            "status": "success",
+            "message": "Database configuration updated successfully",
+            "config": config
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating database config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/settings/database/test")
+async def test_database_connection(config: Dict[str, Any]):
+    """Test database connection with provided configuration"""
+    try:
+        # Validate required fields
+        required_fields = ['host', 'port', 'database', 'user', 'password']
+        for field in required_fields:
+            if field not in config:
+                raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
+        
+        # Test the database connection
+        try:
+            import asyncpg
+            conn = await asyncpg.connect(
+                host=config['host'],
+                port=config['port'],
+                database=config['database'],
+                user=config['user'],
+                password=config['password']
+            )
+            
+            # Test a simple query
+            result = await conn.fetchval('SELECT 1')
+            await conn.close()
+            
+            return {
+                "status": "success",
+                "message": "Database connection test successful",
+                "details": {
+                    "host": config['host'],
+                    "port": config['port'],
+                    "database": config['database'],
+                    "user": config['user']
+                }
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Database connection test failed: {str(e)}",
+                "details": {
+                    "host": config['host'],
+                    "port": config['port'],
+                    "database": config['database'],
+                    "user": config['user']
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing database connection: {e}")
         raise HTTPException(status_code=500, detail=str(e)) 

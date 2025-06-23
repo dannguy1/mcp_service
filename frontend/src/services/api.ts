@@ -18,7 +18,10 @@ import type {
   ModelTransferHistory,
   ModelCompatibilityResult,
   ModelValidationReport,
-  ModelPerformanceReport
+  ModelPerformanceReport,
+  LogEntry,
+  DatabaseConfig,
+  DatabaseTestResult
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -283,5 +286,21 @@ export const endpoints = {
   getCurrentModel: () => {
     console.log("Getting current model info...");
     return api.get('/api/v1/models/current').then(res => res.data);
+  },
+
+  // Database configuration endpoints
+  getDatabaseConfig: () => {
+    console.log("Getting database configuration...");
+    return api.get('/settings/database').then(res => res.data);
+  },
+
+  updateDatabaseConfig: (config: DatabaseConfig) => {
+    console.log("Updating database configuration:", config);
+    return api.post('/settings/database', config).then(res => res.data);
+  },
+
+  testDatabaseConnection: (config: DatabaseConfig) => {
+    console.log("Testing database connection:", config);
+    return api.post('/settings/database/test', config).then(res => res.data);
   },
 };

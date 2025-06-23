@@ -68,9 +68,6 @@ export interface Anomaly {
   severity: number;
   description: string;
   status: 'detected' | 'investigating' | 'resolved';
-  device_id?: string;
-  model_version?: string;
-  details?: any;
 }
 
 export interface LogEntry {
@@ -246,26 +243,16 @@ export interface Service {
   status: 'running' | 'stopped' | 'error';
   uptime: string;
   memoryUsage: number;
-  cpuUsage?: number;
 }
 
 export interface ServerStatus {
   status: string;
   version: string;
   uptime: string;
-  load_average?: string;
-  total_memory?: string;
-  available_memory?: string;
-  network_interfaces?: string;
-  active_connections?: string;
-  bytes_received?: string;
-  bytes_sent?: string;
-  disk_usage?: number;
   components: {
     database: string;
     model: string;
     cache: string;
-    [key: string]: string;
   };
   metrics: {
     cpu_usage: number;

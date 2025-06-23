@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form, Row, Col } from 'react-bootstrap';
-import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle, FaUpload } from 'react-icons/fa';
+import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle, FaUpload, FaChartLine, FaHistory } from 'react-icons/fa';
 import { endpoints } from '../services/api';
-import type { Model, ModelValidationSummary } from '../services/types';
+import type { Model, ModelValidationSummary, ModelPerformanceMetrics, ModelTransferHistory } from '../services/types';
 import { toast } from 'react-hot-toast';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import ModelValidationSummaryComponent from '../components/models/ModelValidationSummary';
+import TabbedLayout from '../components/common/TabbedLayout';
+import type { TabItem } from '../components/common/types';
 
 const Models: React.FC = () => {
   const queryClient = useQueryClient();
@@ -21,6 +23,18 @@ const Models: React.FC = () => {
     queryKey: ['models'],
     queryFn: () => endpoints.listEnhancedModels(),
     refetchInterval: 30000, // Refresh every 30 seconds
+  });
+
+  const { data: performanceData } = useQuery({
+    queryKey: ['modelPerformance'],
+    queryFn: () => endpoints.getAllModelPerformance(),
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  const { data: transferHistory } = useQuery({
+    queryKey: ['transferHistory'],
+    queryFn: () => endpoints.getTransferHistory(),
+    refetchInterval: 300000, // Refresh every 5 minutes
   });
 
   const handleInfo = async (version: string) => {
@@ -95,7 +109,7 @@ const Models: React.FC = () => {
       
       // Validate naming convention
       if (!file.name.match(/^model_.*_deployment\.zip$/)) {
-        toast.error('File must follow naming convention: model_&lt;version&gt;_deployment.zip');
+        toast.error('File must follow naming convention: model_<version>_deployment.zip');
         return;
       }
       
@@ -161,10 +175,10 @@ const Models: React.FC = () => {
   const activeModels = data?.filter(m => m.status === 'deployed').length || 0;
   const totalModels = data?.length || 0;
 
-  return (
-    <div className="container-fluid">
+  // Model List Tab Content
+  const ModelListContent = (
+    <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>AI Models</h2>
         <div className="d-flex gap-2">
           <Button variant="outline-primary" onClick={() => refetch()}>
             <FaSync className="me-2" />
@@ -198,13 +212,8 @@ const Models: React.FC = () => {
         <div className="col-md-4">
           <Card>
             <Card.Body>
-              <h6 className="text-muted mb-2">Latest Update</h6>
-              <h3>
-                {data?.length > 0
-                  ? new Date(Math.max(...data.map(m => new Date(m.created_at))))
-                      .toLocaleDateString()
-                  : 'N/A'}
-              </h3>
+              <h6 className="text-muted mb-2">Success Rate</h6>
+              <h3>{totalModels > 0 ? Math.round((activeModels / totalModels) * 100) : 0}%</h3>
             </Card.Body>
           </Card>
         </div>
@@ -217,10 +226,8 @@ const Models: React.FC = () => {
             <thead>
               <tr>
                 <th>Version</th>
-                <th>Created At</th>
                 <th>Status</th>
-                <th>Model Type</th>
-                <th>Features</th>
+                <th>Created</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -228,61 +235,55 @@ const Models: React.FC = () => {
               {data?.map((model) => (
                 <tr key={model.version}>
                   <td>{model.version}</td>
-                  <td>{new Date(model.created_at).toLocaleString()}</td>
                   <td>
                     <Badge
                       bg={
                         model.status === 'deployed' ? 'success' :
-                        model.status === 'available' ? 'secondary' :
+                        model.status === 'active' ? 'primary' :
+                        model.status === 'inactive' ? 'secondary' :
                         'danger'
                       }
                     >
                       {model.status}
                     </Badge>
                   </td>
-                  <td>{model.metadata?.model_info?.model_type || 'Unknown'}</td>
-                  <td>{model.metadata?.training_info?.feature_names?.length || 0}</td>
+                  <td>{new Date(model.created_at).toLocaleDateString()}</td>
                   <td>
-                    <div className="d-flex gap-2">
+                    <div className="d-flex gap-1">
                       <Button
-                        variant="info"
                         size="sm"
+                        variant="outline-info"
                         onClick={() => handleInfo(model.version)}
-                        title="View Details"
                       >
                         <FaInfoCircle />
                       </Button>
                       <Button
-                        variant="success"
                         size="sm"
+                        variant="outline-success"
                         onClick={() => handleDeploy(model.version)}
-                        title="Deploy Model"
                         disabled={model.status === 'deployed'}
                       >
                         Deploy
                       </Button>
                       <Button
-                        variant="warning"
                         size="sm"
+                        variant="outline-warning"
                         onClick={() => handleRollback(model.version)}
-                        title="Rollback to this version"
-                        disabled={model.status === 'deployed'}
+                        disabled={model.status !== 'deployed'}
                       >
                         Rollback
                       </Button>
                       <Button
-                        variant="secondary"
                         size="sm"
+                        variant="outline-primary"
                         onClick={() => handleValidate(model.version)}
-                        title="Validate Model"
                       >
                         Validate
                       </Button>
                       <Button
-                        variant="danger"
                         size="sm"
+                        variant="outline-danger"
                         onClick={() => setShowDeleteModal(model.version)}
-                        title="Delete Model"
                       >
                         <FaTrash />
                       </Button>
@@ -294,24 +295,158 @@ const Models: React.FC = () => {
           </Table>
         </Card.Body>
       </Card>
+    </div>
+  );
+
+  // Model Performance Tab Content
+  const ModelPerformanceContent = (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h4>Model Performance Metrics</h4>
+        <Button variant="outline-primary" onClick={() => queryClient.invalidateQueries(['modelPerformance'])}>
+          <FaSync className="me-2" />
+          Refresh
+        </Button>
+      </div>
+
+      {performanceData && performanceData.length > 0 ? (
+        <div className="row">
+          {performanceData.map((performance) => (
+            <div key={performance.model_version} className="col-md-6 mb-4">
+              <Card>
+                <Card.Header>
+                  <h6 className="mb-0">Model {performance.model_version}</h6>
+                </Card.Header>
+                <Card.Body>
+                  <div className="row">
+                    <div className="col-6">
+                      <small className="text-muted">Total Inferences</small>
+                      <div className="h5 mb-0">{performance.total_inferences.toLocaleString()}</div>
+                    </div>
+                    <div className="col-6">
+                      <small className="text-muted">Anomaly Rate</small>
+                      <div className="h5 mb-0">{(performance.performance_metrics.anomaly_rate * 100).toFixed(2)}%</div>
+                    </div>
+                  </div>
+                  <div className="row mt-3">
+                    <div className="col-6">
+                      <small className="text-muted">Avg Inference Time</small>
+                      <div className="h5 mb-0">{performance.performance_metrics.avg_inference_time.toFixed(2)}ms</div>
+                    </div>
+                    <div className="col-6">
+                      <small className="text-muted">Total Anomalies</small>
+                      <div className="h5 mb-0">{performance.performance_metrics.total_anomalies}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <small className="text-muted">Last Updated: {new Date(performance.last_updated).toLocaleString()}</small>
+                  </div>
+                </Card.Body>
+              </Card>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Alert variant="info">
+          No performance data available. Models need to be deployed and used to generate performance metrics.
+        </Alert>
+      )}
+    </div>
+  );
+
+  // Transfer History Tab Content
+  const TransferHistoryContent = (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h4>Model Transfer History</h4>
+        <Button variant="outline-primary" onClick={() => queryClient.invalidateQueries(['transferHistory'])}>
+          <FaSync className="me-2" />
+          Refresh
+        </Button>
+      </div>
+
+      {transferHistory && transferHistory.length > 0 ? (
+        <Card>
+          <Card.Body>
+            <Table responsive hover>
+              <thead>
+                <tr>
+                  <th>Transfer ID</th>
+                  <th>Original Path</th>
+                  <th>Local Path</th>
+                  <th>Transferred At</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transferHistory.map((transfer) => (
+                  <tr key={transfer.transfer_id}>
+                    <td>{transfer.transfer_id}</td>
+                    <td>{transfer.original_path}</td>
+                    <td>{transfer.local_path}</td>
+                    <td>{new Date(transfer.transferred_at).toLocaleString()}</td>
+                    <td>
+                      <Badge
+                        bg={transfer.status === 'completed' ? 'success' : 'warning'}
+                      >
+                        {transfer.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card.Body>
+        </Card>
+      ) : (
+        <Alert variant="info">
+          No transfer history available. Model transfers will appear here once they occur.
+        </Alert>
+      )}
+    </div>
+  );
+
+  const tabs: TabItem[] = [
+    {
+      key: 'list',
+      title: 'Model List',
+      icon: <FaPlus />,
+      content: ModelListContent
+    },
+    {
+      key: 'performance',
+      title: 'Performance',
+      icon: <FaChartLine />,
+      content: ModelPerformanceContent
+    },
+    {
+      key: 'history',
+      title: 'Transfer History',
+      icon: <FaHistory />,
+      content: TransferHistoryContent
+    }
+  ];
+
+  return (
+    <div className="container-fluid">
+      <TabbedLayout title="AI Models" tabs={tabs} />
 
       {/* Add Model Modal */}
-      <Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
+      <Modal show={showAddModal} onHide={() => setShowAddModal(false)} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Add New Model</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <Form>
             <Form.Group className="mb-3">
-              <Form.Label>Model Package (ZIP)</Form.Label>
+              <Form.Label>Model Package (ZIP file)</Form.Label>
               <Form.Control
                 type="file"
-                onChange={handleFileChange}
                 accept=".zip"
-                placeholder="Select model package ZIP file"
+                onChange={handleFileChange}
               />
               <Form.Text className="text-muted">
-                File must follow naming convention: model_&lt;version&gt;_deployment.zip
+                Select a model package file. Must follow naming convention: model_&lt;version&gt;_deployment.zip
               </Form.Text>
             </Form.Group>
           </Form>
@@ -320,12 +455,9 @@ const Models: React.FC = () => {
           <Button variant="secondary" onClick={() => setShowAddModal(false)}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            onClick={handleUpload}
-            disabled={!selectedFile}
-          >
-            Upload
+          <Button variant="primary" onClick={handleUpload} disabled={!selectedFile}>
+            <FaUpload className="me-2" />
+            Upload Model
           </Button>
         </Modal.Footer>
       </Modal>
@@ -338,101 +470,18 @@ const Models: React.FC = () => {
         <Modal.Body>
           {modelInfo && (
             <div>
-              <h5>Basic Information</h5>
-              <Table striped bordered>
-                <tbody>
-                  <tr>
-                    <th>Version</th>
-                    <td>{modelInfo.version}</td>
-                  </tr>
-                  <tr>
-                    <th>Created At</th>
-                    <td>{new Date(modelInfo.created_at).toLocaleString()}</td>
-                  </tr>
-                  <tr>
-                    <th>Status</th>
-                    <td>
-                      <Badge bg={
-                        modelInfo.status === 'deployed' ? 'success' :
-                        modelInfo.status === 'available' ? 'secondary' :
-                        'danger'
-                      }>
-                        {modelInfo.status}
-                      </Badge>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Import Method</th>
-                    <td>{modelInfo.import_method || 'Unknown'}</td>
-                  </tr>
-                  <tr>
-                    <th>Path</th>
-                    <td>{modelInfo.path}</td>
-                  </tr>
-                </tbody>
-              </Table>
-
-              {modelInfo.metadata && (
-                <>
-                  <h5 className="mt-4">Model Information</h5>
-                  <Table striped bordered>
-                    <tbody>
-                      <tr>
-                        <th>Model Type</th>
-                        <td>{modelInfo.metadata.model_info?.model_type || 'Unknown'}</td>
-                      </tr>
-                      <tr>
-                        <th>Description</th>
-                        <td>{modelInfo.metadata.model_info?.description || 'No description'}</td>
-                      </tr>
-                      <tr>
-                        <th>Features</th>
-                        <td>{modelInfo.metadata.training_info?.feature_names?.length || 0}</td>
-                      </tr>
-                      <tr>
-                        <th>Training Samples</th>
-                        <td>{modelInfo.metadata.training_info?.n_samples || 'Unknown'}</td>
-                      </tr>
-                    </tbody>
-                  </Table>
-
-                  {modelInfo.metadata.evaluation_info?.basic_metrics && (
-                    <>
-                      <h5 className="mt-4">Performance Metrics</h5>
-                      <Table striped bordered>
-                        <tbody>
-                          <tr>
-                            <th>F1 Score</th>
-                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.f1_score * 100).toFixed(1)}%</td>
-                          </tr>
-                          <tr>
-                            <th>Precision</th>
-                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.precision * 100).toFixed(1)}%</td>
-                          </tr>
-                          <tr>
-                            <th>Recall</th>
-                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.recall * 100).toFixed(1)}%</td>
-                          </tr>
-                          <tr>
-                            <th>ROC AUC</th>
-                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.roc_auc * 100).toFixed(1)}%</td>
-                          </tr>
-                        </tbody>
-                      </Table>
-                    </>
-                  )}
-
-                  {modelInfo.metadata.training_info?.feature_names && (
-                    <>
-                      <h5 className="mt-4">Feature Names</h5>
-                      <ul>
-                        {modelInfo.metadata.training_info.feature_names.map((feature, index) => (
-                          <li key={index}>{feature}</li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </>
+              <h5>Version: {modelInfo.version}</h5>
+              <p><strong>Status:</strong> {modelInfo.status}</p>
+              <p><strong>Created:</strong> {new Date(modelInfo.created_at).toLocaleString()}</p>
+              {modelInfo.metrics && (
+                <div>
+                  <h6>Metrics:</h6>
+                  <ul>
+                    <li>Accuracy: {modelInfo.metrics.accuracy}%</li>
+                    <li>False Positive Rate: {modelInfo.metrics.false_positive_rate}%</li>
+                    <li>False Negative Rate: {modelInfo.metrics.false_negative_rate}%</li>
+                  </ul>
+                </div>
               )}
             </div>
           )}
@@ -447,32 +496,29 @@ const Models: React.FC = () => {
       {/* Delete Confirmation Modal */}
       <Modal show={!!showDeleteModal} onHide={() => setShowDeleteModal(null)}>
         <Modal.Header closeButton>
-          <Modal.Title>Confirm Delete</Modal.Title>
+          <Modal.Title>Delete Model</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          Are you sure you want to delete this model? This action cannot be undone.
+          Are you sure you want to delete model {showDeleteModal}? This action cannot be undone.
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowDeleteModal(null)}>
             Cancel
           </Button>
-          <Button
-            variant="danger"
-            onClick={() => showDeleteModal && handleDelete(showDeleteModal)}
-          >
+          <Button variant="danger" onClick={() => showDeleteModal && handleDelete(showDeleteModal)}>
             Delete
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* Validation Summary Modal */}
-      <Modal show={showValidationSummary !== null} onHide={() => setShowValidationSummary(null)} size="lg">
+      <Modal show={!!showValidationSummary} onHide={() => setShowValidationSummary(null)} size="lg">
         <Modal.Header closeButton>
-          <Modal.Title>Model Import Validation Summary</Modal.Title>
+          <Modal.Title>Model Validation Summary</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {showValidationSummary && (
-            <ModelValidationSummaryComponent validationSummary={showValidationSummary} />
+            <ModelValidationSummaryComponent summary={showValidationSummary} />
           )}
         </Modal.Body>
         <Modal.Footer>
