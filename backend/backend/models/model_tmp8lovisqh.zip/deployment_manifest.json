@@ -1,0 +1,107 @@
+{
+  "model_version": "20250621_220609",
+  "deployment_timestamp": "2025-06-21T22:45:41.030560",
+  "package_format_version": "1.0",
+  "model_info": {
+    "model_type": "default",
+    "training_source": "export_data",
+    "training_id": "7c10f21c-2f63-4b22-81f5-8f0c6547f5bc",
+    "export_file": "exports/upload_20250621_220124_export_1b051c2b-06a0-4ee3-a0fe-05dd75349d57.json"
+  },
+  "training_info": {
+    "training_samples": 32971,
+    "feature_names": [
+      "hour_of_day",
+      "day_of_week",
+      "minute_of_hour",
+      "time_since_midnight",
+      "is_weekend",
+      "is_business_hours",
+      "is_connection_event",
+      "is_auth_event",
+      "is_error_event",
+      "mac_count",
+      "ip_count",
+      "message_length",
+      "word_count",
+      "special_char_count",
+      "uppercase_ratio",
+      "number_count",
+      "unique_chars",
+      "process_rank",
+      "log_level_numeric",
+      "process_frequency",
+      "window_5min_connection_count",
+      "window_5min_unique_macs",
+      "window_5min_error_count",
+      "window_5min_process_diversity",
+      "window_15min_connection_count",
+      "window_15min_unique_macs",
+      "window_15min_error_count",
+      "window_15min_process_diversity",
+      "window_1hour_connection_count",
+      "window_1hour_unique_macs",
+      "window_1hour_error_count",
+      "window_1hour_process_diversity"
+    ],
+    "feature_count": 32,
+    "export_file_size": 19943015,
+    "training_duration": 0.811535,
+    "model_parameters": {
+      "n_estimators": 100,
+      "max_samples": "auto",
+      "contamination": 0.1,
+      "random_state": 42,
+      "bootstrap": true,
+      "max_features": 1.0
+    }
+  },
+  "evaluation_info": {
+    "basic_metrics": {
+      "score_mean": 0.44747658827856,
+      "score_std": 0.07683804433272041,
+      "score_min": 0.3483055822808683,
+      "score_max": 0.6919560416805753,
+      "anomaly_ratio": 0.09966334051135847,
+      "threshold_value": 0.5560265328723301,
+      "accuracy": null,
+      "precision": null,
+      "recall": null,
+      "f1_score": null,
+      "roc_auc": null,
+      "average_precision": null
+    },
+    "cross_validation_score": null,
+    "feature_importance": null
+  },
+  "deployment_info": {
+    "status": "deployed",
+    "deployed_at": "2025-06-21T22:45:41.012908",
+    "deployed_by": null
+  },
+  "files": {
+    "model_file": "model.joblib",
+    "scaler_file": "scaler.joblib",
+    "metadata_file": "metadata.json",
+    "validation_script": "validate_model.py",
+    "inference_example": "inference_example.py",
+    "requirements": "requirements.txt"
+  },
+  "file_integrity": {
+    "model.joblib": "3e28af8c2bb12038b4bf1d55f3e29f61e9f1452441edcd0dad9e8a1dce28658c",
+    "scaler.joblib": "772a7efb5c25f2921012e87b9fe50852c23bb6f9aeb7d003fb5b67da0ea54630",
+    "metadata.json": "bbc712e68379b824099b36469e8a4570add22f9efeef3d000c50419135dc8dc9"
+  },
+  "inference_config": {
+    "threshold": 0.5560265328723301,
+    "anomaly_ratio": 0.09966334051135847,
+    "score_percentile": 90,
+    "batch_size": 1000,
+    "timeout_seconds": 30
+  },
+  "model_artifacts": {
+    "model_size_bytes": 1263480,
+    "scaler_size_bytes": 2487,
+    "total_package_size": 0
+  }
+}

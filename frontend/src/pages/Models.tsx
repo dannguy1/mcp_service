@@ -1,48 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form } from 'react-bootstrap';
-import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle } from 'react-icons/fa';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form, Row, Col } from 'react-bootstrap';
+import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle, FaUpload } from 'react-icons/fa';
 import { endpoints } from '../services/api';
-import type { Model } from '../services/types';
+import type { Model, ModelValidationSummary } from '../services/types';
 import { toast } from 'react-hot-toast';
 import { XMarkIcon } from '@heroicons/react/24/outline';
+import ModelValidationSummaryComponent from '../components/models/ModelValidationSummary';
 
 const Models: React.FC = () => {
+  const queryClient = useQueryClient();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [modelInfo, setModelInfo] = useState<Model | null>(null);
+  const [showValidationSummary, setShowValidationSummary] = useState<ModelValidationSummary | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['models'],
-    queryFn: () => endpoints.getModels(),
+    queryFn: () => endpoints.listEnhancedModels(),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  const handleInfo = async (modelId: string) => {
+  const handleInfo = async (version: string) => {
     try {
-      const info = await endpoints.getModelInfo(modelId);
-      if (info.error) {
-        console.error('Error in model info:', info.error);
-        alert(info.error);
-        return;
+      const modelInfo = data?.find(m => m.version === version);
+      if (modelInfo) {
+        setModelInfo(modelInfo);
+        setShowInfoModal(true);
       }
-      setModelInfo(info);
-      setShowInfoModal(true);
     } catch (error) {
-      console.error('Error fetching model info:', error);
-      alert('Failed to fetch model information');
+      console.error('Failed to get model info:', error);
+      toast.error('Failed to get model info');
     }
   };
 
-  const handleDelete = async (modelId: string) => {
+  const handleDelete = async (version: string) => {
     try {
-      await endpoints.deleteModel(modelId);
+      // For now, just show a message since delete endpoint might not exist
+      toast.error('Delete functionality not implemented yet');
       setShowDeleteModal(null);
-      refetch();
     } catch (error) {
       console.error('Failed to delete model:', error);
+      toast.error('Failed to delete model');
     }
   };
 
@@ -103,20 +104,37 @@ const Models: React.FC = () => {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      console.log("No file selected");
+      return;
+    }
+    
+    console.log("Starting upload process...");
+    console.log("Selected file:", selectedFile.name, selectedFile.size);
     
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
       
+      console.log("FormData created, calling importModelPackage...");
+      console.log("API Base URL:", import.meta.env.VITE_API_BASE_URL);
+      
       const result = await endpoints.importModelPackage(formData);
       
+      console.log("Upload successful:", result);
       toast.success(`Model imported successfully: ${result.version}`);
+      
+      // Show validation summary if available
+      if (result.validation_summary) {
+        setShowValidationSummary(result.validation_summary);
+      }
+      
       setShowAddModal(false);
       setSelectedFile(null);
       refetch();
     } catch (error) {
-      console.error('Failed to upload model:', error);
+      console.error("Upload failed:", error);
+      console.error("Error details:", error.response?.data || error.message);
       toast.error('Failed to upload model package');
     }
   };
@@ -140,8 +158,8 @@ const Models: React.FC = () => {
     );
   }
 
-  const activeModels = data?.models.filter(m => m.status === 'active').length || 0;
-  const totalModels = data?.models.length || 0;
+  const activeModels = data?.filter(m => m.status === 'deployed').length || 0;
+  const totalModels = data?.length || 0;
 
   return (
     <div className="container-fluid">
@@ -172,7 +190,7 @@ const Models: React.FC = () => {
         <div className="col-md-4">
           <Card>
             <Card.Body>
-              <h6 className="text-muted mb-2">Active Models</h6>
+              <h6 className="text-muted mb-2">Deployed Models</h6>
               <h3>{activeModels}</h3>
             </Card.Body>
           </Card>
@@ -182,8 +200,8 @@ const Models: React.FC = () => {
             <Card.Body>
               <h6 className="text-muted mb-2">Latest Update</h6>
               <h3>
-                {data?.models.length > 0
-                  ? new Date(Math.max(...data.models.map(m => new Date(m.created_at))))
+                {data?.length > 0
+                  ? new Date(Math.max(...data.map(m => new Date(m.created_at))))
                       .toLocaleDateString()
                   : 'N/A'}
               </h3>
@@ -201,37 +219,35 @@ const Models: React.FC = () => {
                 <th>Version</th>
                 <th>Created At</th>
                 <th>Status</th>
-                <th>Accuracy</th>
-                <th>False Positive Rate</th>
-                <th>False Negative Rate</th>
+                <th>Model Type</th>
+                <th>Features</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data?.models.map((model) => (
-                <tr key={model.id}>
+              {data?.map((model) => (
+                <tr key={model.version}>
                   <td>{model.version}</td>
                   <td>{new Date(model.created_at).toLocaleString()}</td>
                   <td>
                     <Badge
                       bg={
-                        model.status === 'active' ? 'success' :
-                        model.status === 'inactive' ? 'secondary' :
+                        model.status === 'deployed' ? 'success' :
+                        model.status === 'available' ? 'secondary' :
                         'danger'
                       }
                     >
                       {model.status}
                     </Badge>
                   </td>
-                  <td>{(model.metrics.accuracy * 100).toFixed(1)}%</td>
-                  <td>{(model.metrics.false_positive_rate * 100).toFixed(1)}%</td>
-                  <td>{(model.metrics.false_negative_rate * 100).toFixed(1)}%</td>
+                  <td>{model.metadata?.model_info?.model_type || 'Unknown'}</td>
+                  <td>{model.metadata?.training_info?.feature_names?.length || 0}</td>
                   <td>
                     <div className="d-flex gap-2">
                       <Button
                         variant="info"
                         size="sm"
-                        onClick={() => handleInfo(model.id)}
+                        onClick={() => handleInfo(model.version)}
                         title="View Details"
                       >
                         <FaInfoCircle />
@@ -265,7 +281,7 @@ const Models: React.FC = () => {
                       <Button
                         variant="danger"
                         size="sm"
-                        onClick={() => setShowDeleteModal(model.id)}
+                        onClick={() => setShowDeleteModal(model.version)}
                         title="Delete Model"
                       >
                         <FaTrash />
@@ -326,10 +342,6 @@ const Models: React.FC = () => {
               <Table striped bordered>
                 <tbody>
                   <tr>
-                    <th>ID</th>
-                    <td>{modelInfo.id}</td>
-                  </tr>
-                  <tr>
                     <th>Version</th>
                     <td>{modelInfo.version}</td>
                   </tr>
@@ -341,104 +353,85 @@ const Models: React.FC = () => {
                     <th>Status</th>
                     <td>
                       <Badge bg={
-                        modelInfo.status === 'active' ? 'success' :
-                        modelInfo.status === 'inactive' ? 'secondary' :
+                        modelInfo.status === 'deployed' ? 'success' :
+                        modelInfo.status === 'available' ? 'secondary' :
                         'danger'
                       }>
                         {modelInfo.status}
                       </Badge>
                     </td>
                   </tr>
+                  <tr>
+                    <th>Import Method</th>
+                    <td>{modelInfo.import_method || 'Unknown'}</td>
+                  </tr>
+                  <tr>
+                    <th>Path</th>
+                    <td>{modelInfo.path}</td>
+                  </tr>
                 </tbody>
               </Table>
 
-              {modelInfo.metrics && (
+              {modelInfo.metadata && (
                 <>
-                  <h5 className="mt-4">Metrics</h5>
+                  <h5 className="mt-4">Model Information</h5>
                   <Table striped bordered>
                     <tbody>
                       <tr>
-                        <th>Accuracy</th>
-                        <td>{(modelInfo.metrics.accuracy * 100).toFixed(1)}%</td>
+                        <th>Model Type</th>
+                        <td>{modelInfo.metadata.model_info?.model_type || 'Unknown'}</td>
                       </tr>
                       <tr>
-                        <th>False Positive Rate</th>
-                        <td>{(modelInfo.metrics.false_positive_rate * 100).toFixed(1)}%</td>
+                        <th>Description</th>
+                        <td>{modelInfo.metadata.model_info?.description || 'No description'}</td>
                       </tr>
                       <tr>
-                        <th>False Negative Rate</th>
-                        <td>{(modelInfo.metrics.false_negative_rate * 100).toFixed(1)}%</td>
+                        <th>Features</th>
+                        <td>{modelInfo.metadata.training_info?.feature_names?.length || 0}</td>
+                      </tr>
+                      <tr>
+                        <th>Training Samples</th>
+                        <td>{modelInfo.metadata.training_info?.n_samples || 'Unknown'}</td>
                       </tr>
                     </tbody>
                   </Table>
-                </>
-              )}
 
-              {modelInfo.agent_info && Object.keys(modelInfo.agent_info).length > 0 && (
-                <>
-                  <h5 className="mt-4">Agent Information</h5>
-                  <Table striped bordered>
-                    <tbody>
-                      <tr>
-                        <th>Status</th>
-                        <td>
-                          <Badge bg={
-                            modelInfo.agent_info.status === 'active' ? 'success' :
-                            modelInfo.agent_info.status === 'inactive' ? 'secondary' :
-                            'danger'
-                          }>
-                            {modelInfo.agent_info.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                      <tr>
-                        <th>Running</th>
-                        <td>{modelInfo.agent_info.is_running ? 'Yes' : 'No'}</td>
-                      </tr>
-                      {modelInfo.agent_info.last_run && (
-                        <tr>
-                          <th>Last Run</th>
-                          <td>{new Date(modelInfo.agent_info.last_run).toLocaleString()}</td>
-                        </tr>
-                      )}
-                      {modelInfo.agent_info.description && (
-                        <tr>
-                          <th>Description</th>
-                          <td>{modelInfo.agent_info.description}</td>
-                        </tr>
-                      )}
-                      {modelInfo.agent_info.capabilities && modelInfo.agent_info.capabilities.length > 0 && (
-                        <tr>
-                          <th>Capabilities</th>
-                          <td>
-                            <ul className="mb-0">
-                              {modelInfo.agent_info.capabilities.map((cap, index) => (
-                                <li key={index}>{cap}</li>
-                              ))}
-                            </ul>
-                          </td>
-                        </tr>
-                      )}
-                      {modelInfo.agent_info.programs && modelInfo.agent_info.programs.length > 0 && (
-                        <tr>
-                          <th>Monitored Programs</th>
-                          <td>
-                            <ul className="mb-0">
-                              {modelInfo.agent_info.programs.map((prog, index) => (
-                                <li key={index}>{prog}</li>
-                              ))}
-                            </ul>
-                          </td>
-                        </tr>
-                      )}
-                      {modelInfo.agent_info.model_path && (
-                        <tr>
-                          <th>Model Path</th>
-                          <td>{modelInfo.agent_info.model_path}</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </Table>
+                  {modelInfo.metadata.evaluation_info?.basic_metrics && (
+                    <>
+                      <h5 className="mt-4">Performance Metrics</h5>
+                      <Table striped bordered>
+                        <tbody>
+                          <tr>
+                            <th>F1 Score</th>
+                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.f1_score * 100).toFixed(1)}%</td>
+                          </tr>
+                          <tr>
+                            <th>Precision</th>
+                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.precision * 100).toFixed(1)}%</td>
+                          </tr>
+                          <tr>
+                            <th>Recall</th>
+                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.recall * 100).toFixed(1)}%</td>
+                          </tr>
+                          <tr>
+                            <th>ROC AUC</th>
+                            <td>{(modelInfo.metadata.evaluation_info.basic_metrics.roc_auc * 100).toFixed(1)}%</td>
+                          </tr>
+                        </tbody>
+                      </Table>
+                    </>
+                  )}
+
+                  {modelInfo.metadata.training_info?.feature_names && (
+                    <>
+                      <h5 className="mt-4">Feature Names</h5>
+                      <ul>
+                        {modelInfo.metadata.training_info.feature_names.map((feature, index) => (
+                          <li key={index}>{feature}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -468,6 +461,23 @@ const Models: React.FC = () => {
             onClick={() => showDeleteModal && handleDelete(showDeleteModal)}
           >
             Delete
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Validation Summary Modal */}
+      <Modal show={showValidationSummary !== null} onHide={() => setShowValidationSummary(null)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Model Import Validation Summary</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {showValidationSummary && (
+            <ModelValidationSummaryComponent validationSummary={showValidationSummary} />
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowValidationSummary(null)}>
+            Close
           </Button>
         </Modal.Footer>
       </Modal>

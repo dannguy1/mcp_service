@@ -76,23 +76,39 @@ class ModelManager:
             raise
     
     async def _validate_imported_model(self, model_path: str) -> Dict[str, Any]:
-        """Validate an imported model for compatibility."""
+        """Validate an imported model for compatibility with flexible requirements."""
         validation_result = {
             'is_valid': True,
             'errors': [],
             'warnings': [],
-            'metadata': {}
+            'metadata': {},
+            'required_files_present': [],
+            'optional_files_missing': [],
+            'optional_files_present': []
         }
         
         try:
             model_dir = Path(model_path)
             
-            # Check required files
+            # Define required and optional files
             required_files = ['model.joblib', 'metadata.json']
+            optional_files = ['deployment_manifest.json', 'validate_model.py', 'inference_example.py', 'requirements.txt', 'README.md']
+            
+            # Check required files (import fails if any are missing)
             for file in required_files:
-                if not (model_dir / file).exists():
+                if (model_dir / file).exists():
+                    validation_result['required_files_present'].append(file)
+                else:
                     validation_result['is_valid'] = False
                     validation_result['errors'].append(f"Missing required file: {file}")
+            
+            # Check optional files (import succeeds but reports missing ones)
+            for file in optional_files:
+                if (model_dir / file).exists():
+                    validation_result['optional_files_present'].append(file)
+                else:
+                    validation_result['optional_files_missing'].append(file)
+                    validation_result['warnings'].append(f"Missing optional file: {file}")
             
             # Load and validate metadata
             if (model_dir / 'metadata.json').exists():
@@ -101,11 +117,11 @@ class ModelManager:
                 
                 validation_result['metadata'] = metadata
                 
-                # Check metadata structure
+                # Check metadata structure (warnings for missing fields, not errors)
                 required_metadata_fields = ['model_info', 'training_info', 'evaluation_info']
                 for field in required_metadata_fields:
                     if field not in metadata:
-                        validation_result['errors'].append(f"Missing metadata field: {field}")
+                        validation_result['warnings'].append(f"Missing metadata field: {field}")
                 
                 # Check model type compatibility
                 model_type = metadata.get('model_info', {}).get('model_type', '')
@@ -140,6 +156,13 @@ class ModelManager:
                     validation_result['warnings'].append("No feature names found in metadata")
                 else:
                     validation_result['metadata']['feature_count'] = len(feature_names)
+            
+            # Add summary information
+            if validation_result['optional_files_missing']:
+                validation_result['warnings'].append(
+                    f"Model validation successful but missing {len(validation_result['optional_files_missing'])} optional files: "
+                    f"{', '.join(validation_result['optional_files_missing'])}"
+                )
             
         except Exception as e:
             validation_result['is_valid'] = False
@@ -308,23 +331,60 @@ class ModelManager:
     
     async def _update_model_registry(self, model_dir: Path, status: str):
         """Update model registry with new model."""
-        registry = {}
-        if self.model_registry_file.exists():
-            with open(self.model_registry_file, 'r') as f:
-                registry = json.load(f)
-        
-        # Add new model to registry
-        model_version = model_dir.name
-        registry[model_version] = {
-            'path': str(model_dir),
-            'created_at': datetime.now().isoformat(),
-            'status': status,
-            'last_updated': datetime.now().isoformat()
-        }
-        
-        # Save updated registry
-        with open(self.model_registry_file, 'w') as f:
-            json.dump(registry, f, indent=2)
+        try:
+            registry_data = {}
+            if self.model_registry_file.exists():
+                with open(self.model_registry_file, 'r') as f:
+                    registry_data = json.load(f)
+            
+            # Handle both old and new registry formats
+            if isinstance(registry_data, dict) and 'models' in registry_data:
+                # Old format: {"models": [...], "last_updated": "..."}
+                models_list = registry_data.get('models', [])
+                
+                # Check if model already exists
+                existing_model = next((m for m in models_list if m.get('version') == model_dir.name), None)
+                if existing_model:
+                    # Update existing model
+                    existing_model.update({
+                        'path': f"models/{model_dir.name}",
+                        'status': status,
+                        'last_updated': datetime.now().isoformat()
+                    })
+                else:
+                    # Add new model
+                    models_list.append({
+                        'version': model_dir.name,
+                        'path': f"models/{model_dir.name}",
+                        'status': status,
+                        'created_at': datetime.now().isoformat(),
+                        'last_updated': datetime.now().isoformat(),
+                        'model_type': 'IsolationForest'  # Default type
+                    })
+                
+                registry_data['models'] = models_list
+                registry_data['last_updated'] = datetime.now().isoformat()
+                
+            else:
+                # New format: {"version": {...}, "version2": {...}}
+                model_version = model_dir.name
+                registry_data[model_version] = {
+                    'path': str(model_dir),
+                    'created_at': datetime.now().isoformat(),
+                    'status': status,
+                    'last_updated': datetime.now().isoformat(),
+                    'import_method': 'zip_upload'
+                }
+            
+            # Save updated registry
+            with open(self.model_registry_file, 'w') as f:
+                json.dump(registry_data, f, indent=2)
+                
+            logger.info(f"Model {model_dir.name} registered successfully")
+            
+        except Exception as e:
+            logger.error(f"Error registering model: {e}")
+            raise
     
     async def list_models(self) -> List[Dict[str, Any]]:
         """List all available models."""
@@ -334,10 +394,36 @@ class ModelManager:
             # Load registry if it exists
             if self.model_registry_file.exists():
                 with open(self.model_registry_file, 'r') as f:
-                    registry = json.load(f)
+                    registry_data = json.load(f)
                 
-                for version, model_info in registry.items():
-                    model_path = Path(model_info['path'])
+                # Handle both old format (with models array) and new format (flat dict)
+                if isinstance(registry_data, dict) and 'models' in registry_data:
+                    # Old format: {"models": [...], "last_updated": "..."}
+                    registry_items = registry_data['models']
+                elif isinstance(registry_data, dict):
+                    # New format: {"version": {...}, "version2": {...}}
+                    registry_items = registry_data.items()
+                else:
+                    registry_items = []
+                
+                for item in registry_items:
+                    if isinstance(item, tuple):
+                        # New format: (version, model_info)
+                        version, model_info = item
+                    else:
+                        # Old format: model_info dict with version field
+                        model_info = item
+                        version = model_info.get('version', 'unknown')
+                    
+                    # Handle different path formats
+                    model_path_str = model_info.get('path', '')
+                    if model_path_str.startswith('models/'):
+                        # Relative path from registry
+                        model_path = self.models_directory / model_path_str.replace('models/', '')
+                    else:
+                        # Absolute or relative path
+                        model_path = Path(model_path_str)
+                    
                     if model_path.exists():
                         # Load metadata if available
                         metadata_path = model_path / 'metadata.json'
@@ -349,9 +435,9 @@ class ModelManager:
                         models.append({
                             'version': version,
                             'path': str(model_path),
-                            'status': model_info['status'],
-                            'created_at': model_info['created_at'],
-                            'last_updated': model_info['last_updated'],
+                            'status': model_info.get('status', 'unknown'),
+                            'created_at': model_info.get('created_at', ''),
+                            'last_updated': model_info.get('last_updated', ''),
                             'import_method': model_info.get('import_method', 'unknown'),
                             'metadata': metadata
                         })
@@ -370,7 +456,7 @@ class ModelManager:
             return models
         
         for model_dir in self.models_directory.iterdir():
-            if model_dir.is_dir() and model_dir.name.startswith('model_'):
+            if model_dir.is_dir() and (model_dir.name.startswith('model_') or model_dir.name.startswith('test_model_')):
                 try:
                     # Check if already registered
                     if not await self._is_model_registered(model_dir.name):
@@ -382,7 +468,7 @@ class ModelManager:
                                 'version': model_dir.name,
                                 'path': str(model_dir),
                                 'status': 'available',
-                                'imported_at': datetime.now().isoformat()
+                                'created_at': datetime.now().isoformat()
                             })
                             logger.info(f"Discovered and registered new model: {model_dir.name}")
                         else:
@@ -399,9 +485,17 @@ class ModelManager:
                 return False
             
             with open(self.model_registry_file, 'r') as f:
-                registry = json.load(f)
+                registry_data = json.load(f)
             
-            return version in registry
+            # Handle both old and new registry formats
+            if isinstance(registry_data, dict) and 'models' in registry_data:
+                # Old format: check in models array
+                return any(model.get('version') == version for model in registry_data['models'])
+            elif isinstance(registry_data, dict):
+                # New format: check in flat dictionary
+                return version in registry_data
+            
+            return False
         except Exception as e:
             logger.error(f"Error checking model registration: {e}")
             return False

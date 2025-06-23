@@ -11,6 +11,8 @@ import type {
   ChangePasswordForm, 
   ModelInfo,
   ModelValidationResult,
+  ModelValidationSummary,
+  ModelImportResult,
   ModelPerformanceMetrics,
   ModelDriftResult,
   ModelTransferHistory,
@@ -259,11 +261,23 @@ export const endpoints = {
   // Model package import
   importModelPackage: (formData: FormData) => {
     console.log("Importing model package...");
-    return api.post('/model-management/import', formData, {
+    console.log("FormData contents:");
+    for (let [key, value] of formData.entries()) {
+      console.log(`${key}:`, value);
+    }
+    console.log("Making POST request to /model-management/import");
+    return api.post<ModelImportResult>('/model-management/import', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-    }).then(res => res.data);
+    }).then(res => {
+      console.log("Import response:", res.data);
+      return res.data;
+    }).catch(error => {
+      console.error("Import request failed:", error);
+      console.error("Error response:", error.response?.data);
+      throw error;
+    });
   },
 
   getCurrentModel: () => {

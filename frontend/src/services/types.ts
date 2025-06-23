@@ -112,6 +112,20 @@ export interface ModelValidationResult {
   metadata?: any;
 }
 
+export interface ModelValidationSummary {
+  required_files_present: string[];
+  optional_files_missing: string[];
+  warnings: string[];
+}
+
+export interface ModelImportResult {
+  version: string;
+  status: string;
+  path: string;
+  imported_at: string;
+  validation_summary?: ModelValidationSummary;
+}
+
 export interface ModelPerformanceMetrics {
   model_version: string;
   total_inferences: number;

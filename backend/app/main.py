@@ -245,15 +245,15 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def startup_event():
     """Initialize services on startup."""
     try:
-        # Start MCP Service components
+        # Initialize MCP Service components
         await data_service.start()
         await wifi_agent.start()
-        # ResourceMonitor doesn't have start/stop methods, just initialize it
+        # ResourceMonitor doesn't have start/stop methods
         model_manager.start()
         status_manager.start_status_updates()
         logger.info("MCP Service components initialized successfully")
         
-        # Initialize model manager for model scanning
+        # Initialize model manager for enhanced model management
         from app.components.model_manager import ModelManager
         from app.models.config import ModelConfig
         
@@ -270,7 +270,8 @@ async def startup_event():
         deployed_models = [m for m in models if m['status'] == 'deployed']
         
         if deployed_models:
-            latest_model = max(deployed_models, key=lambda x: x['imported_at'])
+            # Use 'created_at' field instead of 'imported_at'
+            latest_model = max(deployed_models, key=lambda x: x.get('created_at', ''))
             await model_manager_instance.load_model_version(latest_model['version'])
             logger.info(f"Loaded deployed model: {latest_model['version']}")
         

@@ -1,0 +1,16 @@
+{
+  "version": "20250618_151129",
+  "created_at": "2025-06-18T15:11:29.391988",
+  "file_hashes": {
+    "model.joblib": "sha256_hash_placeholder",
+    "metadata.json": "sha256_hash_placeholder",
+    "scaler.joblib": "sha256_hash_placeholder"
+  },
+  "total_files": 3,
+  "deployment_info": {
+    "status": "available",
+    "model_type": "IsolationForest",
+    "features": 5,
+    "contamination": 0.1
+  }
+} 

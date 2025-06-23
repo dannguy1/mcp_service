@@ -18,6 +18,20 @@ class ModelLoader:
     def __init__(self, models_directory: str = "backend/models"):
         self.models_directory = Path(models_directory)
         self.models_directory.mkdir(parents=True, exist_ok=True)
+        
+        # Define required and optional components
+        self.required_files = [
+            'model.joblib',
+            'metadata.json',
+            'deployment_manifest.json'
+        ]
+        
+        self.optional_files = [
+            'validate_model.py',
+            'inference_example.py',
+            'requirements.txt',
+            'README.md'
+        ]
     
     async def process_model_package(self, zip_path: str, validate: bool = True) -> Dict[str, Any]:
         """Process uploaded model package ZIP file."""
@@ -48,7 +62,12 @@ class ModelLoader:
                 "version": version,
                 "status": "imported",
                 "path": str(model_dir),
-                "imported_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
+                "validation_summary": {
+                    "required_files_present": validation_result.get('required_files_present', []),
+                    "optional_files_missing": validation_result.get('optional_files_missing', []),
+                    "warnings": validation_result.get('warnings', [])
+                } if validate else None
             }
             
         except Exception as e:
@@ -59,22 +78,12 @@ class ModelLoader:
         """Extract model package ZIP to target directory."""
         try:
             with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                # Validate ZIP contents before extraction
-                required_files = [
-                    'model.joblib',
-                    'metadata.json', 
-                    'deployment_manifest.json',
-                    'validate_model.py',
-                    'inference_example.py',
-                    'requirements.txt',
-                    'README.md'
-                ]
-                
+                # Check for required files before extraction
                 zip_files = zip_ref.namelist()
-                missing_files = [f for f in required_files if f not in zip_files]
+                missing_required = [f for f in self.required_files if f not in zip_files]
                 
-                if missing_files:
-                    raise ValueError(f"Missing required files: {missing_files}")
+                if missing_required:
+                    raise ValueError(f"Missing required files: {missing_required}")
                 
                 # Extract to target directory
                 zip_ref.extractall(target_dir)
@@ -88,30 +97,33 @@ class ModelLoader:
             raise
     
     async def validate_model_contents(self, model_dir: Path) -> Dict[str, Any]:
-        """Validate model package contents."""
+        """Validate model package contents with flexible requirements."""
         validation_result = {
             'is_valid': True,
             'errors': [],
             'warnings': [],
-            'metadata': {}
+            'metadata': {},
+            'required_files_present': [],
+            'optional_files_missing': [],
+            'optional_files_present': []
         }
         
         try:
-            # Check required files
-            required_files = [
-                'model.joblib',
-                'metadata.json',
-                'deployment_manifest.json',
-                'validate_model.py',
-                'inference_example.py',
-                'requirements.txt',
-                'README.md'
-            ]
-            
-            for file in required_files:
-                if not (model_dir / file).exists():
+            # Check required files (import fails if any are missing)
+            for file in self.required_files:
+                if (model_dir / file).exists():
+                    validation_result['required_files_present'].append(file)
+                else:
                     validation_result['is_valid'] = False
                     validation_result['errors'].append(f"Missing required file: {file}")
+            
+            # Check optional files (import succeeds but reports missing ones)
+            for file in self.optional_files:
+                if (model_dir / file).exists():
+                    validation_result['optional_files_present'].append(file)
+                else:
+                    validation_result['optional_files_missing'].append(file)
+                    validation_result['warnings'].append(f"Missing optional file: {file}")
             
             # Validate metadata.json
             if (model_dir / 'metadata.json').exists():
@@ -120,8 +132,8 @@ class ModelLoader:
                         metadata = json.load(f)
                     
                     # Check required metadata fields
-                    required_fields = ['model_type', 'version', 'created_at', 'training_info']
-                    for field in required_fields:
+                    required_metadata_fields = ['model_type', 'version', 'created_at', 'training_info']
+                    for field in required_metadata_fields:
                         if field not in metadata:
                             validation_result['warnings'].append(f"Missing metadata field: {field}")
                     
@@ -137,7 +149,7 @@ class ModelLoader:
                     with open(model_dir / 'deployment_manifest.json', 'r') as f:
                         manifest = json.load(f)
                     
-                    # Verify SHA256 hashes
+                    # Verify SHA256 hashes for files that exist
                     if 'file_hashes' in manifest:
                         for filename, expected_hash in manifest['file_hashes'].items():
                             file_path = model_dir / filename
@@ -157,9 +169,22 @@ class ModelLoader:
                 if model_file.exists():
                     model = joblib.load(str(model_file))
                     validation_result['metadata']['model_type'] = type(model).__name__
+                    
+                    # Basic model validation
+                    if not hasattr(model, 'predict'):
+                        validation_result['is_valid'] = False
+                        validation_result['errors'].append("Model does not have required 'predict' method")
+                    
             except Exception as e:
                 validation_result['is_valid'] = False
                 validation_result['errors'].append(f"Failed to load model: {str(e)}")
+            
+            # Add summary information
+            if validation_result['optional_files_missing']:
+                validation_result['warnings'].append(
+                    f"Model imported successfully but missing {len(validation_result['optional_files_missing'])} optional files: "
+                    f"{', '.join(validation_result['optional_files_missing'])}"
+                )
             
         except Exception as e:
             validation_result['is_valid'] = False

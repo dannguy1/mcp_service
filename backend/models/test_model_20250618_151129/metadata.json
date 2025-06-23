@@ -27,8 +27,8 @@
     }
   },
   "deployment_info": {
-    "status": "available",
-    "deployed_at": null,
+    "status": "deployed",
+    "deployed_at": "2025-06-23T09:12:14.417210",
     "deployed_by": null
   }
 }
