@@ -18,6 +18,7 @@ const Models: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [modelInfo, setModelInfo] = useState<Model | null>(null);
   const [showValidationSummary, setShowValidationSummary] = useState<ModelValidationSummary | null>(null);
+  const [modelInfoLoading, setModelInfoLoading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['models'],
@@ -39,14 +40,18 @@ const Models: React.FC = () => {
 
   const handleInfo = async (version: string) => {
     try {
-      const modelInfo = data?.find(m => m.version === version);
-      if (modelInfo) {
-        setModelInfo(modelInfo);
-        setShowInfoModal(true);
-      }
-    } catch (error) {
+      setModelInfoLoading(true);
+      setShowInfoModal(true);
+      
+      // Fetch detailed model information from API
+      const detailedInfo = await endpoints.getEnhancedModelInfo(version);
+      setModelInfo(detailedInfo);
+    } catch (error: any) {
       console.error('Failed to get model info:', error);
       toast.error('Failed to get model info');
+      setShowInfoModal(false);
+    } finally {
+      setModelInfoLoading(false);
     }
   };
 
@@ -55,7 +60,7 @@ const Models: React.FC = () => {
       // For now, just show a message since delete endpoint might not exist
       toast.error('Delete functionality not implemented yet');
       setShowDeleteModal(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete model:', error);
       toast.error('Failed to delete model');
     }
@@ -232,7 +237,7 @@ const Models: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {data?.map((model) => (
+              {data?.map((model: any) => (
                 <tr key={model.version}>
                   <td>{model.version}</td>
                   <td>
@@ -463,28 +468,264 @@ const Models: React.FC = () => {
       </Modal>
 
       {/* Model Info Modal */}
-      <Modal show={showInfoModal} onHide={() => setShowInfoModal(false)} size="lg">
+      <Modal show={showInfoModal} onHide={() => setShowInfoModal(false)} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>Model Information</Modal.Title>
+          <Modal.Title>Model Information - {modelInfo?.version}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {modelInfo && (
+          {modelInfoLoading ? (
+            <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
+              <Spinner animation="border" role="status">
+                <span className="visually-hidden">Loading model information...</span>
+              </Spinner>
+            </div>
+          ) : modelInfo ? (
             <div>
-              <h5>Version: {modelInfo.version}</h5>
-              <p><strong>Status:</strong> {modelInfo.status}</p>
-              <p><strong>Created:</strong> {new Date(modelInfo.created_at).toLocaleString()}</p>
-              {modelInfo.metrics && (
-                <div>
-                  <h6>Metrics:</h6>
-                  <ul>
-                    <li>Accuracy: {modelInfo.metrics.accuracy}%</li>
-                    <li>False Positive Rate: {modelInfo.metrics.false_positive_rate}%</li>
-                    <li>False Negative Rate: {modelInfo.metrics.false_negative_rate}%</li>
-                  </ul>
+              {/* Basic Info Section */}
+              <div className="mb-4">
+                <h5 className="border-bottom pb-2">Basic Information</h5>
+                <div className="row">
+                  <div className="col-md-6">
+                    <p><strong>Version:</strong> {modelInfo.version}</p>
+                    <p><strong>Status:</strong> 
+                      <Badge 
+                        bg={(modelInfo as any).status === 'deployed' ? 'success' : 'secondary'} 
+                        className="ms-2"
+                      >
+                        {(modelInfo as any).status}
+                      </Badge>
+                    </p>
+                    <p><strong>Created:</strong> {new Date(modelInfo.created_at).toLocaleString()}</p>
+                    {(modelInfo as any).last_updated && (
+                      <p><strong>Last Updated:</strong> {new Date((modelInfo as any).last_updated).toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div className="col-md-6">
+                    <p><strong>Import Method:</strong> {(modelInfo as any).import_method || 'Unknown'}</p>
+                    <p><strong>Model Path:</strong> <code className="small">{(modelInfo as any).path}</code></p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Model Metadata Section */}
+              {(modelInfo as any).metadata && (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Model Details</h5>
+                  
+                  {/* Model Info */}
+                  {(modelInfo as any).metadata.model_info && (
+                    <div className="mb-3">
+                      <h6>Model Information</h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p><strong>Model Type:</strong> {(modelInfo as any).metadata.model_info.model_type}</p>
+                          <p><strong>Description:</strong> {(modelInfo as any).metadata.model_info.description || 'No description available'}</p>
+                        </div>
+                        <div className="col-md-6">
+                          <p><strong>Created At:</strong> {new Date((modelInfo as any).metadata.model_info.created_at).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Training Information */}
+                  {(modelInfo as any).metadata.training_info && (
+                    <div className="mb-3">
+                      <h6>Training Information</h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p><strong>Training Samples:</strong> {(modelInfo as any).metadata.training_info.n_samples?.toLocaleString()}</p>
+                          <p><strong>Number of Features:</strong> {(modelInfo as any).metadata.training_info.n_features}</p>
+                          {(modelInfo as any).metadata.training_info.training_date && (
+                            <p><strong>Training Date:</strong> {new Date((modelInfo as any).metadata.training_info.training_date).toLocaleString()}</p>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          <p><strong>Feature Names:</strong></p>
+                          <div className="small">
+                            {(modelInfo as any).metadata.training_info.feature_names?.map((feature: string, index: number) => (
+                              <Badge key={index} bg="light" text="dark" className="me-1 mb-1">
+                                {feature}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Evaluation Information */}
+                  {(modelInfo as any).metadata.evaluation_info && (
+                    <div className="mb-3">
+                      <h6>Evaluation Metrics</h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p><strong>F1 Score:</strong> {((modelInfo as any).metadata.evaluation_info.basic_metrics?.f1_score * 100).toFixed(1)}%</p>
+                          <p><strong>Precision:</strong> {((modelInfo as any).metadata.evaluation_info.basic_metrics?.precision * 100).toFixed(1)}%</p>
+                          <p><strong>Recall:</strong> {((modelInfo as any).metadata.evaluation_info.basic_metrics?.recall * 100).toFixed(1)}%</p>
+                        </div>
+                        <div className="col-md-6">
+                          <p><strong>ROC AUC:</strong> {((modelInfo as any).metadata.evaluation_info.basic_metrics?.roc_auc * 100).toFixed(1)}%</p>
+                          {(modelInfo as any).metadata.evaluation_info.basic_metrics?.accuracy && (
+                            <p><strong>Accuracy:</strong> {((modelInfo as any).metadata.evaluation_info.basic_metrics.accuracy * 100).toFixed(1)}%</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Deployment Information */}
+                  {(modelInfo as any).metadata.deployment_info && (
+                    <div className="mb-3">
+                      <h6>Deployment Information</h6>
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p><strong>Deployment Status:</strong> 
+                            <Badge 
+                              bg={(modelInfo as any).metadata.deployment_info.status === 'deployed' ? 'success' : 'secondary'} 
+                              className="ms-2"
+                            >
+                              {(modelInfo as any).metadata.deployment_info.status}
+                            </Badge>
+                          </p>
+                          {(modelInfo as any).metadata.deployment_info.deployed_at && (
+                            <p><strong>Deployed At:</strong> {new Date((modelInfo as any).metadata.deployment_info.deployed_at).toLocaleString()}</p>
+                          )}
+                        </div>
+                        <div className="col-md-6">
+                          {(modelInfo as any).metadata.deployment_info.deployed_by && (
+                            <p><strong>Deployed By:</strong> {(modelInfo as any).metadata.deployment_info.deployed_by}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Performance Metrics Section */}
+              {performanceData && performanceData.find((p: any) => p.model_version === modelInfo.version) && (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Performance Metrics</h5>
+                  {(() => {
+                    const performance = performanceData.find((p: any) => p.model_version === modelInfo.version);
+                    if (!performance) return null;
+                    
+                    return (
+                      <div className="row">
+                        <div className="col-md-6">
+                          <p><strong>Total Inferences:</strong> {performance.total_inferences.toLocaleString()}</p>
+                          <p><strong>Average Inference Time:</strong> {(performance.performance_metrics.avg_inference_time * 1000).toFixed(2)}ms</p>
+                          <p><strong>Min Inference Time:</strong> {(performance.performance_metrics.min_inference_time * 1000).toFixed(2)}ms</p>
+                        </div>
+                        <div className="col-md-6">
+                          <p><strong>Max Inference Time:</strong> {(performance.performance_metrics.max_inference_time * 1000).toFixed(2)}ms</p>
+                          <p><strong>Average Anomaly Score:</strong> {performance.performance_metrics.avg_anomaly_score.toFixed(3)}</p>
+                          <p><strong>Anomaly Rate:</strong> {(performance.performance_metrics.anomaly_rate * 100).toFixed(2)}%</p>
+                          <p><strong>Total Anomalies:</strong> {performance.performance_metrics.total_anomalies.toLocaleString()}</p>
+                        </div>
+                        {performance.last_updated && (
+                          <div className="col-12 mt-2">
+                            <small className="text-muted">
+                              <strong>Last Updated:</strong> {new Date(performance.last_updated).toLocaleString()}
+                            </small>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Model Quality Assessment */}
+              {(modelInfo as any).metadata?.evaluation_info?.basic_metrics && (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Quality Assessment</h5>
+                  {(() => {
+                    const metrics = (modelInfo as any).metadata.evaluation_info.basic_metrics;
+                    const assessments = [];
+                    
+                    // F1 Score assessment
+                    if (metrics.f1_score >= 0.9) {
+                      assessments.push({ metric: 'F1 Score', status: 'Excellent', color: 'success', value: `${(metrics.f1_score * 100).toFixed(1)}%` });
+                    } else if (metrics.f1_score >= 0.7) {
+                      assessments.push({ metric: 'F1 Score', status: 'Good', color: 'info', value: `${(metrics.f1_score * 100).toFixed(1)}%` });
+                    } else if (metrics.f1_score >= 0.5) {
+                      assessments.push({ metric: 'F1 Score', status: 'Fair', color: 'warning', value: `${(metrics.f1_score * 100).toFixed(1)}%` });
+                    } else {
+                      assessments.push({ metric: 'F1 Score', status: 'Poor', color: 'danger', value: `${(metrics.f1_score * 100).toFixed(1)}%` });
+                    }
+                    
+                    // ROC AUC assessment
+                    if (metrics.roc_auc >= 0.9) {
+                      assessments.push({ metric: 'ROC AUC', status: 'Excellent', color: 'success', value: `${(metrics.roc_auc * 100).toFixed(1)}%` });
+                    } else if (metrics.roc_auc >= 0.8) {
+                      assessments.push({ metric: 'ROC AUC', status: 'Good', color: 'info', value: `${(metrics.roc_auc * 100).toFixed(1)}%` });
+                    } else if (metrics.roc_auc >= 0.6) {
+                      assessments.push({ metric: 'ROC AUC', status: 'Fair', color: 'warning', value: `${(metrics.roc_auc * 100).toFixed(1)}%` });
+                    } else {
+                      assessments.push({ metric: 'ROC AUC', status: 'Poor', color: 'danger', value: `${(metrics.roc_auc * 100).toFixed(1)}%` });
+                    }
+                    
+                    return (
+                      <div className="row">
+                        {assessments.map((assessment, index) => (
+                          <div key={index} className="col-md-6 mb-2">
+                            <div className="d-flex justify-content-between align-items-center">
+                              <span><strong>{assessment.metric}:</strong></span>
+                              <div>
+                                <Badge bg={assessment.color} className="me-2">{assessment.status}</Badge>
+                                <span>{assessment.value}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Recommendations Section */}
+              {(modelInfo as any).metadata?.evaluation_info?.basic_metrics && (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Recommendations</h5>
+                  {(() => {
+                    const metrics = (modelInfo as any).metadata.evaluation_info.basic_metrics;
+                    const recommendations = [];
+                    
+                    if (metrics.f1_score < 0.7) {
+                      recommendations.push("Consider retraining with more data or different parameters to improve F1 score");
+                    }
+                    if (metrics.roc_auc < 0.8) {
+                      recommendations.push("Feature engineering or model tuning may improve ROC AUC performance");
+                    }
+                    if (metrics.precision < 0.8) {
+                      recommendations.push("High false positive rate detected - consider adjusting classification threshold");
+                    }
+                    if (metrics.recall < 0.8) {
+                      recommendations.push("Low recall indicates missed anomalies - consider model retraining");
+                    }
+                    
+                    if (recommendations.length === 0) {
+                      recommendations.push("Model performance is within acceptable ranges");
+                    }
+                    
+                    return (
+                      <ul className="list-group">
+                        {recommendations.map((rec, index) => (
+                          <li key={index} className="list-group-item">
+                            <FaInfoCircle className="me-2 text-info" />
+                            {rec}
+                          </li>
+                        ))}
+                      </ul>
+                    );
+                  })()}
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={() => setShowInfoModal(false)}>
