@@ -10,18 +10,18 @@ import {
   Spinner
 } from 'react-bootstrap';
 import { 
-  Play, 
-  Square, 
-  RefreshCw, 
-  Settings, 
-  Trash2, 
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  XCircle
-} from 'lucide-react';
+  FaPlay, 
+  FaStop, 
+  FaSync, 
+  FaCog, 
+  FaTrash, 
+  FaExclamationTriangle,
+  FaCheckCircle,
+  FaClock,
+  FaTimesCircle
+} from 'react-icons/fa';
 import { useAgents } from '../hooks/useAgents';
-import { Agent, AvailableModel } from '../services/types';
+import type { Agent, AvailableModel } from '../services/types';
 
 const Agents: React.FC = () => {
   const {
@@ -67,11 +67,11 @@ const Agents: React.FC = () => {
 
   const getStatusIcon = (agent: Agent) => {
     if (agent.is_running) {
-      return <CheckCircle className="h-4 w-4 text-success" />;
+      return <FaCheckCircle className="h-4 w-4 text-success" />;
     } else if (agent.status === 'error') {
-      return <XCircle className="h-4 w-4 text-danger" />;
+      return <FaTimesCircle className="h-4 w-4 text-danger" />;
     } else {
-      return <Clock className="h-4 w-4 text-warning" />;
+      return <FaClock className="h-4 w-4 text-warning" />;
     }
   };
 
@@ -140,7 +140,7 @@ const Agents: React.FC = () => {
         <Card.Body>
           {agents.length === 0 ? (
             <div className="text-center py-5 text-muted">
-              <AlertTriangle className="h-12 w-12 mx-auto mb-3 text-muted" />
+              <FaExclamationTriangle className="h-12 w-12 mx-auto mb-3 text-muted" />
               <p>No agents registered</p>
             </div>
           ) : (
@@ -200,7 +200,7 @@ const Agents: React.FC = () => {
                           onClick={() => handleSetModel(agent)}
                           disabled={isSettingModel}
                         >
-                          <Settings className="h-4 w-4" />
+                          <FaCog className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -208,7 +208,7 @@ const Agents: React.FC = () => {
                           onClick={() => handleRestartAgent(agent)}
                           disabled={isRestarting}
                         >
-                          <RefreshCw className="h-4 w-4" />
+                          <FaSync className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -216,7 +216,7 @@ const Agents: React.FC = () => {
                           onClick={() => setShowDeleteModal(agent)}
                           disabled={isUnregistering}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <FaTrash className="h-4 w-4" />
                         </Button>
                       </div>
                     </td>
