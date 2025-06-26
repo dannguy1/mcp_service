@@ -1,0 +1,27 @@
+agent_id: "threshold_agent"
+name: "ThresholdAgent"
+description: "Simple threshold-based monitoring"
+agent_type: "rule_based"
+process_filters: ["nginx", "apache2", "mysql", "postgresql"]
+model_path: null
+capabilities: [
+  "High CPU usage detection",
+  "Memory usage monitoring",
+  "Disk space monitoring"
+]
+analysis_rules:
+  lookback_minutes: 5
+  analysis_interval: 60
+  thresholds:
+    cpu_usage: 80
+    memory_usage: 85
+    disk_usage: 90
+  severity_mapping:
+    cpu_high: 3
+    memory_high: 3
+    disk_full: 4
+  alert_cooldown: 300  # 5 minutes between alerts
+  escalation_rules:
+    cpu_critical: 95
+    memory_critical: 95
+    disk_critical: 98 

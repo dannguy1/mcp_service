@@ -1,0 +1,33 @@
+agent_id: "log_level_agent"
+name: "LogLevelAgent"
+description: "Rule-based log level monitoring"
+agent_type: "rule_based"
+process_filters: []  # All processes
+model_path: null  # No model required
+capabilities: [
+  "Error log level detection",
+  "Critical log level detection",
+  "Warning level monitoring"
+]
+analysis_rules:
+  lookback_minutes: 5
+  analysis_interval: 60
+  target_levels: ["error", "critical", "warning"]
+  severity_mapping:
+    error: 4
+    critical: 5
+    warning: 3
+  confidence: 1.0  # High confidence for rule-based detection
+  exclude_patterns: [
+    ".*test.*",
+    ".*debug.*"
+  ]
+  include_patterns: [
+    ".*auth.*",
+    ".*network.*",
+    ".*system.*"
+  ]
+  alert_cooldown: 300  # 5 minutes between alerts
+  escalation_rules:
+    error_critical: 10
+    critical_critical: 5 

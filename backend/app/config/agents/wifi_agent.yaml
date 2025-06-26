@@ -1,0 +1,26 @@
+agent_id: "wifi_agent"
+name: "WiFiAgent"
+description: "WiFi anomaly detection using ML models"
+agent_type: "ml_based"
+process_filters: ["hostapd", "wpa_supplicant"]
+model_path: "/app/models/wifi_anomaly_model.pkl"
+capabilities: [
+  "Authentication failure detection",
+  "Deauthentication flood detection",
+  "Beacon frame flood detection"
+]
+analysis_rules:
+  lookback_minutes: 5
+  analysis_interval: 60
+  feature_extraction:
+    auth_failures: true
+    deauth_count: true
+    beacon_count: true
+  severity_mapping:
+    auth_failure: 4
+    deauth_flood: 5
+    beacon_flood: 3
+  thresholds:
+    auth_failure_threshold: 5
+    deauth_flood_threshold: 10
+    beacon_flood_threshold: 100 

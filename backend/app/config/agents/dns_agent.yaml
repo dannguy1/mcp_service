@@ -1,0 +1,27 @@
+agent_id: "dns_agent"
+name: "DNSAgent"
+description: "DNS query anomaly detection"
+agent_type: "ml_based"
+process_filters: ["named", "dnsmasq", "systemd-resolved"]
+model_path: "/app/models/dns_anomaly_model.pkl"
+capabilities: [
+  "DNS amplification detection",
+  "Query flood detection",
+  "Suspicious domain detection"
+]
+analysis_rules:
+  lookback_minutes: 10
+  analysis_interval: 120
+  feature_extraction:
+    query_count: true
+    response_time: true
+    domain_patterns: true
+    query_types: true
+  severity_mapping:
+    dns_amplification: 5
+    query_flood: 4
+    suspicious_domain: 3
+  thresholds:
+    query_flood_threshold: 1000
+    response_time_threshold: 5000
+    amplification_ratio_threshold: 10 

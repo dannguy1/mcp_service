@@ -5,7 +5,6 @@ import asyncpg
 import json
 
 from .base_agent import BaseAgent
-from ..components.agent_registry import agent_registry
 
 class LogLevelAgent(BaseAgent):
     def __init__(self, config, data_service):
@@ -35,10 +34,6 @@ class LogLevelAgent(BaseAgent):
         """Start the Log Level agent."""
         try:
             self.logger.info("Starting Log Level agent...")
-            
-            # Register with AgentRegistry
-            if not agent_registry.register_agent(self, self.agent_id):
-                self.logger.warning("Failed to register with agent registry")
             
             # Set running state
             self.is_running = True
@@ -97,10 +92,6 @@ class LogLevelAgent(BaseAgent):
                 'capabilities': self.capabilities,
                 'description': self.description
             })
-            
-            # Unregister from AgentRegistry only if requested
-            if unregister:
-                agent_registry.unregister_agent(self.agent_id)
             
             self.logger.info("Log Level agent stopped successfully")
             
@@ -201,7 +192,7 @@ class LogLevelAgent(BaseAgent):
                 'id': self.agent_id,
                 'name': self.__class__.__name__,
                 'status': 'error',
-                'is_running': False,
+                'is_running': True,
                 'last_run': datetime.now().isoformat(),
                 'capabilities': self.capabilities,
                 'description': self.description
@@ -209,141 +200,106 @@ class LogLevelAgent(BaseAgent):
             raise
 
     async def _get_logs_by_level(self) -> List[Dict[str, Any]]:
-        """
-        Get logs with error or critical log levels from the database.
+        """Get recent logs with error or critical levels.
         
         Returns:
-            List of log entries with error or critical levels
+            List[Dict[str, Any]]: List of log entries with error or critical levels
         """
         try:
-            # Calculate time range
-            end_time = datetime.now()
-            start_time = end_time - timedelta(minutes=self.lookback_minutes)
-            
-            # Connect to the database
-            conn = await asyncpg.connect(
-                host=self.data_service.db_config['host'],
-                port=self.data_service.db_config['port'],
-                user=self.data_service.db_config['user'],
-                password=self.data_service.db_config['password'],
-                database=self.data_service.db_config['database']
+            # Get recent logs from the last lookback_minutes
+            logs = await self.data_service.get_recent_logs(
+                programs=None,  # All programs
+                minutes=self.lookback_minutes
             )
             
-            try:
-                # Query for logs with error or critical levels
-                query = """
-                    SELECT 
-                        id, device_id, device_ip, timestamp, log_level, 
-                        process_name, message, raw_message, structured_data,
-                        pushed_to_ai, pushed_at, push_attempts, last_push_error
-                    FROM log_entries
-                    WHERE timestamp >= $1 AND timestamp <= $2
-                    AND LOWER(log_level) = ANY($3::text[])
-                    ORDER BY timestamp DESC
-                """
-                
-                # Convert target levels to lowercase for case-insensitive comparison
-                target_levels_lower = [level.lower() for level in self.target_levels]
-                params = [start_time, end_time, target_levels_lower]
-                
-                logs = await conn.fetch(query, *params)
-                logs = [dict(record) for record in logs]
-                
-                self.logger.info(f"Retrieved {len(logs)} logs with levels {self.target_levels}")
-                return logs
-                
-            finally:
-                await conn.close()
-                
+            # Filter logs by level
+            filtered_logs = []
+            for log in logs:
+                log_level = log.get('level', '').lower()
+                if log_level in [level.lower() for level in self.target_levels]:
+                    filtered_logs.append(log)
+            
+            return filtered_logs
+            
         except Exception as e:
             self.logger.error(f"Error getting logs by level: {e}")
-            raise
+            return []
 
     async def _process_log_for_anomaly(self, log: Dict[str, Any]):
-        """
-        Process a single log entry and create an anomaly if needed.
+        """Process a single log entry and create an anomaly.
         
         Args:
-            log: Log entry dictionary
+            log: Log entry to process
         """
         try:
-            log_level = log.get('log_level', '').lower()
-            
-            # Check if this is a target level
-            if log_level not in self.target_levels:
-                return
-            
-            # Determine severity based on log level
+            # Get log level and determine severity
+            log_level = log.get('level', '').lower()
             severity = self.severity_mapping.get(log_level, 3)
             
             # Create anomaly description
             description = self._create_anomaly_description(log)
             
-            # Create features dictionary
-            features = {
-                'log_level': log_level,
-                'process_name': log.get('process_name'),
-                'device_ip': log.get('device_ip'),
-                'message_length': len(log.get('message', '')),
-                'timestamp': log.get('timestamp').isoformat() if log.get('timestamp') else None
-            }
-            
             # Store the anomaly
             await self.store_anomaly(
-                anomaly_type=f"log_level_{log_level}",
+                anomaly_type=f"{log_level}_log_detected",
                 severity=severity,
                 confidence=1.0,  # High confidence for rule-based detection
                 description=description,
-                features=features,
-                device_id=log.get('device_id')
+                features={
+                    'log_level': log_level,
+                    'program': log.get('program', 'unknown'),
+                    'message': log.get('message', ''),
+                    'timestamp': log.get('timestamp', ''),
+                    'source': 'log_level_agent'
+                }
             )
-            
-            self.logger.info(f"Created anomaly for {log_level} log: {log.get('id')}")
             
         except Exception as e:
             self.logger.error(f"Error processing log for anomaly: {e}")
             raise
 
     def _create_anomaly_description(self, log: Dict[str, Any]) -> str:
-        """
-        Create a human-readable description for the anomaly.
+        """Create a human-readable description for the anomaly.
         
         Args:
-            log: Log entry dictionary
+            log: Log entry that triggered the anomaly
             
         Returns:
-            String description of the anomaly
+            str: Description of the anomaly
         """
-        log_level = log.get('log_level', '').lower()
-        process_name = log.get('process_name', 'Unknown')
-        device_ip = log.get('device_ip', 'Unknown')
-        message = log.get('message', 'No message')
+        log_level = log.get('level', 'unknown')
+        program = log.get('program', 'unknown')
+        message = log.get('message', '')
         
-        if log_level == 'error':
-            return f"Error log detected from {process_name} on device {device_ip}: {message[:100]}..."
-        elif log_level == 'critical':
-            return f"Critical log detected from {process_name} on device {device_ip}: {message[:100]}..."
-        else:
-            return f"{log_level.title()} log detected from {process_name} on device {device_ip}: {message[:100]}..."
+        # Truncate message if too long
+        if len(message) > 200:
+            message = message[:200] + "..."
+        
+        return f"{log_level.upper()} log detected from {program}: {message}"
 
     def get_status(self) -> Dict[str, Any]:
-        """
-        Get the current status of the agent.
+        """Get the current status of the agent.
         
         Returns:
             dict: Dictionary containing agent status information
         """
-        base_status = super().get_status()
-        base_status.update({
-            'target_levels': self.target_levels,
-            'lookback_minutes': self.lookback_minutes,
-            'severity_mapping': self.severity_mapping
-        })
-        return base_status
+        return {
+            "id": self.agent_id,
+            "name": self.__class__.__name__,
+            "is_running": self.is_running,
+            "last_run": self.last_run.isoformat() if self.last_run else None,
+            "next_run": (
+                (self.last_run + timedelta(seconds=self.config.analysis_interval)).isoformat()
+                if self.last_run
+                else None
+            ),
+            "status": self.status,
+            "capabilities": self.capabilities,
+            "description": self.description
+        }
 
     def check_running(self) -> bool:
-        """
-        Check if the agent is currently running.
+        """Check if the agent is currently running.
         
         Returns:
             bool: True if the agent is running, False otherwise

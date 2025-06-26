@@ -1,0 +1,28 @@
+agent_id: "system_agent"
+name: "SystemAgent"
+description: "System-level anomaly detection"
+agent_type: "ml_based"
+process_filters: ["systemd", "cron", "sshd", "sudo"]
+model_path: "/app/models/system_anomaly_model.pkl"
+capabilities: [
+  "System resource anomaly detection",
+  "Authentication failure detection",
+  "Process behavior analysis"
+]
+analysis_rules:
+  lookback_minutes: 15
+  analysis_interval: 300
+  feature_extraction:
+    cpu_usage: true
+    memory_usage: true
+    disk_io: true
+    network_connections: true
+    failed_logins: true
+  severity_mapping:
+    resource_anomaly: 4
+    auth_failure: 3
+    process_anomaly: 5
+  thresholds:
+    cpu_threshold: 90
+    memory_threshold: 85
+    failed_login_threshold: 5 

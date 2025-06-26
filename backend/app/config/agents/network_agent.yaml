@@ -1,0 +1,30 @@
+agent_id: "network_agent"
+name: "NetworkAgent"
+description: "Network traffic anomaly detection"
+agent_type: "hybrid"
+process_filters: ["iptables", "ufw", "firewalld", "netfilter"]
+model_path: "/app/models/network_anomaly_model.pkl"
+capabilities: [
+  "Network traffic pattern analysis",
+  "Firewall rule violation detection",
+  "Port scanning detection"
+]
+analysis_rules:
+  lookback_minutes: 20
+  analysis_interval: 180
+  feature_extraction:
+    packet_count: true
+    connection_count: true
+    port_scanning: true
+    traffic_patterns: true
+  severity_mapping:
+    traffic_anomaly: 4
+    firewall_violation: 5
+    port_scan: 4
+  thresholds:
+    packet_threshold: 10000
+    connection_threshold: 1000
+    port_scan_threshold: 100
+  fallback_rules:
+    enable_fallback: true
+    rule_based_detection: true 

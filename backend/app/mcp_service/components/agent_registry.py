@@ -8,6 +8,10 @@ import yaml
 import asyncio
 
 from ..agents.base_agent import BaseAgent
+from ..agents.generic_agent import GenericAgent
+from ..agents.ml_based_agent import MLBasedAgent
+from ..agents.rule_based_agent import RuleBasedAgent
+from ..agents.hybrid_agent import HybridAgent
 from .model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
@@ -33,7 +37,9 @@ class AgentRegistry:
     def _load_agent_configs(self):
         """Load agent configurations from files."""
         try:
-            config_dir = Path("backend/app/config")
+            # Always resolve config_dir relative to the project root
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent  # Go up to project root
+            config_dir = base_dir / "app" / "config"
             agent_config_file = config_dir / "agent_config.yaml"
             
             if agent_config_file.exists():
@@ -50,10 +56,186 @@ class AgentRegistry:
                         config = yaml.safe_load(f)
                         self.agent_configs[agent_name] = config
                         self.logger.info(f"Loaded {agent_name} agent configuration")
+            
+            # Load from new agents directory if it exists
+            agents_config_dir = config_dir / "agents"
+            if agents_config_dir.exists():
+                for config_file in agents_config_dir.glob("*.yaml"):
+                    agent_id = config_file.stem
+                    with open(config_file, 'r') as f:
+                        config = yaml.safe_load(f)
+                        self.agent_configs[agent_id] = config
+                        self.logger.info(f"Loaded {agent_id} agent configuration from agents directory")
                         
         except Exception as e:
             self.logger.error(f"Error loading agent configurations: {e}")
     
+    def create_agent(self, agent_id: str, data_service, model_manager=None) -> Optional[BaseAgent]:
+        """Create agent instance from configuration.
+        
+        Args:
+            agent_id: Unique identifier for the agent
+            data_service: DataService instance for database access
+            model_manager: Optional ModelManager instance
+            
+        Returns:
+            BaseAgent: Created agent instance or None if creation failed
+        """
+        try:
+            if agent_id not in self.agent_configs:
+                self.logger.error(f"Agent configuration not found: {agent_id}")
+                return None
+            
+            config = self.agent_configs[agent_id]
+            agent_type = config.get('agent_type', 'ml_based')
+            
+            # Create agent based on type
+            if agent_type == 'ml_based':
+                agent = MLBasedAgent(config, data_service, model_manager)
+            elif agent_type == 'rule_based':
+                agent = RuleBasedAgent(config, data_service, model_manager)
+            elif agent_type == 'hybrid':
+                agent = HybridAgent(config, data_service, model_manager)
+            else:
+                self.logger.error(f"Unknown agent type: {agent_type}")
+                return None
+            
+            self.logger.info(f"Created {agent_type} agent: {agent_id}")
+            return agent
+            
+        except Exception as e:
+            self.logger.error(f"Error creating agent {agent_id}: {e}")
+            return None
+    
+    def create_agent_from_config(self, config: Dict[str, Any], data_service, model_manager=None) -> Optional[BaseAgent]:
+        """Create agent instance from provided configuration.
+        
+        Args:
+            config: Agent configuration dictionary
+            data_service: DataService instance for database access
+            model_manager: Optional ModelManager instance
+            
+        Returns:
+            BaseAgent: Created agent instance or None if creation failed
+        """
+        try:
+            agent_id = config.get('agent_id')
+            if not agent_id:
+                self.logger.error("Agent configuration missing agent_id")
+                return None
+            
+            agent_type = config.get('agent_type', 'ml_based')
+            
+            # Create agent based on type
+            if agent_type == 'ml_based':
+                agent = MLBasedAgent(config, data_service, model_manager)
+            elif agent_type == 'rule_based':
+                agent = RuleBasedAgent(config, data_service, model_manager)
+            elif agent_type == 'hybrid':
+                agent = HybridAgent(config, data_service, model_manager)
+            else:
+                self.logger.error(f"Unknown agent type: {agent_type}")
+                return None
+            
+            self.logger.info(f"Created {agent_type} agent from config: {agent_id}")
+            return agent
+            
+        except Exception as e:
+            self.logger.error(f"Error creating agent from config: {e}")
+            return None
+    
+    def save_agent_config(self, agent_id: str, config: Dict[str, Any]) -> bool:
+        """Save agent configuration to file.
+        
+        Args:
+            agent_id: Unique identifier for the agent
+            config: Configuration dictionary to save
+            
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        try:
+            # Create agents directory if it doesn't exist
+            agents_config_dir = Path("backend/app/config/agents")
+            agents_config_dir.mkdir(exist_ok=True)
+            
+            # Save configuration file
+            config_file = agents_config_dir / f"{agent_id}.yaml"
+            with open(config_file, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False, indent=2)
+            
+            # Update in-memory config
+            self.agent_configs[agent_id] = config
+            
+            self.logger.info(f"Saved agent configuration: {agent_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error saving agent configuration {agent_id}: {e}")
+            return False
+    
+    def get_agent_config(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        """Get agent configuration.
+        
+        Args:
+            agent_id: Unique identifier for the agent
+            
+        Returns:
+            dict: Agent configuration or None if not found
+        """
+        return self.agent_configs.get(agent_id)
+    
+    def list_agent_configs(self) -> List[Dict[str, Any]]:
+        """List all available agent configurations.
+        
+        Returns:
+            List[Dict[str, Any]]: List of agent configurations
+        """
+        configs = []
+        for agent_id, config in self.agent_configs.items():
+            config_info = {
+                'agent_id': agent_id,
+                'name': config.get('name', agent_id),
+                'description': config.get('description', ''),
+                'agent_type': config.get('agent_type', 'unknown'),
+                'capabilities': config.get('capabilities', []),
+                'is_created': agent_id in self.agents
+            }
+            configs.append(config_info)
+        
+        return configs
+    
+    def delete_agent_config(self, agent_id: str) -> bool:
+        """Delete agent configuration.
+        
+        Args:
+            agent_id: Unique identifier for the agent
+            
+        Returns:
+            bool: True if deleted successfully, False otherwise
+        """
+        try:
+            # Remove from in-memory configs
+            if agent_id in self.agent_configs:
+                del self.agent_configs[agent_id]
+            
+            # Remove from agents if created
+            if agent_id in self.agents:
+                del self.agents[agent_id]
+            
+            # Delete configuration file
+            agents_config_dir = Path("backend/app/config/agents")
+            config_file = agents_config_dir / f"{agent_id}.yaml"
+            if config_file.exists():
+                config_file.unlink()
+            
+            self.logger.info(f"Deleted agent configuration: {agent_id}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error deleting agent configuration {agent_id}: {e}")
+            return False
+
     def register_agent(self, agent: BaseAgent, agent_id: str) -> bool:
         """Register an agent with the registry.
         
