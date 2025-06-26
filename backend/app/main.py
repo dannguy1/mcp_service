@@ -473,7 +473,7 @@ async def get_logs(
         paginated_logs = transformed_logs[start_index:end_index]
         
         # Get unique programs from the data for filters
-        unique_programs = list(set(log["process"] for log in transformed_logs))
+        unique_programs = [p for p in set(log["process"] for log in transformed_logs) if p]
         unique_programs.sort()
         
         return {
