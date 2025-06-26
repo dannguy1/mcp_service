@@ -342,4 +342,40 @@ export interface AgentActionResponse {
   model_path?: string;
 }
 
+export interface EnhancedModel {
+  version: string;
+  path: string;
+  status: string;
+  created_at: string;
+  last_updated: string;
+  import_method: string;
+  metadata: {
+    model_info: {
+      version: string;
+      model_type: string;
+      created_at: string;
+      description: string;
+    };
+    training_info: {
+      n_samples: number;
+      n_features: number;
+      feature_names: string[];
+      training_date: string;
+    };
+    evaluation_info: {
+      basic_metrics: {
+        f1_score: number;
+        precision: number;
+        recall: number;
+        roc_auc: number;
+      };
+    };
+    deployment_info: {
+      status: string;
+      deployed_at: string;
+      deployed_by: string | null;
+    };
+  };
+}
+
 // End of types file - DatabaseConfig and DatabaseTestResult are exported above

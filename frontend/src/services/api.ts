@@ -26,7 +26,8 @@ import type {
   AgentModelRequest,
   AgentModelResponse,
   AvailableModel,
-  AgentActionResponse
+  AgentActionResponse,
+  EnhancedModel
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -337,7 +338,15 @@ export const endpoints = {
 
   getAvailableModels: () => {
     console.log("Fetching available models...");
-    return api.get<AvailableModel[]>('/agents/available-models').then(res => res.data);
+    return api.get<EnhancedModel[]>('/model-management/models').then(res => {
+      // Map enhanced models to AvailableModel format
+      return res.data.map(model => ({
+        name: model.metadata.model_info.description || model.version,
+        path: model.path,
+        size: 0, // Size not available in enhanced model response
+        modified: model.last_updated
+      }));
+    });
   },
 
   unregisterAgent: (agentId: string) => {
