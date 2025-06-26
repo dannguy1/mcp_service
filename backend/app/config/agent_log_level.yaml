@@ -1,0 +1,27 @@
+# Log Level Agent Configuration
+agent_id: "log_level_agent"
+name: "Log Level Monitor"
+description: "Monitors log levels and generates anomalies for error and critical severity logs"
+
+# Analysis settings
+analysis_interval: 60  # seconds between analysis cycles
+log_level_lookback_minutes: 5  # minutes to look back for logs
+
+# Target log levels to monitor (case insensitive)
+target_levels:
+  - "error"
+  - "critical"
+
+# Severity mapping for anomaly creation
+severity_mapping:
+  error: 4      # High severity
+  critical: 5   # Critical severity
+
+# Agent capabilities
+capabilities:
+  - "Error log level detection"
+  - "Critical log level detection"
+  - "Automatic anomaly generation for high severity logs"
+
+# No model required for this rule-based agent
+model_path: null 

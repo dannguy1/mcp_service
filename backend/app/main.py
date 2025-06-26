@@ -20,6 +20,7 @@ load_dotenv()
 # Import existing components
 from app.mcp_service.data_service import DataService
 from app.mcp_service.agents.wifi_agent import WiFiAgent
+from app.mcp_service.agents.log_level_agent import LogLevelAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor
 from app.mcp_service.components.model_manager import model_manager
 from app.mcp_service.components.agent_registry import agent_registry
@@ -50,6 +51,7 @@ redis_client = redis.Redis(
 # Initialize MCP Service components
 data_service = DataService(config=config)
 wifi_agent = WiFiAgent(config=config, data_service=data_service, model_manager=model_manager)
+log_level_agent = LogLevelAgent(config=config, data_service=data_service)
 resource_monitor = ResourceMonitor()
 status_manager = MCPStatusManager(redis_host=config.redis['host'], redis_port=config.redis['port'])
 
@@ -63,7 +65,7 @@ agent_registry.redis_client = redis_client
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan."""
-    global data_service, wifi_agent, resource_monitor, status_manager, analysis_task
+    global data_service, wifi_agent, log_level_agent, resource_monitor, status_manager, analysis_task
     
     # Startup
     try:
@@ -75,9 +77,13 @@ async def lifespan(app: FastAPI):
         # Initialize WiFi agent
         wifi_agent = WiFiAgent(config, data_service, model_manager)
         
+        # Initialize Log Level agent
+        log_level_agent = LogLevelAgent(config, data_service)
+        
         # Start services
         await data_service.start()
         await wifi_agent.start()
+        await log_level_agent.start()
         model_manager.start()
         status_manager.start_status_updates()
         
@@ -127,6 +133,8 @@ async def lifespan(app: FastAPI):
         # Stop services
         if wifi_agent:
             await wifi_agent.stop()
+        if log_level_agent:
+            await log_level_agent.stop()
         if data_service:
             await data_service.stop()
         if model_manager:
@@ -140,17 +148,28 @@ async def lifespan(app: FastAPI):
         raise
 
 async def run_analysis_cycles():
-    """Background task to run WiFi agent analysis cycles."""
+    """Background task to run agent analysis cycles."""
     try:
         while True:
+            # Run WiFi agent analysis cycle
             if wifi_agent and wifi_agent.is_running:
                 try:
                     await wifi_agent.run_analysis_cycle()
-                    logger.debug("Analysis cycle completed successfully")
+                    logger.debug("WiFi agent analysis cycle completed successfully")
                 except Exception as e:
-                    logger.error(f"Error in analysis cycle: {e}")
+                    logger.error(f"Error in WiFi agent analysis cycle: {e}")
             else:
                 logger.debug("WiFi agent not running, skipping analysis cycle")
+            
+            # Run Log Level agent analysis cycle
+            if log_level_agent and log_level_agent.is_running:
+                try:
+                    await log_level_agent.run_analysis_cycle()
+                    logger.debug("Log Level agent analysis cycle completed successfully")
+                except Exception as e:
+                    logger.error(f"Error in Log Level agent analysis cycle: {e}")
+            else:
+                logger.debug("Log Level agent not running, skipping analysis cycle")
             
             # Wait for next cycle (default 5 minutes)
             await asyncio.sleep(getattr(config, 'ANALYSIS_INTERVAL', 300))
@@ -232,6 +251,11 @@ async def health_check():
             
         if wifi_agent:
             services_healthy = services_healthy and wifi_agent.check_running()
+        else:
+            services_healthy = False
+            
+        if log_level_agent:
+            services_healthy = services_healthy and log_level_agent.is_running
         else:
             services_healthy = False
             
