@@ -124,14 +124,11 @@ main() {
     print_status "Stopping Backend..."
     stop_process_by_pid "Backend" "backend/backend.pid" 5000
     
-    print_status "Stopping MCP Service..."
-    stop_process_by_pid "MCP Service" "mcp_service.pid" 5555
-    
     print_status "Stopping Redis..."
     stop_redis
     
     # Clean up any remaining PID files
-    rm -f frontend/frontend.pid backend/backend.pid mcp_service.pid redis.pid
+    rm -f frontend/frontend.pid backend/backend.pid redis.pid
     
     print_success "All services stopped successfully!"
     
@@ -142,10 +139,6 @@ main() {
     
     if redis-cli ping >/dev/null 2>&1; then
         running_services+=("Redis")
-    fi
-    
-    if lsof -Pi :5555 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        running_services+=("MCP Service")
     fi
     
     if lsof -Pi :5000 -sTCP:LISTEN -t >/dev/null 2>&1; then

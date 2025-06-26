@@ -223,24 +223,6 @@ main() {
         fi
     fi
     
-    # Start MCP Service (if not skipped)
-    if [ "$SKIP_MCP" = false ]; then
-        print_status "Starting MCP Service..."
-        if [ "$BACKGROUND" = true ]; then
-            MCP_PID=$(start_service_background "MCP Service" "./scripts/start_mcp_service.sh" 5555 "mcp_service.pid" "mcp_service.log")
-            if [ $? -ne 0 ]; then
-                print_error "Failed to start MCP Service"
-                cleanup
-                exit 1
-            fi
-        else
-            ./scripts/start_mcp_service.sh &
-            MCP_PID=$!
-        fi
-    else
-        print_status "Skipping MCP Service startup"
-    fi
-    
     # Start Backend
     print_status "Starting Backend API..."
     if [ "$BACKGROUND" = true ]; then
@@ -294,15 +276,11 @@ main() {
     echo "  Redis:     http://localhost:6379"
     echo "  Backend:   http://localhost:5000/api/v1/docs"
     echo "  Frontend:  http://localhost:3000"
-    if [ "$SKIP_MCP" = false ]; then
-        echo "  MCP Service: Running in background"
-    fi
     echo
     echo "To stop all services, press Ctrl+C"
     echo "To view logs:"
     echo "  Backend:   tail -f backend.log"
     echo "  Frontend:  tail -f frontend.log"
-    echo "  MCP:       tail -f mcp_service.log"
     echo
     
     # Wait for all background processes if not in background mode
@@ -310,7 +288,7 @@ main() {
         wait
     else
         print_status "All services are running in background mode"
-        print_status "Use 'ps aux | grep -E \"(redis|mcp|backend|frontend)\"' to see running processes"
+        print_status "Use 'ps aux | grep -E \"(redis|backend|frontend)\"' to see running processes"
     fi
 }
 

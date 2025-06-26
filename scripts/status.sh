@@ -105,7 +105,6 @@ main() {
     
     # Check each service
     check_redis
-    check_process_by_pid "MCP Service" "mcp_service.pid" 5555 ""
     check_process_by_pid "Backend" "backend/backend.pid" 5000 "http://localhost:5000/api/v1/docs"
     check_process_by_pid "Frontend" "frontend/frontend.pid" 3000 "http://localhost:3000"
     
@@ -119,7 +118,6 @@ main() {
     echo
     echo "Individual services:"
     echo "  Redis:       ./scripts/start_redis.sh"
-    echo "  MCP:         ./scripts/start_mcp_service.sh"
     echo "  Backend:     ./scripts/start_backend.sh"
     echo "  Frontend:    ./scripts/start_frontend.sh"
 }
