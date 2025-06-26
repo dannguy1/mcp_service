@@ -8,7 +8,6 @@ import yaml
 import asyncio
 
 from ..agents.base_agent import BaseAgent
-from ..agents.wifi_agent import WiFiAgent
 from .model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
