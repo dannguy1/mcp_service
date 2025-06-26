@@ -11,6 +11,8 @@ import psutil
 from sqlalchemy import text
 import json
 from dotenv import load_dotenv
+import asyncio
+from contextlib import asynccontextmanager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -57,6 +59,108 @@ model_manager.set_redis_client(redis_client)
 # Set Redis client for agent registry
 agent_registry.redis_client = redis_client
 
+# Define lifespan function before app creation
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    global data_service, wifi_agent, resource_monitor, status_manager, analysis_task
+    
+    # Startup
+    try:
+        # Initialize services
+        data_service = DataService(config)
+        resource_monitor = ResourceMonitor()
+        status_manager = MCPStatusManager(redis_host=config.redis['host'], redis_port=config.redis['port'])
+        
+        # Initialize WiFi agent
+        wifi_agent = WiFiAgent(config, data_service, model_manager)
+        
+        # Start services
+        await data_service.start()
+        await wifi_agent.start()
+        model_manager.start()
+        status_manager.start_status_updates()
+        
+        # Start background analysis task
+        analysis_task = asyncio.create_task(run_analysis_cycles())
+        
+        logger.info("MCP Service components initialized successfully")
+        
+        # Initialize model manager for enhanced model management
+        from app.components.model_manager import ModelManager
+        from app.models.config import ModelConfig
+        
+        model_config = ModelConfig()
+        model_manager_instance = ModelManager(model_config)
+        
+        # Scan for new models
+        new_models = await model_manager_instance.scan_model_directory()
+        if new_models:
+            logger.info(f"Found {len(new_models)} new models during startup")
+        
+        # Load the most recent deployed model
+        models = await model_manager_instance.list_models()
+        deployed_models = [m for m in models if m['status'] == 'deployed']
+        
+        if deployed_models:
+            # Use 'created_at' field instead of 'imported_at'
+            latest_model = max(deployed_models, key=lambda x: x.get('created_at', ''))
+            await model_manager_instance.load_model_version(latest_model['version'])
+            logger.info(f"Loaded deployed model: {latest_model['version']}")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize MCP Service components: {e}", exc_info=True)
+        raise
+    
+    yield
+    
+    # Shutdown
+    try:
+        # Cancel background task
+        if analysis_task:
+            analysis_task.cancel()
+            try:
+                await analysis_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Stop services
+        if wifi_agent:
+            await wifi_agent.stop()
+        if data_service:
+            await data_service.stop()
+        if model_manager:
+            model_manager.stop()
+        if status_manager:
+            status_manager.stop_status_updates()
+        
+        logger.info("MCP Service components stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop MCP Service components: {e}", exc_info=True)
+        raise
+
+async def run_analysis_cycles():
+    """Background task to run WiFi agent analysis cycles."""
+    try:
+        while True:
+            if wifi_agent and wifi_agent.is_running:
+                try:
+                    await wifi_agent.run_analysis_cycle()
+                    logger.debug("Analysis cycle completed successfully")
+                except Exception as e:
+                    logger.error(f"Error in analysis cycle: {e}")
+            else:
+                logger.debug("WiFi agent not running, skipping analysis cycle")
+            
+            # Wait for next cycle (default 5 minutes)
+            await asyncio.sleep(getattr(config, 'ANALYSIS_INTERVAL', 300))
+    except asyncio.CancelledError:
+        logger.info("Analysis cycles task cancelled")
+        raise
+    except Exception as e:
+        logger.error(f"Error in analysis cycles task: {e}")
+        raise
+
 # Create FastAPI app
 app = FastAPI(
     title="MCP Service API",
@@ -64,7 +168,8 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/api/v1/docs",
     redoc_url="/api/v1/redoc",
-    openapi_url="/api/v1/openapi.json"
+    openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan
 )
 
 # Configure CORS
@@ -112,13 +217,28 @@ async def health_check():
         with get_db_connection() as conn:
             conn.execute(text('SELECT 1'))
         
-        # Check if services are running
-        services_healthy = all([
-            data_service.is_running(),
-            model_manager.is_running(),
-            wifi_agent.check_running(),
-            resource_monitor.is_running()
-        ])
+        # Check if services are running (handle uninitialized services)
+        services_healthy = True
+        
+        if data_service:
+            services_healthy = services_healthy and data_service.is_running()
+        else:
+            services_healthy = False
+            
+        if model_manager:
+            services_healthy = services_healthy and model_manager.is_running()
+        else:
+            services_healthy = False
+            
+        if wifi_agent:
+            services_healthy = services_healthy and wifi_agent.check_running()
+        else:
+            services_healthy = False
+            
+        if resource_monitor:
+            services_healthy = services_healthy and resource_monitor.is_running()
+        else:
+            services_healthy = False
         
         if not services_healthy:
             return JSONResponse(
@@ -245,61 +365,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"}
     )
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Initialize services on startup."""
-    try:
-        # Initialize MCP Service components
-        await data_service.start()
-        await wifi_agent.start()
-        # ResourceMonitor doesn't have start/stop methods
-        model_manager.start()
-        status_manager.start_status_updates()
-        logger.info("MCP Service components initialized successfully")
-        
-        # Initialize model manager for enhanced model management
-        from app.components.model_manager import ModelManager
-        from app.models.config import ModelConfig
-        
-        config = ModelConfig()
-        model_manager_instance = ModelManager(config)
-        
-        # Scan for new models
-        new_models = await model_manager_instance.scan_model_directory()
-        if new_models:
-            logger.info(f"Found {len(new_models)} new models during startup")
-        
-        # Load the most recent deployed model
-        models = await model_manager_instance.list_models()
-        deployed_models = [m for m in models if m['status'] == 'deployed']
-        
-        if deployed_models:
-            # Use 'created_at' field instead of 'imported_at'
-            latest_model = max(deployed_models, key=lambda x: x.get('created_at', ''))
-            await model_manager_instance.load_model_version(latest_model['version'])
-            logger.info(f"Loaded deployed model: {latest_model['version']}")
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize MCP Service components: {e}", exc_info=True)
-        raise
-
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup services on shutdown"""
-    try:
-        # Stop MCP Service components
-        await data_service.stop()
-        await wifi_agent.stop()
-        # ResourceMonitor doesn't have start/stop methods
-        model_manager.stop()
-        status_manager.stop_status_updates()
-        logger.info("MCP Service components stopped successfully")
-    except Exception as e:
-        logger.error(f"Failed to stop MCP Service components: {e}", exc_info=True)
-        raise
 
 # Logs endpoint
 @app.get("/api/v1/logs")
@@ -554,8 +619,8 @@ async def get_current_model():
         from app.components.model_manager import ModelManager
         from app.models.config import ModelConfig
         
-        config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_config = ModelConfig()
+        model_manager = ModelManager(model_config)
         current_model_info = model_manager.get_model_info()
         
         if not current_model_info:
@@ -572,8 +637,8 @@ async def load_model_version(version: str):
         from app.components.model_manager import ModelManager
         from app.models.config import ModelConfig
         
-        config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_config = ModelConfig()
+        model_manager = ModelManager(model_config)
         
         # Find model path
         models = await model_manager.list_models()
@@ -606,8 +671,8 @@ async def analyze_logs(logs: List[Dict[str, Any]]):
         from app.components.feature_extractor import FeatureExtractor
         import numpy as np
         
-        config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_config = ModelConfig()
+        model_manager = ModelManager(model_config)
         
         # Check if model is loaded
         if not model_manager.is_model_loaded():

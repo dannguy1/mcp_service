@@ -352,5 +352,16 @@ export const endpoints = {
   unregisterAgent: (agentId: string) => {
     console.log("Unregistering agent:", agentId);
     return api.delete<AgentActionResponse>(`/agents/${agentId}`).then(res => res.data);
+  },
+
+  // Agent Analysis Stats endpoints
+  getAnalysisOverview: () => {
+    console.log("Fetching analysis overview...");
+    return api.get('/agents/stats/overview').then(res => res.data);
+  },
+
+  getAgentStats: (agentId: string) => {
+    console.log("Fetching agent stats for:", agentId);
+    return api.get(`/agents/${agentId}/stats`).then(res => res.data);
   }
 };

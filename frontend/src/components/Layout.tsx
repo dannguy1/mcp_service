@@ -11,6 +11,7 @@ import {
   DesktopOutlined,
   LockOutlined,
   TeamOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 
 const Layout: React.FC = () => {
@@ -45,6 +46,11 @@ const Layout: React.FC = () => {
       path: '/agents',
       label: 'Agents',
       icon: <TeamOutlined />,
+    },
+    {
+      path: '/analysis-stats',
+      label: 'Analysis Stats',
+      icon: <BarChartOutlined />,
     },
     {
       path: '/server',

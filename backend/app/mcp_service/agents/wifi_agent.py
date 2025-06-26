@@ -153,6 +153,8 @@ class WiFiAgent(BaseAgent):
 
         try:
             self.status = 'analyzing'
+            cycle_start_time = datetime.now()
+            
             # Update status in Redis
             if self.model_manager:
                 self.model_manager._update_model_status(self.model_id, {
@@ -195,6 +197,28 @@ class WiFiAgent(BaseAgent):
                     features=anomaly['features']
                 )
 
+            # Calculate cycle statistics
+            cycle_duration = (datetime.now() - cycle_start_time).total_seconds()
+            
+            # Store analysis statistics
+            await self._store_analysis_stats({
+                'analysis_cycles': 1,
+                'logs_processed': len(logs),
+                'features_extracted': len(features) if isinstance(features, dict) else 1,
+                'anomalies_detected': len(anomalies),
+                'cycle_duration_seconds': cycle_duration,
+                'last_cycle_timestamp': datetime.now().isoformat(),
+                'feature_details': {
+                    'auth_failures': features.get('auth_failures', 0),
+                    'deauth_count': features.get('deauth_count', 0),
+                    'beacon_count': features.get('beacon_count', 0),
+                    'unique_mac_count': features.get('unique_mac_count', 0),
+                    'unique_ssid_count': features.get('unique_ssid_count', 0)
+                },
+                'anomaly_types': [anomaly['type'] for anomaly in anomalies],
+                'anomaly_severities': [anomaly['severity'] for anomaly in anomalies]
+            })
+
             self.status = 'active'
             # Update status in Redis
             if self.model_manager:
@@ -225,6 +249,70 @@ class WiFiAgent(BaseAgent):
                     'description': self.description
                 })
             raise
+
+    async def _store_analysis_stats(self, new_stats: Dict[str, Any]):
+        """Store analysis statistics in Redis with cumulative tracking."""
+        try:
+            if not self.model_manager or not self.model_manager.redis_client:
+                return
+            
+            # Get existing stats
+            stats_key = f"mcp:agent:{self.model_id}:analysis_stats"
+            existing_stats = self.model_manager.redis_client.get(stats_key)
+            
+            if existing_stats:
+                current_stats = json.loads(existing_stats)
+            else:
+                current_stats = {
+                    'analysis_cycles': 0,
+                    'logs_processed': 0,
+                    'features_extracted': 0,
+                    'anomalies_detected': 0,
+                    'total_cycle_duration': 0,
+                    'avg_cycle_duration': 0,
+                    'last_cycle_timestamp': None,
+                    'feature_totals': {
+                        'auth_failures': 0,
+                        'deauth_count': 0,
+                        'beacon_count': 0,
+                        'unique_mac_count': 0,
+                        'unique_ssid_count': 0
+                    },
+                    'anomaly_type_counts': {},
+                    'anomaly_severity_counts': {}
+                }
+            
+            # Update cumulative stats
+            current_stats['analysis_cycles'] += new_stats['analysis_cycles']
+            current_stats['logs_processed'] += new_stats['logs_processed']
+            current_stats['features_extracted'] += new_stats['features_extracted']
+            current_stats['anomalies_detected'] += new_stats['anomalies_detected']
+            current_stats['total_cycle_duration'] += new_stats['cycle_duration_seconds']
+            current_stats['avg_cycle_duration'] = current_stats['total_cycle_duration'] / current_stats['analysis_cycles']
+            current_stats['last_cycle_timestamp'] = new_stats['last_cycle_timestamp']
+            
+            # Update feature totals
+            for feature, value in new_stats['feature_details'].items():
+                if feature in current_stats['feature_totals']:
+                    current_stats['feature_totals'][feature] += value
+            
+            # Update anomaly type counts
+            for anomaly_type in new_stats['anomaly_types']:
+                current_stats['anomaly_type_counts'][anomaly_type] = current_stats['anomaly_type_counts'].get(anomaly_type, 0) + 1
+            
+            # Update anomaly severity counts
+            for severity in new_stats['anomaly_severities']:
+                current_stats['anomaly_severity_counts'][str(severity)] = current_stats['anomaly_severity_counts'].get(str(severity), 0) + 1
+            
+            # Store updated stats
+            self.model_manager.redis_client.set(
+                stats_key,
+                json.dumps(current_stats),
+                ex=86400  # Expire after 24 hours
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error storing analysis stats: {e}")
 
     def get_status(self) -> Dict[str, Any]:
         """Get the current status of the agent."""
