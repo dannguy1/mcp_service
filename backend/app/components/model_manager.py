@@ -27,7 +27,16 @@ class ModelManager:
         self.current_model_metadata = None
         self.feature_names = []
         self.model_loaded = False
-        self.models_directory = Path(self.config.storage.directory)
+        
+        # Resolve models directory path relative to project root
+        models_dir = self.config.storage.directory
+        if not Path(models_dir).is_absolute():
+            # Get the project root (assuming this is backend/app/components/)
+            project_root = Path(__file__).parent.parent.parent.parent
+            self.models_directory = project_root / models_dir
+        else:
+            self.models_directory = Path(models_dir)
+            
         self.model_registry_file = self.models_directory / "model_registry.json"
         
         # Ensure models directory exists

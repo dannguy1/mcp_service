@@ -1,15 +1,15 @@
 {
-  "model_version": "20250621_220609",
-  "deployment_timestamp": "2025-06-21T22:45:41.030560",
+  "model_version": "20250624_205530",
+  "deployment_timestamp": "2025-06-24T21:41:51.931042",
   "package_format_version": "1.0",
   "model_info": {
     "model_type": "default",
     "training_source": "export_data",
-    "training_id": "7c10f21c-2f63-4b22-81f5-8f0c6547f5bc",
-    "export_file": "exports/upload_20250621_220124_export_1b051c2b-06a0-4ee3-a0fe-05dd75349d57.json"
+    "training_id": "db6a3ff7-b70c-4416-a5d6-ecf33faf1362",
+    "export_file": "/home/wnc/mcp_training/exports/upload_20250624_205111_export_c040d84e-5e9f-4bed-9a74-c8352b99cdaa_20250623_142143.json"
   },
   "training_info": {
-    "training_samples": 32971,
+    "training_samples": 35915,
     "feature_names": [
       "hour_of_day",
       "day_of_week",
@@ -45,8 +45,8 @@
       "window_1hour_process_diversity"
     ],
     "feature_count": 32,
-    "export_file_size": 19943015,
-    "training_duration": 0.811535,
+    "export_file_size": 21799483,
+    "training_duration": 0.319146,
     "model_parameters": {
       "n_estimators": 100,
       "max_samples": "auto",
@@ -58,12 +58,12 @@
   },
   "evaluation_info": {
     "basic_metrics": {
-      "score_mean": 0.44747658827856,
-      "score_std": 0.07683804433272041,
-      "score_min": 0.3483055822808683,
-      "score_max": 0.6919560416805753,
-      "anomaly_ratio": 0.09966334051135847,
-      "threshold_value": 0.5560265328723301,
+      "score_mean": 0.4468769600503917,
+      "score_std": 0.07660276540786973,
+      "score_min": 0.348993300758957,
+      "score_max": 0.6733459125730712,
+      "anomaly_ratio": 0.10001392175971043,
+      "threshold_value": 0.5582929987266498,
       "accuracy": null,
       "precision": null,
       "recall": null,
@@ -76,7 +76,7 @@
   },
   "deployment_info": {
     "status": "deployed",
-    "deployed_at": "2025-06-21T22:45:41.012908",
+    "deployed_at": "2025-06-24T21:41:51.927105",
     "deployed_by": null
   },
   "files": {
@@ -88,20 +88,20 @@
     "requirements": "requirements.txt"
   },
   "file_integrity": {
-    "model.joblib": "3e28af8c2bb12038b4bf1d55f3e29f61e9f1452441edcd0dad9e8a1dce28658c",
-    "scaler.joblib": "772a7efb5c25f2921012e87b9fe50852c23bb6f9aeb7d003fb5b67da0ea54630",
-    "metadata.json": "bbc712e68379b824099b36469e8a4570add22f9efeef3d000c50419135dc8dc9"
+    "model.joblib": "4efbd314f6f2ca007bc1a74546a12454ec5745e59073127519689733d4631a96",
+    "scaler.joblib": "85fba9574077d116877e04a30832e4f318d63da576563013d0ac3e3b8f2ba27e",
+    "metadata.json": "489c2778dc5949e5d216b2e3019213b86d3213d326f49d91df5c6c559bc848c4"
   },
   "inference_config": {
-    "threshold": 0.5560265328723301,
-    "anomaly_ratio": 0.09966334051135847,
+    "threshold": 0.5582929987266498,
+    "anomaly_ratio": 0.10001392175971043,
     "score_percentile": 90,
     "batch_size": 1000,
     "timeout_seconds": 30
   },
   "model_artifacts": {
-    "model_size_bytes": 1263480,
+    "model_size_bytes": 1252760,
     "scaler_size_bytes": 2487,
-    "total_package_size": 0
+    "total_package_size": 334166
   }
 }

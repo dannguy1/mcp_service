@@ -7,7 +7,9 @@ import {
   Modal, 
   Form,
   Alert,
-  Spinner
+  Spinner,
+  OverlayTrigger,
+  Tooltip
 } from 'react-bootstrap';
 import { 
   FaPlay, 
@@ -194,30 +196,45 @@ const Agents: React.FC = () => {
                     </td>
                     <td>
                       <div className="d-flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline-primary"
-                          onClick={() => handleSetModel(agent)}
-                          disabled={isSettingModel}
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip>Assign Model</Tooltip>}
                         >
-                          <FaCog className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline-secondary"
-                          onClick={() => handleRestartAgent(agent)}
-                          disabled={isRestarting}
+                          <Button
+                            size="sm"
+                            variant="outline-primary"
+                            onClick={() => handleSetModel(agent)}
+                            disabled={isSettingModel}
+                          >
+                            <FaCog className="h-4 w-4" />
+                          </Button>
+                        </OverlayTrigger>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip>Restart Agent</Tooltip>}
                         >
-                          <FaSync className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline-danger"
-                          onClick={() => setShowDeleteModal(agent)}
-                          disabled={isUnregistering}
+                          <Button
+                            size="sm"
+                            variant="outline-secondary"
+                            onClick={() => handleRestartAgent(agent)}
+                            disabled={isRestarting}
+                          >
+                            <FaSync className="h-4 w-4" />
+                          </Button>
+                        </OverlayTrigger>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip>Unregister Agent</Tooltip>}
                         >
-                          <FaTrash className="h-4 w-4" />
-                        </Button>
+                          <Button
+                            size="sm"
+                            variant="outline-danger"
+                            onClick={() => setShowDeleteModal(agent)}
+                            disabled={isUnregistering}
+                          >
+                            <FaTrash className="h-4 w-4" />
+                          </Button>
+                        </OverlayTrigger>
                       </div>
                     </td>
                   </tr>

@@ -9,7 +9,7 @@ from app.config.config import Config
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/agents", tags=["Agent Management"])
+router = APIRouter(tags=["Agent Management"])
 
 class AgentModelRequest(BaseModel):
     model_path: str
@@ -31,7 +31,7 @@ class ModelInfo(BaseModel):
     size: int
     modified: str
 
-@router.get("/", response_model=List[AgentResponse])
+@router.get("", response_model=List[AgentResponse])
 async def list_agents():
     """List all registered agents with their status and model associations."""
     try:
@@ -40,6 +40,16 @@ async def list_agents():
     except Exception as e:
         logger.error(f"Error listing agents: {e}")
         raise HTTPException(status_code=500, detail="Failed to list agents")
+
+@router.get("/available-models", response_model=List[ModelInfo])
+async def get_available_models():
+    """Get list of available models that can be assigned to agents."""
+    try:
+        models = agent_registry.get_available_models()
+        return models
+    except Exception as e:
+        logger.error(f"Error getting available models: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get available models")
 
 @router.get("/{agent_id}", response_model=AgentResponse)
 async def get_agent(agent_id: str):
@@ -105,16 +115,6 @@ async def restart_agent(agent_id: str):
     except Exception as e:
         logger.error(f"Error restarting agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to restart agent")
-
-@router.get("/available-models", response_model=List[ModelInfo])
-async def get_available_models():
-    """Get list of available models that can be assigned to agents."""
-    try:
-        models = agent_registry.get_available_models()
-        return models
-    except Exception as e:
-        logger.error(f"Error getting available models: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get available models")
 
 @router.delete("/{agent_id}")
 async def unregister_agent(agent_id: str):

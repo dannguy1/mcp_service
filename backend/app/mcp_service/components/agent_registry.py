@@ -147,11 +147,19 @@ class AgentRegistry:
             # Get additional status from Redis if available
             if self.redis_client:
                 try:
-                    key = f"mcp:agent:{agent_id}:status"
-                    status_data = self.redis_client.get(key)
-                    if status_data:
-                        redis_status = json.loads(status_data)
-                        agent_info.update(redis_status)
+                    # Check model status first (what WiFi agent updates)
+                    model_key = f"mcp:model:{agent_id}:status"
+                    model_status_data = self.redis_client.get(model_key)
+                    if model_status_data:
+                        model_status = json.loads(model_status_data)
+                        agent_info.update(model_status)
+                    else:
+                        # Fallback to agent status
+                        agent_key = f"mcp:agent:{agent_id}:status"
+                        agent_status_data = self.redis_client.get(agent_key)
+                        if agent_status_data:
+                            agent_status = json.loads(agent_status_data)
+                            agent_info.update(agent_status)
                 except Exception as e:
                     self.logger.warning(f"Error getting Redis status for {agent_id}: {e}")
             
@@ -232,8 +240,8 @@ class AgentRegistry:
             
             agent = self.agents[agent_id]
             
-            # Stop the agent
-            await agent.stop()
+            # Stop the agent without unregistering it
+            await agent.stop(unregister=False)
             
             # Start the agent
             await agent.start()
@@ -252,21 +260,54 @@ class AgentRegistry:
             List[Dict[str, Any]]: List of available models
         """
         try:
-            models_dir = Path("models")
-            if not models_dir.exists():
-                return []
+            # Use the enhanced model management system
+            from app.components.model_manager import ModelManager
+            from app.models.config import ModelConfig
             
-            models = []
-            for model_file in models_dir.glob("*.joblib"):
+            config = ModelConfig()
+            model_manager_instance = ModelManager(config)
+            
+            # Get models from the enhanced system using asyncio
+            import asyncio
+            try:
+                # Try to get the current event loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is running, we need to create a new one
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    models = loop.run_until_complete(model_manager_instance.list_models())
+                    loop.close()
+                else:
+                    # Use the existing loop
+                    models = loop.run_until_complete(model_manager_instance.list_models())
+            except RuntimeError:
+                # No event loop, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    models = loop.run_until_complete(model_manager_instance.list_models())
+                finally:
+                    loop.close()
+            
+            # Transform to the expected format
+            available_models = []
+            for model in models:
+                # Get the model name from metadata
+                metadata = model.get('metadata', {})
+                model_info = metadata.get('model_info', {})
+                name = model_info.get('description', model.get('version', 'Unknown'))
+                
                 model_info = {
-                    'name': model_file.stem,
-                    'path': str(model_file),
-                    'size': model_file.stat().st_size,
-                    'modified': datetime.fromtimestamp(model_file.stat().st_mtime).isoformat()
+                    'name': name,
+                    'path': model.get('path', ''),
+                    'size': 0,  # Size not available in enhanced system
+                    'modified': model.get('last_updated', model.get('created_at', ''))
                 }
-                models.append(model_info)
+                available_models.append(model_info)
             
-            return models
+            self.logger.info(f"Found {len(available_models)} available models")
+            return available_models
             
         except Exception as e:
             self.logger.error(f"Error getting available models: {e}")

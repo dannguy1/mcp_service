@@ -27,7 +27,10 @@ class TrainingConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     """Model storage configuration."""
-    directory: str = Field(default="models", description="Directory to save models")
+    directory: str = Field(
+        default_factory=lambda: os.getenv("MODELS_DIRECTORY", "models"), 
+        description="Directory to save models"
+    )
     version_format: str = Field(default="%Y%m%d_%H%M%S", description="Version format string")
     keep_last_n_versions: int = Field(default=5, description="Number of versions to keep")
     backup_enabled: bool = Field(default=True, description="Enable model backup")

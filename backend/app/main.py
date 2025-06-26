@@ -92,7 +92,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Include routers
 app.include_router(export_router, prefix="/api/v1")
 app.include_router(model_management_router, prefix="/api/v1/model-management")
-app.include_router(agent_management_router)
+app.include_router(agent_management_router, prefix="/api/v1/agents")
 
 # Root endpoint
 @app.get("/")

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form, Row, Col } from 'react-bootstrap';
+import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle, FaUpload, FaChartLine, FaHistory } from 'react-icons/fa';
 import { endpoints } from '../services/api';
 import type { Model, ModelValidationSummary, ModelPerformanceMetrics, ModelTransferHistory } from '../services/types';
@@ -255,43 +255,68 @@ const Models: React.FC = () => {
                   <td>{new Date(model.created_at).toLocaleDateString()}</td>
                   <td>
                     <div className="d-flex gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline-info"
-                        onClick={() => handleInfo(model.version)}
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>View Model Info</Tooltip>}
                       >
-                        <FaInfoCircle />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline-success"
-                        onClick={() => handleDeploy(model.version)}
-                        disabled={model.status === 'deployed'}
+                        <Button
+                          size="sm"
+                          variant="outline-info"
+                          onClick={() => handleInfo(model.version)}
+                        >
+                          <FaInfoCircle />
+                        </Button>
+                      </OverlayTrigger>
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Deploy Model</Tooltip>}
                       >
-                        Deploy
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline-warning"
-                        onClick={() => handleRollback(model.version)}
-                        disabled={model.status !== 'deployed'}
+                        <Button
+                          size="sm"
+                          variant="outline-success"
+                          onClick={() => handleDeploy(model.version)}
+                          disabled={model.status === 'deployed'}
+                        >
+                          Deploy
+                        </Button>
+                      </OverlayTrigger>
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Rollback to This Model</Tooltip>}
                       >
-                        Rollback
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline-primary"
-                        onClick={() => handleValidate(model.version)}
+                        <Button
+                          size="sm"
+                          variant="outline-warning"
+                          onClick={() => handleRollback(model.version)}
+                          disabled={model.status !== 'deployed'}
+                        >
+                          Rollback
+                        </Button>
+                      </OverlayTrigger>
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Validate Model</Tooltip>}
                       >
-                        Validate
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline-danger"
-                        onClick={() => setShowDeleteModal(model.version)}
+                        <Button
+                          size="sm"
+                          variant="outline-primary"
+                          onClick={() => handleValidate(model.version)}
+                        >
+                          Validate
+                        </Button>
+                      </OverlayTrigger>
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Delete Model</Tooltip>}
                       >
-                        <FaTrash />
-                      </Button>
+                        <Button
+                          size="sm"
+                          variant="outline-danger"
+                          onClick={() => setShowDeleteModal(model.version)}
+                        >
+                          <FaTrash />
+                        </Button>
+                      </OverlayTrigger>
                     </div>
                   </td>
                 </tr>

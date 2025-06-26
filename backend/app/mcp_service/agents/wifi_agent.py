@@ -98,8 +98,12 @@ class WiFiAgent(BaseAgent):
                 })
             raise
 
-    async def stop(self):
-        """Stop the WiFi agent."""
+    async def stop(self, unregister=True):
+        """Stop the WiFi agent.
+        
+        Args:
+            unregister: Whether to unregister the agent from the registry
+        """
         try:
             self.logger.info("Stopping WiFi agent...")
             
@@ -108,8 +112,9 @@ class WiFiAgent(BaseAgent):
             self.status = 'inactive'
             self.last_run = datetime.now()
             
-            # Unregister from AgentRegistry
-            agent_registry.unregister_agent(self.model_id)
+            # Unregister from AgentRegistry only if requested
+            if unregister:
+                agent_registry.unregister_agent(self.model_id)
             
             # Update model status in ModelManager
             if self.model_manager:
