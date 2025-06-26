@@ -306,4 +306,40 @@ export interface DatabaseTestResult {
   };
 }
 
+// Agent Management Types
+export interface Agent {
+  id: string;
+  name: string;
+  status: string;
+  is_running: boolean;
+  last_run: string | null;
+  capabilities: string[];
+  description: string;
+  model_path: string | null;
+  config: Record<string, any>;
+  model_updated_at?: string;
+  updated_at?: string;
+}
+
+export interface AgentModelRequest {
+  model_path: string;
+}
+
+export interface AgentModelResponse {
+  agent_id: string;
+  model_path: string;
+}
+
+export interface AvailableModel {
+  name: string;
+  path: string;
+  size: number;
+  modified: string;
+}
+
+export interface AgentActionResponse {
+  message: string;
+  model_path?: string;
+}
+
 // End of types file - DatabaseConfig and DatabaseTestResult are exported above

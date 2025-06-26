@@ -6,6 +6,7 @@ import Logs from './pages/Logs';
 import Anomalies from './pages/Anomalies';
 import Models from './pages/Models';
 import EnhancedModels from './pages/EnhancedModels';
+import Agents from './pages/Agents';
 import ServerStatus from './pages/ServerStatus';
 import Settings from './pages/Settings';
 import ExportPage from './pages/ExportPage';
@@ -20,6 +21,7 @@ const AppRoutes: React.FC = () => {
         <Route path="anomalies" element={<Anomalies />} />
         <Route path="models" element={<Models />} />
         <Route path="enhanced-models" element={<EnhancedModels />} />
+        <Route path="agents" element={<Agents />} />
         <Route path="server" element={<ServerStatus />} />
         <Route path="settings" element={<Settings />} />
         <Route path="export" element={<ExportPage />} />

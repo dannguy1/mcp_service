@@ -8,6 +8,7 @@ from .base_agent import BaseAgent
 from ..components.feature_extractor import FeatureExtractor
 from ..components.model_manager import model_manager as global_model_manager
 from ..components.anomaly_classifier import AnomalyClassifier
+from ..components.agent_registry import agent_registry
 
 class WiFiAgent(BaseAgent):
     def __init__(self, config, data_service, model_manager=None):
@@ -59,6 +60,10 @@ class WiFiAgent(BaseAgent):
             if not self.model_manager.register_model(self, self.model_id):
                 raise Exception("Failed to register model")
             
+            # Register with AgentRegistry
+            if not agent_registry.register_agent(self, self.model_id):
+                self.logger.warning("Failed to register with agent registry")
+            
             # Set running state
             self.is_running = True
             self.status = 'active'
@@ -102,6 +107,9 @@ class WiFiAgent(BaseAgent):
             self.is_running = False
             self.status = 'inactive'
             self.last_run = datetime.now()
+            
+            # Unregister from AgentRegistry
+            agent_registry.unregister_agent(self.model_id)
             
             # Update model status in ModelManager
             if self.model_manager:

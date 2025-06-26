@@ -20,6 +20,7 @@ from app.mcp_service.data_service import DataService
 from app.mcp_service.agents.wifi_agent import WiFiAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor
 from app.mcp_service.components.model_manager import model_manager
+from app.mcp_service.components.agent_registry import agent_registry
 from app.mcp_service.status_manager import MCPStatusManager
 from app.config.config import config
 from app.db import get_db_connection
@@ -28,6 +29,7 @@ from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 # Import routers
 from app.api.endpoints.export import router as export_router
 from app.api.endpoints.model_management import router as model_management_router
+from app.api.endpoints.agent_management import router as agent_management_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +53,9 @@ status_manager = MCPStatusManager(redis_host=config.redis['host'], redis_port=co
 
 # Set Redis client for model manager
 model_manager.set_redis_client(redis_client)
+
+# Set Redis client for agent registry
+agent_registry.redis_client = redis_client
 
 # Create FastAPI app
 app = FastAPI(
@@ -87,6 +92,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Include routers
 app.include_router(export_router, prefix="/api/v1")
 app.include_router(model_management_router, prefix="/api/v1/model-management")
+app.include_router(agent_management_router)
 
 # Root endpoint
 @app.get("/")

@@ -21,7 +21,12 @@ import type {
   ModelPerformanceReport,
   LogEntry,
   DatabaseConfig,
-  DatabaseTestResult
+  DatabaseTestResult,
+  Agent,
+  AgentModelRequest,
+  AgentModelResponse,
+  AvailableModel,
+  AgentActionResponse
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -209,7 +214,7 @@ export const endpoints = {
 
   validateModelCompatibility: (version: string, targetFeatures: string[]) => {
     console.log("Validating model compatibility for:", version);
-    return api.post<ModelCompatibilityResult>(`/model-management/${version}/validate-compatibility`, targetFeatures).then(res => res.data);
+    return api.post<ModelCompatibilityResult>(`/model-management/${version}/validate-compatibility`, { target_features: targetFeatures }).then(res => res.data);
   },
 
   generateValidationReport: (version: string) => {
@@ -218,14 +223,14 @@ export const endpoints = {
   },
 
   // Cleanup operations
-  cleanupTransferHistory: (daysToKeep: number = 30) => {
-    console.log("Cleaning up transfer history, keeping days:", daysToKeep);
-    return api.delete(`/model-management/transfer-history?days_to_keep=${daysToKeep}`).then(res => res.data);
+  cleanupTransferHistory: () => {
+    console.log("Cleaning up transfer history...");
+    return api.delete('/model-management/transfer-history').then(res => res.data);
   },
 
-  cleanupPerformanceMetrics: (daysToKeep: number = 30) => {
-    console.log("Cleaning up performance metrics, keeping days:", daysToKeep);
-    return api.delete(`/model-management/performance/cleanup?days_to_keep=${daysToKeep}`).then(res => res.data);
+  cleanupPerformanceMetrics: () => {
+    console.log("Cleaning up performance metrics...");
+    return api.delete('/model-management/performance/cleanup').then(res => res.data);
   },
 
   // Training service endpoints
@@ -235,13 +240,13 @@ export const endpoints = {
   },
 
   importLatestModel: (validate: boolean = true) => {
-    console.log("Importing latest model, validate:", validate);
-    return api.post(`/model-management/import-latest?validate=${validate}`).then(res => res.data);
+    console.log("Importing latest model...");
+    return api.post<ModelImportResult>('/model-management/import-latest', { validate }).then(res => res.data);
   },
 
-  importModelFromTrainingService: (modelPath: string, validate: boolean = true) => {
-    console.log("Importing model from training service:", modelPath);
-    return api.post(`/model-management/import/${encodeURIComponent(modelPath)}?validate=${validate}`).then(res => res.data);
+  importModel: (modelPath: string, validate: boolean = true) => {
+    console.log("Importing model:", modelPath);
+    return api.post<ModelImportResult>(`/model-management/import/${modelPath}`, { validate }).then(res => res.data);
   },
 
   validateTrainingServiceConnection: () => {
@@ -303,4 +308,40 @@ export const endpoints = {
     console.log("Testing database connection:", config);
     return api.post('/settings/database/test', config).then(res => res.data);
   },
+
+  // Agent Management endpoints
+  listAgents: () => {
+    console.log("Fetching agents...");
+    return api.get<Agent[]>('/agents').then(res => res.data);
+  },
+
+  getAgent: (agentId: string) => {
+    console.log("Fetching agent:", agentId);
+    return api.get<Agent>(`/agents/${agentId}`).then(res => res.data);
+  },
+
+  setAgentModel: (agentId: string, modelPath: string) => {
+    console.log("Setting model for agent:", agentId, "to:", modelPath);
+    return api.post<AgentActionResponse>(`/agents/${agentId}/set-model`, { model_path: modelPath }).then(res => res.data);
+  },
+
+  getAgentModel: (agentId: string) => {
+    console.log("Getting model for agent:", agentId);
+    return api.get<AgentModelResponse>(`/agents/${agentId}/model`).then(res => res.data);
+  },
+
+  restartAgent: (agentId: string) => {
+    console.log("Restarting agent:", agentId);
+    return api.post<AgentActionResponse>(`/agents/${agentId}/restart`).then(res => res.data);
+  },
+
+  getAvailableModels: () => {
+    console.log("Fetching available models...");
+    return api.get<AvailableModel[]>('/agents/available-models').then(res => res.data);
+  },
+
+  unregisterAgent: (agentId: string) => {
+    console.log("Unregistering agent:", agentId);
+    return api.delete<AgentActionResponse>(`/agents/${agentId}`).then(res => res.data);
+  }
 };

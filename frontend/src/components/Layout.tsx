@@ -10,6 +10,7 @@ import {
   RobotOutlined,
   DesktopOutlined,
   LockOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 
 const Layout: React.FC = () => {
@@ -39,6 +40,11 @@ const Layout: React.FC = () => {
       path: '/models',
       label: 'Models',
       icon: <RobotOutlined />,
+    },
+    {
+      path: '/agents',
+      label: 'Agents',
+      icon: <TeamOutlined />,
     },
     {
       path: '/server',
