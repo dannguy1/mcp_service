@@ -409,8 +409,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def get_logs(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
-    level: Optional[str] = Query(None, description="Log level filter"),
-    program: Optional[str] = Query(None, description="Program filter"),
+    level: Optional[str] = Query(None, description="Log level filter (comma-separated for multiple)"),
+    program: Optional[str] = Query(None, description="Program filter (comma-separated for multiple)"),
     page: int = Query(1, description="Page number"),
     per_page: int = Query(25, description="Number of logs per page")
 ):
@@ -434,10 +434,10 @@ async def get_logs(
                 logger.error(f"Invalid end date format: {e}")
                 raise HTTPException(status_code=400, detail="Invalid end date format")
             
-        # Set programs - if specific program requested, use it; otherwise get all logs
+        # Handle program filter - support multiple programs
         programs = None
         if program:
-            programs = [program]
+            programs = [p.strip() for p in program.split(',') if p.strip()]
             
         # Get logs from the real database
         logs = await data_service.get_logs_by_program(start_datetime, end_datetime, programs)
@@ -462,9 +462,10 @@ async def get_logs(
             }
             transformed_logs.append(transformed_log)
         
-        # Apply level filter if provided
+        # Apply level filter if provided - support multiple levels
         if level:
-            transformed_logs = [log for log in transformed_logs if log["level"] == level.upper()]
+            levels = [l.strip().lower() for l in level.split(',') if l.strip()]
+            transformed_logs = [log for log in transformed_logs if log["level"].lower() in levels]
             
         # Apply pagination
         total_logs = len(transformed_logs)

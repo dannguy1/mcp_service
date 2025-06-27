@@ -67,6 +67,25 @@ const Logs: React.FC = () => {
     setPagination(prev => ({ ...prev, currentPage: page }));
   };
 
+  const clearFilters = () => {
+    setFilters({
+      startDate: '',
+      endDate: '',
+      severity: [],
+      programs: [],
+      search: ''
+    });
+    setPagination(prev => ({ ...prev, currentPage: 1 }));
+  };
+
+  // Count active filters
+  const activeFiltersCount = 
+    filters.severity.length + 
+    filters.programs.length + 
+    (filters.startDate ? 1 : 0) + 
+    (filters.endDate ? 1 : 0) + 
+    (filters.search ? 1 : 0);
+
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '200px' }}>
@@ -115,9 +134,19 @@ const Logs: React.FC = () => {
       </div>
 
       <Card className="mb-4">
-        <Card.Header>
-          <FaFilter className="me-2" />
-          Filters
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <div>
+            <FaFilter className="me-2" />
+            Filters
+          </div>
+          <Button 
+            variant="outline-secondary" 
+            size="sm" 
+            onClick={clearFilters}
+            disabled={activeFiltersCount === 0}
+          >
+            Clear Filters ({activeFiltersCount})
+          </Button>
         </Card.Header>
         <Card.Body>
           <Form>
