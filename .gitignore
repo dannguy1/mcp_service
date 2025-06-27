@@ -59,6 +59,13 @@ models/*.pth
 # System
 .DS_Store
 Thumbs.db 
+
+# Protection against nested backend directories (prevents accidental commits)
+backend/backend/
+backend/backend/backend/
+**/backend/backend/
+**/backend/backend/backend/
+
 # Python
 __pycache__/
 *.py[cod]

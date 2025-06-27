@@ -3,7 +3,7 @@ import asyncpg
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import redis.asyncio as redis
-from config import config
+from app.config.config import config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -45,15 +45,15 @@ class DataService:
         """Connect to database and Redis."""
         if self.pool is None:
             self.pool = await asyncpg.create_pool(
-                dsn=config.DATABASE_URL,
+                dsn=config.database_url,
                 min_size=5,
                 max_size=20
             )
         
         if self.redis is None:
             self.redis = redis.Redis(
-                host=config.REDIS_HOST,
-                port=config.REDIS_PORT,
+                host=config.redis['host'],
+                port=config.redis['port'],
                 db=0,
                 decode_responses=True
             )

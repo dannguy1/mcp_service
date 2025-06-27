@@ -3,6 +3,20 @@
 ## Overview
 This backend uses a single `.env` file for all configuration. Both the backend Python code and the shell scripts read from this file, ensuring a single source of truth for all environment variables.
 
+## Directory Structure
+The backend follows a specific directory structure that should be maintained:
+```
+backend/
+├── app/           # Main application code
+├── config/        # Configuration files
+├── models/        # Model storage (created automatically)
+├── tests/         # Test files
+├── venv/          # Virtual environment
+└── .env           # Environment configuration
+```
+
+**Important**: Avoid creating nested `backend/backend/` directories. The application includes validation to detect and warn about such structures.
+
 ## How Environment Variables Are Loaded
 - **Python code**: Uses [`python-dotenv`](https://pypi.org/project/python-dotenv/) to load variables from `.env` automatically.
 - **Shell scripts**: The `start_backend.sh` script sources the `.env` file so all variables are available to subprocesses (like `uvicorn`).

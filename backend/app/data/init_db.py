@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncpg
 import aiosqlite
 import os
-from config import Config
+from app.config.config import config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -70,7 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_alerts_device_id ON alerts(device_id);
 CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
 """
 
-async def init_db(config: Config) -> None:
+async def init_db() -> None:
     """Initialize database schema.
     
     Note: This service only reads from the log_entries table which is
@@ -80,11 +80,11 @@ async def init_db(config: Config) -> None:
     try:
         # Connect to PostgreSQL (read-only)
         conn = await asyncpg.connect(
-            host=config.db.host,
-            port=config.db.port,
-            user=config.db.user,
-            password=config.db.password,
-            database=config.db.database
+            host=config.db['host'],
+            port=config.db['port'],
+            user=config.db['user'],
+            password=config.db['password'],
+            database=config.db['database']
         )
         
         # Verify log_entries table exists
@@ -92,8 +92,8 @@ async def init_db(config: Config) -> None:
         await conn.close()
         
         # Initialize SQLite database
-        os.makedirs(os.path.dirname(config.sqlite_db_path), exist_ok=True)
-        async with aiosqlite.connect(config.sqlite_db_path) as db:
+        os.makedirs(os.path.dirname(config.sqlite['db_path']), exist_ok=True)
+        async with aiosqlite.connect(config.sqlite['db_path']) as db:
             await db.execute('''
                 CREATE TABLE IF NOT EXISTS mcp_anomalies (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

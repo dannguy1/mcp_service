@@ -31,16 +31,57 @@ class ModelManager:
         # Resolve models directory path relative to project root
         models_dir = self.config.storage.directory
         if not Path(models_dir).is_absolute():
-            # Get the project root (assuming this is backend/app/components/)
-            project_root = Path(__file__).parent.parent.parent.parent
+            # Get the project root more reliably
+            # Start from current file location and navigate to backend root
+            current_file = Path(__file__)
+            
+            # Navigate from backend/app/components/ to backend/
+            project_root = current_file.parent.parent.parent  # backend/
+            
+            # Validate we're in the correct location by checking for expected directories
+            if not (project_root / "app").exists() or not (project_root / "config").exists():
+                # Fallback: try to find backend directory from current working directory
+                cwd = Path.cwd()
+                
+                # Check if we're already in the backend directory
+                if (cwd / "app").exists() and (cwd / "config").exists():
+                    project_root = cwd
+                # Check if we're in the project root and need to go to backend/
+                elif (cwd / "backend" / "app").exists() and (cwd / "backend" / "config").exists():
+                    project_root = cwd / "backend"
+                else:
+                    # Last resort: use current working directory
+                    project_root = cwd
+                    logger.warning(f"Could not reliably determine project root, using current directory: {project_root}")
+            
+            # Final validation to prevent nested directories
+            if "backend/backend" in str(project_root):
+                logger.error(f"Detected nested backend path: {project_root}")
+                # Try to find the correct backend directory
+                path_parts = project_root.parts
+                backend_indices = [i for i, part in enumerate(path_parts) if part == "backend"]
+                if len(backend_indices) > 1:
+                    # Use the first backend directory found
+                    correct_backend_index = backend_indices[0]
+                    project_root = Path(*path_parts[:correct_backend_index + 1])
+                    logger.info(f"Corrected project root to: {project_root}")
+            
             self.models_directory = project_root / models_dir
         else:
             self.models_directory = Path(models_dir)
             
         self.model_registry_file = self.models_directory / "model_registry.json"
         
-        # Ensure models directory exists
-        self.models_directory.mkdir(parents=True, exist_ok=True)
+        # Ensure models directory exists with better error handling
+        try:
+            self.models_directory.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Models directory initialized at: {self.models_directory}")
+            
+            # Validate directory structure to prevent nested issues
+            self._validate_directory_structure()
+        except Exception as e:
+            logger.error(f"Failed to create models directory {self.models_directory}: {e}")
+            raise
         
     async def import_model_from_training_service(self, model_path: str, 
                                                validate: bool = True) -> Dict[str, Any]:
@@ -570,3 +611,64 @@ class ModelManager:
     def is_model_loaded(self) -> bool:
         """Check if a model is currently loaded."""
         return self.model_loaded 
+
+    def _validate_directory_structure(self):
+        """Validate directory structure to prevent nested directory issues."""
+        try:
+            # Check if we're in a nested backend directory
+            current_path = self.models_directory
+            path_parts = current_path.parts
+            
+            # Look for repeated 'backend' in path
+            backend_count = path_parts.count('backend')
+            if backend_count > 1:
+                logger.error(f"CRITICAL: Detected nested backend directory structure: {current_path}")
+                logger.error(f"Found {backend_count} 'backend' directories in path")
+                
+                # Check if there are nested models directories
+                models_count = path_parts.count('models')
+                if models_count > 1:
+                    logger.error(f"CRITICAL: Detected nested models directories: {current_path}")
+                    logger.error("This indicates a serious path resolution issue")
+                
+                # Log the expected correct path
+                expected_path = Path(__file__).parent.parent.parent / "models"
+                logger.error(f"Expected models directory should be: {expected_path}")
+                
+                # Try to fix the path automatically
+                backend_indices = [i for i, part in enumerate(path_parts) if part == "backend"]
+                if len(backend_indices) > 1:
+                    # Use the first backend directory found
+                    correct_backend_index = backend_indices[0]
+                    corrected_path = Path(*path_parts[:correct_backend_index + 1]) / "models"
+                    logger.error(f"CRITICAL: Path should be corrected to: {corrected_path}")
+                    
+                    # Attempt to fix the path
+                    try:
+                        # Remove the incorrect directory
+                        if current_path.exists():
+                            import shutil
+                            shutil.rmtree(current_path)
+                            logger.info(f"Removed incorrect nested directory: {current_path}")
+                        
+                        # Set the correct path
+                        self.models_directory = corrected_path
+                        self.model_registry_file = self.models_directory / "model_registry.json"
+                        
+                        # Create the correct directory
+                        self.models_directory.mkdir(parents=True, exist_ok=True)
+                        logger.info(f"Created correct models directory at: {self.models_directory}")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to fix nested directory: {e}")
+                        raise RuntimeError(f"Cannot continue with nested backend directory: {current_path}")
+            
+            # Check if models directory is in the expected location
+            expected_models_dir = Path(__file__).parent.parent.parent / "models"
+            if self.models_directory != expected_models_dir:
+                logger.warning(f"Models directory location: {self.models_directory}")
+                logger.warning(f"Expected location: {expected_models_dir}")
+                
+        except Exception as e:
+            logger.error(f"Error during directory structure validation: {e}")
+            raise 

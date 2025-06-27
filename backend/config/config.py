@@ -35,9 +35,6 @@ class Config:
     base_dir = Path(__file__).parent.parent
     model_dir = os.path.join(base_dir, 'models')
     
-    # Create model directory if it doesn't exist
-    os.makedirs(model_dir, exist_ok=True)
-    
     # API configuration
     api_prefix = '/api/ui'
     api_host = os.getenv('API_HOST', '0.0.0.0')
