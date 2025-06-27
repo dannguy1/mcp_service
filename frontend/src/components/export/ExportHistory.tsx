@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Tag, Space, Button, Typography, Tooltip } from 'antd';
-import { DownloadOutlined, DeleteOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { DownloadOutlined, DeleteOutlined, ReloadOutlined, EyeOutlined, RobotOutlined } from '@ant-design/icons';
 import { useExport } from '../../hooks/useExport';
+import { useAgents } from '../../hooks/useAgents';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
 
+// Use the interface that matches what the backend actually returns
 interface ExportRecord {
   export_id: string;
   created_at: string | null;
@@ -27,6 +29,7 @@ interface ExportHistoryProps {
 
 const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
   const { listExports, deleteExport, downloadExport } = useExport();
+  const { agents } = useAgents();
   const [exports, setExports] = useState<ExportRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -82,6 +85,30 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
     onExportSelect?.(exportId);
   };
 
+  // Helper function to get agent name by process filters
+  const getTargetAgent = (record: ExportRecord) => {
+    const config = record.config || {};
+    const processes = config.processes || [];
+    
+    if (!processes || processes.length === 0) {
+      return null;
+    }
+
+    // Find agent that matches the process filters
+    const matchingAgent = agents.find(agent => {
+      if (!agent.process_filters || agent.process_filters.length === 0) {
+        return false;
+      }
+      
+      // Check if all agent process filters are in the export processes
+      return agent.process_filters.every(filter => 
+        processes.some((p: string) => p.trim() === filter)
+      );
+    });
+
+    return matchingAgent;
+  };
+
   const columns = [
     {
       title: 'Export ID',
@@ -92,6 +119,26 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
           <Text copyable>{id.substring(0, 8)}...</Text>
         </Tooltip>
       )
+    },
+    {
+      title: 'Target Agent',
+      key: 'target_agent',
+      render: (record: ExportRecord) => {
+        const targetAgent = getTargetAgent(record);
+        
+        if (targetAgent) {
+          return (
+            <Space>
+              <RobotOutlined style={{ color: '#1890ff' }} />
+              <Tooltip title={`Process filters: ${targetAgent.process_filters.join(', ')}`}>
+                <Text strong>{targetAgent.name}</Text>
+              </Tooltip>
+            </Space>
+          );
+        }
+        
+        return <Text type="secondary">General export</Text>;
+      }
     },
     {
       title: 'Date Range',
@@ -124,7 +171,7 @@ const ExportHistory: React.FC<ExportHistoryProps> = ({ onExportSelect }) => {
         
         return (
           <Space>
-            {dataTypes.map(type => (
+            {dataTypes.map((type: string) => (
               <Tag key={type} color="blue">{type}</Tag>
             ))}
           </Space>

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { DatePicker } from 'antd';
-import { Button, Card, Form, Select, Switch, InputNumber, Space, message, Input } from 'antd';
+import { Button, Card, Form, Select, Switch, InputNumber, Space, message, Input, Alert } from 'antd';
 import { ExportOutlined } from '@ant-design/icons';
 import { useExport } from '../../hooks/useExport';
+import { useAgents } from '../../hooks/useAgents';
 import dayjs from 'dayjs';
+import type { Agent } from '../../services/types';
 
 const { RangePicker } = DatePicker;
 
@@ -16,6 +18,7 @@ interface ExportConfig {
   outputFormat: string;
   compression: boolean;
   processes: string;
+  selectedAgent?: string;
 }
 
 interface ExportControlProps {
@@ -25,7 +28,36 @@ interface ExportControlProps {
 const ExportControl: React.FC<ExportControlProps> = () => {
   const [form] = Form.useForm();
   const { createExport, isExporting } = useExport();
+  const { agents, isLoadingAgents } = useAgents();
   const [messageApi, contextHolder] = message.useMessage();
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  // Handle agent selection change
+  const handleAgentChange = (agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    setSelectedAgent(agent || null);
+    
+    if (agent && agent.process_filters && agent.process_filters.length > 0) {
+      // Auto-populate process filters from agent configuration
+      form.setFieldsValue({
+        processes: agent.process_filters.join(', '),
+        selectedAgent: agentId
+      });
+    } else {
+      // Clear process filters if agent has none
+      form.setFieldsValue({
+        processes: '',
+        selectedAgent: agentId
+      });
+    }
+  };
+
+  // Handle manual process filter change
+  const handleProcessChange = () => {
+    // Clear agent selection if user manually edits process filters
+    form.setFieldsValue({ selectedAgent: undefined });
+    setSelectedAgent(null);
+  };
 
   const handleExport = async (values: ExportConfig) => {
     try {
@@ -74,7 +106,8 @@ const ExportControl: React.FC<ExportControlProps> = () => {
           validationLevel: 'basic',
           outputFormat: 'json',
           compression: false,
-          processes: ''
+          processes: '',
+          selectedAgent: undefined
         }}
       >
         <Form.Item
@@ -102,11 +135,58 @@ const ExportControl: React.FC<ExportControlProps> = () => {
         </Form.Item>
 
         <Form.Item
-          label="Processes"
-          name="processes"
-          tooltip="Enter process names to filter by. Use comma to separate multiple processes (e.g., 'nginx,apache,postgres'). Leave empty to include all processes."
+          name="selectedAgent"
+          label="Target Agent (Optional)"
+          tooltip="Select an agent to automatically filter data based on its process configuration. This is useful for training data generation."
         >
-          <Input placeholder="e.g., nginx,apache,postgres" />
+          <Select
+            placeholder="Select an agent for targeted export"
+            allowClear
+            onChange={handleAgentChange}
+            loading={isLoadingAgents}
+            showSearch
+            filterOption={(input, option) =>
+              (option?.children as unknown as string)?.toLowerCase().includes(input.toLowerCase())
+            }
+          >
+            {agents.map((agent) => (
+              <Select.Option key={agent.id} value={agent.id}>
+                {agent.name} ({agent.id})
+              </Select.Option>
+            ))}
+          </Select>
+        </Form.Item>
+
+        {selectedAgent && (
+          <Alert
+            message={`Selected Agent: ${selectedAgent.name}`}
+            description={
+              <div>
+                <p><strong>Process Filters:</strong> {selectedAgent.process_filters.length > 0 ? selectedAgent.process_filters.join(', ') : 'All processes'}</p>
+                <p><strong>Capabilities:</strong> {selectedAgent.capabilities.join(', ')}</p>
+                <p className="text-muted small">The export will be filtered to include only data relevant to this agent's training requirements.</p>
+              </div>
+            }
+            type="info"
+            showIcon
+            className="mb-3"
+          />
+        )}
+
+        <Form.Item
+          label="Process Filters"
+          name="processes"
+          tooltip={
+            selectedAgent 
+              ? "Process filters are automatically set based on the selected agent. You can modify them manually if needed."
+              : "Enter process names to filter by. Use comma to separate multiple processes (e.g., 'nginx,apache,postgres'). Leave empty to include all processes."
+          }
+        >
+          <Input 
+            placeholder={selectedAgent ? "Auto-populated from agent config" : "e.g., nginx,apache,postgres"}
+            onChange={handleProcessChange}
+            disabled={isLoadingAgents}
+          />
         </Form.Item>
 
         <Form.Item

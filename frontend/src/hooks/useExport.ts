@@ -25,13 +25,17 @@ interface ExportStatus {
 
 interface ExportRecord {
   export_id: string;
-  data_version: string;
-  export_config: ExportConfig;
-  record_count: number;
-  file_size: number;
+  created_at: string | null;
+  updated_at: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  created_at: string;
-  updated_at: string;
+  data_types: string[];
+  config: any;
+  record_counts: Record<string, number>;
+  file_sizes: Record<string, number>;
+  error_message: string | null;
+  is_compressed: boolean;
+  total_records: number;
+  total_size: number;
 }
 
 interface ListExportsResponse {
