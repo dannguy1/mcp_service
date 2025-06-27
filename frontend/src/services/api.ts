@@ -84,7 +84,17 @@ export const endpoints = {
   },
   getLogs: (filters?: Record<string, any>) => {
     console.log("Fetching logs with filters:", filters);
-    return api.get<LogsResponse>("/logs", { params: filters }).then(res => res.data);
+    const params: Record<string, any> = {};
+    
+    // Map frontend filter names to backend parameter names
+    if (filters?.startDate) params.start_date = filters.startDate;
+    if (filters?.endDate) params.end_date = filters.endDate;
+    if (filters?.severity?.length) params.level = filters.severity.join(',');
+    if (filters?.programs?.length) params.program = filters.programs.join(',');
+    if (filters?.page) params.page = filters.page;
+    if (filters?.per_page) params.per_page = filters.per_page;
+    
+    return api.get<LogsResponse>("/logs", { params }).then(res => res.data);
   },
   getModels: () => {
     console.log("Fetching models...");
