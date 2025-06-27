@@ -2,7 +2,7 @@ agent_id: "wifi_agent"
 name: "WiFiAgent"
 description: "WiFi anomaly detection using ML models"
 agent_type: "ml_based"
-process_filters: ["hostapd", "wpa_supplicant"]
+process_filters: ["hostapd"]
 model_path: "/app/models/wifi_anomaly_model.pkl"
 capabilities: [
   "Authentication failure detection",
