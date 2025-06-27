@@ -317,6 +317,7 @@ export interface Agent {
   process_filters: string[];
   description: string;
   model_path: string | null;
+  agent_type: string;
   config: Record<string, any>;
   model_updated_at?: string;
   updated_at?: string;

@@ -43,6 +43,7 @@ class AgentResponse(BaseModel):
     process_filters: List[str]
     description: str
     model_path: Optional[str]
+    agent_type: str
     config: Dict[str, Any]
 
 class AgentDetailedInfo(BaseModel):
@@ -108,6 +109,7 @@ async def list_agents():
                     process_filters=process_filters,
                     description=agent_info.get('description', config.get('description', '')),
                     model_path=agent_info.get('model_path'),
+                    agent_type=agent_info.get('agent_type', config.get('agent_type', 'unknown')),
                     config=config or {}
                 ))
             else:
@@ -132,6 +134,7 @@ async def list_agents():
                     process_filters=process_filters,
                     description=config.get('description', ''),
                     model_path=config.get('model_path'),
+                    agent_type=config.get('agent_type', 'unknown'),
                     config=config or {}
                 ))
         
