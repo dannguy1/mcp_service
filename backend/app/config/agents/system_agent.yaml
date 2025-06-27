@@ -2,7 +2,7 @@ agent_id: "system_agent"
 name: "SystemAgent"
 description: "System-level anomaly detection"
 agent_type: "ml_based"
-process_filters: ["systemd", "cron", "sshd", "sudo"]
+process_filters: ["systemd", "cron", "sshd", "sudo", "watchdog"]
 model_path: "/app/models/system_anomaly_model.pkl"
 capabilities: [
   "System resource anomaly detection",

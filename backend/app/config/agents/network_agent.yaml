@@ -2,7 +2,7 @@ agent_id: "network_agent"
 name: "NetworkAgent"
 description: "Network traffic anomaly detection"
 agent_type: "hybrid"
-process_filters: ["iptables", "ufw", "firewalld", "netfilter"]
+process_filters: ["iptables", "ufw", "firewalld", "netfilter", "wan"]
 model_path: "/app/models/network_anomaly_model.pkl"
 capabilities: [
   "Network traffic pattern analysis",
