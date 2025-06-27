@@ -376,5 +376,31 @@ export const endpoints = {
   getAgentDetailedInfo: (agentId: string) => {
     console.log("Fetching detailed info for agent:", agentId);
     return api.get<AgentDetailedInfo>(`/agents/${agentId}/detailed`).then(res => res.data);
+  },
+
+  // Agent Configuration endpoints
+  getAgentConfig: (agentId: string) => {
+    console.log("Fetching agent configuration:", agentId);
+    return api.get(`/agents/${agentId}/config`).then(res => res.data);
+  },
+
+  saveAgentConfig: (agentId: string, config: any) => {
+    console.log("Saving agent configuration:", agentId, config);
+    return api.post(`/agents/${agentId}/config`, { config }).then(res => res.data);
+  },
+
+  validateAgentConfig: (agentId: string, config: any) => {
+    console.log("Validating agent configuration:", agentId, config);
+    return api.post(`/agents/${agentId}/config/validate`, { config }).then(res => res.data);
+  },
+
+  deleteAgentConfig: (agentId: string) => {
+    console.log("Deleting agent configuration:", agentId);
+    return api.delete(`/agents/${agentId}/config`).then(res => res.data);
+  },
+
+  getConfigTemplates: () => {
+    console.log("Fetching configuration templates");
+    return api.get('/agents/configs/templates').then(res => res.data);
   }
 };

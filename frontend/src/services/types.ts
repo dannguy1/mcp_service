@@ -330,43 +330,11 @@ export interface AgentDetailedInfo {
   status: string;
   is_running: boolean;
   capabilities: string[];
-  data_requirements: {
-    data_sources: string[];
-    process_filters: string[];
-    feature_requirements: string[];
-    lookback_period: string | null;
-    sampling_frequency: string | null;
-  };
-  export_considerations: {
-    exportable_features: string[];
-    data_format: string;
-    required_fields: string[];
-    optional_fields: string[];
-    data_volume_estimate: string;
-    training_data_requirements: string[];
-    preprocessing_steps: string[];
-  };
-  configuration: {
-    agent_type: string;
-    analysis_rules: Record<string, any>;
-    severity_mapping: Record<string, any>;
-    model_path: string | null;
-    enabled: boolean;
-    priority: string;
-    [key: string]: any;
-  };
-  model_info: {
-    path: string;
-    assigned: boolean;
-    type: string;
-  } | null;
-  performance_metrics: {
-    analysis_cycles: number;
-    anomalies_detected: number;
-    average_cycle_time: number | null;
-    last_analysis_time: string | null;
-    success_rate: number | null;
-  } | null;
+  data_requirements: Record<string, any>;
+  export_considerations: Record<string, any>;
+  configuration: Record<string, any>;
+  model_info?: Record<string, any>;
+  performance_metrics?: Record<string, any>;
 }
 
 export interface AgentModelRequest {
@@ -424,6 +392,49 @@ export interface EnhancedModel {
       deployed_by: string | null;
     };
   };
+}
+
+// Agent Configuration Types
+export interface AgentConfig {
+  agent_id: string;
+  name: string;
+  description: string;
+  agent_type: 'ml_based' | 'rule_based' | 'hybrid';
+  process_filters: string[];
+  model_path?: string | null;
+  capabilities: string[];
+  analysis_rules: Record<string, any>;
+  [key: string]: any;
+}
+
+export interface AgentConfigResponse {
+  agent_id: string;
+  config: AgentConfig;
+  saved_at: string;
+  is_valid: boolean;
+}
+
+export interface AgentConfigValidationResponse {
+  is_valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ConfigTemplate {
+  agent_id: string;
+  name: string;
+  description: string;
+  agent_type: 'ml_based' | 'rule_based' | 'hybrid';
+  process_filters: string[];
+  model_path?: string | null;
+  capabilities: string[];
+  analysis_rules: Record<string, any>;
+}
+
+export interface ConfigTemplates {
+  ml_based: ConfigTemplate;
+  rule_based: ConfigTemplate;
+  hybrid: ConfigTemplate;
 }
 
 // End of types file - DatabaseConfig and DatabaseTestResult are exported above

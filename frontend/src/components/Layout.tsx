@@ -13,6 +13,7 @@ import {
   TeamOutlined,
   BarChartOutlined,
 } from '@ant-design/icons';
+import { FaCog } from 'react-icons/fa';
 
 const Layout: React.FC = () => {
   const [show, setShow] = useState(false);

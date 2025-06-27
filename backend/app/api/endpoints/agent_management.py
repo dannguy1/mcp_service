@@ -16,6 +16,23 @@ router = APIRouter(tags=["Agent Management"])
 class AgentModelRequest(BaseModel):
     model_path: str
 
+class AgentConfigRequest(BaseModel):
+    config: Dict[str, Any]
+
+class AgentConfigValidationRequest(BaseModel):
+    config: Dict[str, Any]
+
+class AgentConfigValidationResponse(BaseModel):
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+
+class AgentConfigResponse(BaseModel):
+    agent_id: str
+    config: Dict[str, Any]
+    saved_at: str
+    is_valid: bool
+
 class AgentResponse(BaseModel):
     id: str
     name: str
@@ -561,6 +578,234 @@ async def reset_agent_registry():
         logger.error(f"Error resetting agent registry: {e}")
         raise HTTPException(status_code=500, detail="Failed to reset agent registry")
 
+@router.post("/{agent_id}/config", response_model=AgentConfigResponse)
+async def save_agent_config(agent_id: str, request: AgentConfigRequest):
+    """
+    Save or update agent configuration.
+    
+    This endpoint allows you to save or update the configuration for an agent.
+    The configuration will be validated before saving.
+    
+    Args:
+        agent_id: The ID of the agent to configure
+        request: The configuration data to save
+        
+    Returns:
+        The saved configuration with metadata
+    """
+    try:
+        config = request.config
+        
+        # Validate the configuration
+        validation_result = _validate_agent_config(config)
+        if not validation_result['is_valid']:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid configuration: {'; '.join(validation_result['errors'])}"
+            )
+        
+        # Save the configuration
+        success = agent_registry.save_agent_config(agent_id, config)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to save configuration")
+        
+        # Return the saved configuration
+        return AgentConfigResponse(
+            agent_id=agent_id,
+            config=config,
+            saved_at=datetime.now().isoformat(),
+            is_valid=True
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error saving agent configuration for {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save agent configuration")
+
+@router.post("/{agent_id}/config/validate", response_model=AgentConfigValidationResponse)
+async def validate_agent_config(agent_id: str, request: AgentConfigValidationRequest):
+    """
+    Validate agent configuration without saving.
+    
+    This endpoint validates an agent configuration and returns any errors or warnings
+    without actually saving the configuration.
+    
+    Args:
+        agent_id: The ID of the agent to validate configuration for
+        request: The configuration data to validate
+        
+    Returns:
+        Validation results with errors and warnings
+    """
+    try:
+        config = request.config
+        
+        # Validate the configuration
+        validation_result = _validate_agent_config(config)
+        
+        return AgentConfigValidationResponse(
+            is_valid=validation_result['is_valid'],
+            errors=validation_result['errors'],
+            warnings=validation_result['warnings']
+        )
+        
+    except Exception as e:
+        logger.error(f"Error validating agent configuration for {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to validate agent configuration")
+
+@router.get("/{agent_id}/config", response_model=AgentConfigResponse)
+async def get_agent_config(agent_id: str):
+    """
+    Get the current configuration for an agent.
+    
+    Args:
+        agent_id: The ID of the agent to get configuration for
+        
+    Returns:
+        The current agent configuration
+    """
+    try:
+        config = agent_registry.get_agent_config(agent_id)
+        if not config:
+            raise HTTPException(status_code=404, detail="Agent configuration not found")
+        
+        # Validate the configuration
+        validation_result = _validate_agent_config(config)
+        
+        return AgentConfigResponse(
+            agent_id=agent_id,
+            config=config,
+            saved_at=datetime.now().isoformat(),  # We don't track save time, so use current time
+            is_valid=validation_result['is_valid']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting agent configuration for {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get agent configuration")
+
+@router.delete("/{agent_id}/config")
+async def delete_agent_config(agent_id: str):
+    """
+    Delete an agent configuration.
+    
+    This will remove the configuration file and stop the agent if it's running.
+    
+    Args:
+        agent_id: The ID of the agent to delete configuration for
+        
+    Returns:
+        Success message
+    """
+    try:
+        success = agent_registry.delete_agent_config(agent_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Agent configuration not found")
+        
+        return {"message": f"Agent configuration {agent_id} deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting agent configuration for {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete agent configuration")
+
+@router.get("/configs/templates")
+async def get_config_templates():
+    """
+    Get configuration templates for different agent types.
+    
+    Returns:
+        Dictionary of configuration templates
+    """
+    templates = {
+        "ml_based": {
+            "agent_id": "example_ml_agent",
+            "name": "Example ML Agent",
+            "description": "Machine learning-based anomaly detection agent",
+            "agent_type": "ml_based",
+            "process_filters": ["process1", "process2"],
+            "model_path": "/app/models/example_model.pkl",
+            "capabilities": [
+                "Anomaly detection",
+                "Pattern recognition"
+            ],
+            "analysis_rules": {
+                "lookback_minutes": 5,
+                "analysis_interval": 60,
+                "feature_extraction": {
+                    "feature1": True,
+                    "feature2": True
+                },
+                "severity_mapping": {
+                    "anomaly_type1": 4,
+                    "anomaly_type2": 5
+                },
+                "thresholds": {
+                    "threshold1": 100,
+                    "threshold2": 50
+                }
+            }
+        },
+        "rule_based": {
+            "agent_id": "example_rule_agent",
+            "name": "Example Rule Agent",
+            "description": "Rule-based monitoring agent",
+            "agent_type": "rule_based",
+            "process_filters": [],
+            "model_path": None,
+            "capabilities": [
+                "Threshold monitoring",
+                "Pattern matching"
+            ],
+            "analysis_rules": {
+                "lookback_minutes": 5,
+                "analysis_interval": 60,
+                "target_levels": ["error", "critical"],
+                "severity_mapping": {
+                    "error": 4,
+                    "critical": 5
+                },
+                "exclude_patterns": [".*test.*"],
+                "include_patterns": [".*production.*"],
+                "alert_cooldown": 300
+            }
+        },
+        "hybrid": {
+            "agent_id": "example_hybrid_agent",
+            "name": "Example Hybrid Agent",
+            "description": "Hybrid ML and rule-based agent",
+            "agent_type": "hybrid",
+            "process_filters": ["process1"],
+            "model_path": "/app/models/example_model.pkl",
+            "capabilities": [
+                "ML-based detection",
+                "Rule-based fallback"
+            ],
+            "analysis_rules": {
+                "lookback_minutes": 10,
+                "analysis_interval": 120,
+                "feature_extraction": {
+                    "feature1": True
+                },
+                "severity_mapping": {
+                    "anomaly": 4
+                },
+                "thresholds": {
+                    "threshold1": 100
+                },
+                "fallback_rules": {
+                    "enable_fallback": True,
+                    "rule_based_detection": True
+                }
+            }
+        }
+    }
+    
+    return templates
+
 def _get_data_requirements(agent, config: Dict[str, Any]) -> Dict[str, Any]:
     """Extract data requirements for the agent."""
     logger.info(f"_get_data_requirements called with agent: {agent is not None}, config keys: {list(config.keys()) if config else 'None'}")
@@ -789,4 +1034,132 @@ def _get_performance_metrics(agent_id: str, agent_registry) -> Optional[Dict[str
     except Exception as e:
         logger.debug(f"Error getting performance metrics for {agent_id}: {e}")
     
-    return metrics 
+    return metrics
+
+def _validate_agent_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate agent configuration.
+    
+    Args:
+        config: Configuration dictionary to validate
+        
+    Returns:
+        Dictionary with validation results
+    """
+    errors = []
+    warnings = []
+    
+    # Required fields
+    required_fields = ['agent_id', 'name', 'description', 'agent_type']
+    for field in required_fields:
+        if field not in config:
+            errors.append(f"Missing required field: {field}")
+        elif not config[field]:
+            errors.append(f"Required field '{field}' cannot be empty")
+    
+    # Validate agent_type
+    if 'agent_type' in config:
+        valid_types = ['ml_based', 'rule_based', 'hybrid']
+        if config['agent_type'] not in valid_types:
+            errors.append(f"Invalid agent_type: {config['agent_type']}. Must be one of: {', '.join(valid_types)}")
+    
+    # Validate process_filters
+    if 'process_filters' in config:
+        if not isinstance(config['process_filters'], list):
+            errors.append("process_filters must be a list")
+    
+    # Validate capabilities
+    if 'capabilities' in config:
+        if not isinstance(config['capabilities'], list):
+            errors.append("capabilities must be a list")
+    
+    # Validate model_path based on agent_type
+    if 'agent_type' in config and 'model_path' in config:
+        if config['agent_type'] == 'ml_based' and not config['model_path']:
+            warnings.append("ML-based agent should have a model_path specified")
+        elif config['agent_type'] == 'rule_based' and config['model_path']:
+            warnings.append("Rule-based agent typically doesn't need a model_path")
+    
+    # Validate analysis_rules
+    if 'analysis_rules' in config:
+        analysis_rules = config['analysis_rules']
+        
+        # Validate lookback_minutes
+        if 'lookback_minutes' in analysis_rules:
+            try:
+                lookback = int(analysis_rules['lookback_minutes'])
+                if lookback <= 0:
+                    errors.append("lookback_minutes must be positive")
+                elif lookback > 1440:  # 24 hours
+                    warnings.append("lookback_minutes is very large (>24 hours)")
+            except (ValueError, TypeError):
+                errors.append("lookback_minutes must be a number")
+        
+        # Validate analysis_interval
+        if 'analysis_interval' in analysis_rules:
+            try:
+                interval = int(analysis_rules['analysis_interval'])
+                if interval <= 0:
+                    errors.append("analysis_interval must be positive")
+                elif interval < 30:
+                    warnings.append("analysis_interval is very short (<30 seconds)")
+                elif interval > 3600:  # 1 hour
+                    warnings.append("analysis_interval is very long (>1 hour)")
+            except (ValueError, TypeError):
+                errors.append("analysis_interval must be a number")
+        
+        # Validate severity_mapping
+        if 'severity_mapping' in analysis_rules:
+            severity_mapping = analysis_rules['severity_mapping']
+            if not isinstance(severity_mapping, dict):
+                errors.append("severity_mapping must be a dictionary")
+            else:
+                for anomaly_type, severity in severity_mapping.items():
+                    try:
+                        severity_int = int(severity)
+                        if severity_int < 1 or severity_int > 5:
+                            errors.append(f"Severity for '{anomaly_type}' must be between 1 and 5")
+                    except (ValueError, TypeError):
+                        errors.append(f"Severity for '{anomaly_type}' must be a number")
+    
+    # Agent-type specific validation
+    if 'agent_type' in config:
+        if config['agent_type'] == 'rule_based':
+            if 'analysis_rules' in config:
+                analysis_rules = config['analysis_rules']
+                if 'target_levels' in analysis_rules:
+                    if not isinstance(analysis_rules['target_levels'], list):
+                        errors.append("target_levels must be a list")
+                
+                if 'exclude_patterns' in analysis_rules:
+                    if not isinstance(analysis_rules['exclude_patterns'], list):
+                        errors.append("exclude_patterns must be a list")
+                
+                if 'include_patterns' in analysis_rules:
+                    if not isinstance(analysis_rules['include_patterns'], list):
+                        errors.append("include_patterns must be a list")
+        
+        elif config['agent_type'] == 'ml_based':
+            if 'analysis_rules' in config:
+                analysis_rules = config['analysis_rules']
+                if 'feature_extraction' in analysis_rules:
+                    if not isinstance(analysis_rules['feature_extraction'], dict):
+                        errors.append("feature_extraction must be a dictionary")
+                
+                if 'thresholds' in analysis_rules:
+                    if not isinstance(analysis_rules['thresholds'], dict):
+                        errors.append("thresholds must be a dictionary")
+        
+        elif config['agent_type'] == 'hybrid':
+            if 'analysis_rules' in config:
+                analysis_rules = config['analysis_rules']
+                if 'fallback_rules' in analysis_rules:
+                    fallback_rules = analysis_rules['fallback_rules']
+                    if not isinstance(fallback_rules, dict):
+                        errors.append("fallback_rules must be a dictionary")
+    
+    return {
+        'is_valid': len(errors) == 0,
+        'errors': errors,
+        'warnings': warnings
+    } 
