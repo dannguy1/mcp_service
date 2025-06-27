@@ -23,6 +23,7 @@ import type {
   DatabaseConfig,
   DatabaseTestResult,
   Agent,
+  AgentDetailedInfo,
   AgentModelRequest,
   AgentModelResponse,
   AvailableModel,
@@ -363,5 +364,17 @@ export const endpoints = {
   getAgentStats: (agentId: string) => {
     console.log("Fetching agent stats for:", agentId);
     return api.get(`/agents/${agentId}/stats`).then(res => res.data);
+  },
+
+  // Agent Details endpoints
+  getAgentsDetailedInfo: (agentIds?: string[]) => {
+    console.log("Fetching detailed info for agents:", agentIds);
+    const params = agentIds && agentIds.length > 0 ? { agent_ids: agentIds.join(',') } : {};
+    return api.get<AgentDetailedInfo[]>('/agents/detailed-info', { params }).then(res => res.data);
+  },
+
+  getAgentDetailedInfo: (agentId: string) => {
+    console.log("Fetching detailed info for agent:", agentId);
+    return api.get<AgentDetailedInfo>(`/agents/${agentId}/detailed`).then(res => res.data);
   }
 };

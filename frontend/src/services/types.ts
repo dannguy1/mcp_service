@@ -314,11 +314,59 @@ export interface Agent {
   is_running: boolean;
   last_run: string | null;
   capabilities: string[];
+  process_filters: string[];
   description: string;
   model_path: string | null;
   config: Record<string, any>;
   model_updated_at?: string;
   updated_at?: string;
+}
+
+export interface AgentDetailedInfo {
+  id: string;
+  name: string;
+  description: string;
+  agent_type: string;
+  status: string;
+  is_running: boolean;
+  capabilities: string[];
+  data_requirements: {
+    data_sources: string[];
+    process_filters: string[];
+    feature_requirements: string[];
+    lookback_period: string | null;
+    sampling_frequency: string | null;
+  };
+  export_considerations: {
+    exportable_features: string[];
+    data_format: string;
+    required_fields: string[];
+    optional_fields: string[];
+    data_volume_estimate: string;
+    training_data_requirements: string[];
+    preprocessing_steps: string[];
+  };
+  configuration: {
+    agent_type: string;
+    analysis_rules: Record<string, any>;
+    severity_mapping: Record<string, any>;
+    model_path: string | null;
+    enabled: boolean;
+    priority: string;
+    [key: string]: any;
+  };
+  model_info: {
+    path: string;
+    assigned: boolean;
+    type: string;
+  } | null;
+  performance_metrics: {
+    analysis_cycles: number;
+    anomalies_detected: number;
+    average_cycle_time: number | null;
+    last_analysis_time: string | null;
+    success_rate: number | null;
+  } | null;
 }
 
 export interface AgentModelRequest {

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import { endpoints } from '../services/api';
-import type { Agent, AgentModelRequest, AvailableModel, AgentActionResponse } from '../services/types';
+import type { Agent, AgentModelRequest, AvailableModel, AgentActionResponse, AgentDetailedInfo } from '../services/types';
 
 export const useAgents = () => {
   const queryClient = useQueryClient();
@@ -18,6 +18,21 @@ export const useAgents = () => {
     refetchInterval: 30000, // Refetch every 30 seconds
     staleTime: 10000 // Consider data stale after 10 seconds
   });
+
+  // Debug: Log the agents data
+  console.log('🔍 useAgents hook - Raw agents data:', agents);
+  if (agents.length > 0) {
+    console.log('🔍 useAgents hook - First agent:', {
+      id: agents[0].id,
+      name: agents[0].name,
+      capabilities: agents[0].capabilities,
+      process_filters: agents[0].process_filters,
+      hasCapabilities: 'capabilities' in agents[0],
+      hasProcessFilters: 'process_filters' in agents[0],
+      capabilitiesType: typeof agents[0].capabilities,
+      processFiltersType: typeof agents[0].process_filters
+    });
+  }
 
   // Query for available models
   const {
@@ -195,5 +210,50 @@ export const useAgent = (agentId: string) => {
     restartAgent: restartAgentMutation.mutate,
     isSettingModel: setAgentModelMutation.isPending,
     isRestarting: restartAgentMutation.isPending
+  };
+};
+
+// Hook for agent detailed information
+export const useAgentDetailedInfo = (agentId: string) => {
+  const {
+    data: agentDetailedInfo,
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['agent-detailed-info', agentId],
+    queryFn: () => endpoints.getAgentDetailedInfo(agentId),
+    enabled: !!agentId,
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000 // Consider data stale after 30 seconds
+  });
+
+  return {
+    agentDetailedInfo,
+    isLoading,
+    error,
+    refetch
+  };
+};
+
+// Hook for multiple agents detailed information
+export const useAgentsDetailedInfo = (agentIds?: string[]) => {
+  const {
+    data: agentsDetailedInfo = [],
+    isLoading,
+    error,
+    refetch
+  } = useQuery({
+    queryKey: ['agents-detailed-info', agentIds],
+    queryFn: () => endpoints.getAgentsDetailedInfo(agentIds),
+    refetchInterval: 60000, // Refetch every minute
+    staleTime: 30000 // Consider data stale after 30 seconds
+  });
+
+  return {
+    agentsDetailedInfo,
+    isLoading,
+    error,
+    refetch
   };
 }; 

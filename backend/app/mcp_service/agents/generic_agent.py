@@ -21,8 +21,17 @@ class GenericAgent(BaseAgent):
             data_service: DataService instance for database access
             model_manager: Optional ModelManager instance
         """
-        # Initialize base agent with config object
-        super().__init__(config, data_service)
+        # Initialize base agent with a simple config object
+        class SimpleConfig:
+            def __init__(self, analysis_interval=60):
+                self.analysis_interval = analysis_interval
+        
+        # Create a simple config object for BaseAgent
+        analysis_interval = config.get('analysis_rules', {}).get('analysis_interval', 60)
+        simple_config = SimpleConfig(analysis_interval)
+        
+        # Initialize base agent with simple config object
+        super().__init__(simple_config, data_service)
         
         # Configuration-driven initialization
         self.agent_id = config.get('agent_id', self.__class__.__name__.lower())

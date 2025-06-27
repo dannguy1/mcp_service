@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Button, 
@@ -20,9 +20,12 @@ import {
   FaExclamationTriangle,
   FaCheckCircle,
   FaClock,
-  FaTimesCircle
+  FaTimesCircle,
+  FaInfoCircle,
+  FaList
 } from 'react-icons/fa';
-import { useAgents } from '../hooks/useAgents';
+import { useAgents, useAgentDetailedInfo, useAgentsDetailedInfo } from '../hooks/useAgents';
+import AgentDetailsModal from '../components/AgentDetailsModal';
 import type { Agent, AvailableModel } from '../services/types';
 
 const Agents: React.FC = () => {
@@ -42,6 +45,18 @@ const Agents: React.FC = () => {
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<Agent | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState<Agent | null>(null);
+  const [showAllDetailsModal, setShowAllDetailsModal] = useState(false);
+
+  // Hook for detailed agent information
+  const { agentDetailedInfo, isLoading: isLoadingDetails, error: detailsError } = useAgentDetailedInfo(
+    showDetailsModal?.id || ''
+  );
+
+  // Hook for all agents detailed information
+  const { agentsDetailedInfo, isLoading: isLoadingAllDetails, error: allDetailsError } = useAgentsDetailedInfo(
+    showAllDetailsModal ? agents.map(a => a.id) : undefined
+  );
 
   const handleSetModel = (agent: Agent) => {
     setSelectedAgent(agent);
@@ -65,6 +80,22 @@ const Agents: React.FC = () => {
   const handleUnregisterAgent = (agent: Agent) => {
     unregisterAgent(agent.id);
     setShowDeleteModal(null);
+  };
+
+  const handleViewDetails = (agent: Agent) => {
+    setShowDetailsModal(agent);
+  };
+
+  const handleCloseDetails = () => {
+    setShowDetailsModal(null);
+  };
+
+  const handleViewAllDetails = () => {
+    setShowAllDetailsModal(true);
+  };
+
+  const handleCloseAllDetails = () => {
+    setShowAllDetailsModal(false);
   };
 
   const getStatusIcon = (agent: Agent) => {
@@ -126,6 +157,15 @@ const Agents: React.FC = () => {
           </p>
         </div>
         <div className="d-flex gap-2">
+          <Button
+            variant="outline-info"
+            size="sm"
+            onClick={handleViewAllDetails}
+            disabled={agents.length === 0}
+          >
+            <FaList className="me-1" />
+            View All Details
+          </Button>
           <Badge bg="outline-primary">
             {agents.filter(a => a.is_running).length} Running
           </Badge>
@@ -154,11 +194,13 @@ const Agents: React.FC = () => {
                   <th>Model</th>
                   <th>Last Run</th>
                   <th>Capabilities</th>
+                  <th>Process Filters</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {agents.map((agent) => (
+                {agents.map((agent) => {
+                  return (
                   <tr key={agent.id}>
                     <td>
                       <div className="d-flex align-items-center gap-3">
@@ -182,15 +224,35 @@ const Agents: React.FC = () => {
                     </td>
                     <td>
                       <div className="d-flex flex-wrap gap-1">
-                        {agent.capabilities.slice(0, 2).map((capability, index) => (
-                          <Badge key={index} bg="outline-secondary" className="small">
+                        {(agent.capabilities || []).slice(0, 2).map((capability, index) => (
+                          <Badge key={index} bg="secondary" className="small" style={{ color: 'white' }}>
                             {capability}
                           </Badge>
                         ))}
-                        {agent.capabilities.length > 2 && (
-                          <Badge bg="outline-secondary" className="small">
-                            +{agent.capabilities.length - 2} more
+                        {(agent.capabilities || []).length > 2 && (
+                          <Badge bg="secondary" className="small" style={{ color: 'white' }}>
+                            +{(agent.capabilities || []).length - 2} more
                           </Badge>
+                        )}
+                        {(!agent.capabilities || agent.capabilities.length === 0) && (
+                          <span className="text-muted small">None</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="d-flex flex-wrap gap-1">
+                        {(agent.process_filters || []).slice(0, 2).map((filter, index) => (
+                          <Badge key={index} bg="secondary" className="small" style={{ color: 'white' }}>
+                            {filter}
+                          </Badge>
+                        ))}
+                        {(agent.process_filters || []).length > 2 && (
+                          <Badge bg="secondary" className="small" style={{ color: 'white' }}>
+                            +{(agent.process_filters || []).length - 2} more
+                          </Badge>
+                        )}
+                        {(!agent.process_filters || agent.process_filters.length === 0) && (
+                          <span className="text-muted small">None</span>
                         )}
                       </div>
                     </td>
@@ -235,10 +297,23 @@ const Agents: React.FC = () => {
                             <FaTrash className="h-4 w-4" />
                           </Button>
                         </OverlayTrigger>
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={<Tooltip>View Details</Tooltip>}
+                        >
+                          <Button
+                            size="sm"
+                            variant="outline-info"
+                            onClick={() => handleViewDetails(agent)}
+                          >
+                            <FaInfoCircle className="h-4 w-4" />
+                          </Button>
+                        </OverlayTrigger>
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </Table>
           )}
@@ -303,6 +378,124 @@ const Agents: React.FC = () => {
             {isUnregistering ? 'Unregistering...' : 'Unregister'}
           </Button>
         </Modal.Footer>
+      </Modal>
+
+      {/* Agent Details Modal */}
+      <AgentDetailsModal
+        show={!!showDetailsModal}
+        onHide={handleCloseDetails}
+        agentDetailedInfo={agentDetailedInfo}
+        isLoading={isLoadingDetails}
+        error={detailsError}
+      />
+
+      {/* All Agents Details Modal */}
+      <Modal show={showAllDetailsModal} onHide={handleCloseAllDetails} size="xl">
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <div className="d-flex align-items-center gap-2">
+              <FaList />
+              All Agents - Detailed Information
+            </div>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {isLoadingAllDetails ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </Spinner>
+              <p className="mt-3">Loading all agents details...</p>
+            </div>
+          ) : allDetailsError ? (
+            <Alert variant="danger">
+              <FaExclamationTriangle className="me-2" />
+              Failed to load agents details: {allDetailsError.message || 'Unknown error'}
+            </Alert>
+          ) : agentsDetailedInfo.length === 0 ? (
+            <Alert variant="warning">
+              <FaInfoCircle className="me-2" />
+              No agents found
+            </Alert>
+          ) : (
+            <div className="space-y-4">
+              {agentsDetailedInfo.map((agentInfo) => (
+                <Card key={agentInfo.id} className="mb-3">
+                  <Card.Header>
+                    <div className="d-flex justify-content-between align-items-center">
+                      <h6 className="mb-0">{agentInfo.name}</h6>
+                      <div className="d-flex gap-2">
+                        <Badge bg={agentInfo.is_running ? "success" : "secondary"}>
+                          {agentInfo.is_running ? "Running" : "Stopped"}
+                        </Badge>
+                        <Badge bg="outline-primary">{agentInfo.agent_type}</Badge>
+                      </div>
+                    </div>
+                  </Card.Header>
+                  <Card.Body>
+                    <div className="row">
+                      <div className="col-md-6">
+                        <p><strong>Description:</strong> {agentInfo.description || 'No description'}</p>
+                        <p><strong>Data Sources:</strong> {agentInfo.data_requirements.data_sources.length || 0}</p>
+                        <p><strong>Export Format:</strong> {agentInfo.export_considerations.data_format}</p>
+                        <p><strong>Data Volume:</strong> {agentInfo.export_considerations.data_volume_estimate}</p>
+                      </div>
+                      <div className="col-md-6">
+                        <p><strong>Capabilities:</strong></p>
+                        <div className="d-flex flex-wrap gap-1 mb-2">
+                          {agentInfo.capabilities.slice(0, 3).map((capability, index) => (
+                            <Badge key={index} bg="outline-primary" className="small">
+                              {capability}
+                            </Badge>
+                          ))}
+                          {agentInfo.capabilities.length > 3 && (
+                            <Badge bg="outline-secondary" className="small">
+                              +{agentInfo.capabilities.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                        <p><strong>Required Fields:</strong> {agentInfo.export_considerations.required_fields.length}</p>
+                        <p><strong>Preprocessing Steps:</strong> {agentInfo.export_considerations.preprocessing_steps.length}</p>
+                      </div>
+                    </div>
+                    {agentInfo.performance_metrics && (
+                      <div className="mt-3 pt-3 border-top">
+                        <div className="row">
+                          <div className="col-md-3">
+                            <small className="text-muted">Analysis Cycles</small>
+                            <div className="fw-bold">{agentInfo.performance_metrics.analysis_cycles}</div>
+                          </div>
+                          <div className="col-md-3">
+                            <small className="text-muted">Anomalies Detected</small>
+                            <div className="fw-bold">{agentInfo.performance_metrics.anomalies_detected}</div>
+                          </div>
+                          <div className="col-md-3">
+                            <small className="text-muted">Success Rate</small>
+                            <div className="fw-bold">
+                              {agentInfo.performance_metrics.success_rate 
+                                ? `${(agentInfo.performance_metrics.success_rate * 100).toFixed(1)}%`
+                                : 'N/A'
+                              }
+                            </div>
+                          </div>
+                          <div className="col-md-3">
+                            <small className="text-muted">Avg Cycle Time</small>
+                            <div className="fw-bold">
+                              {agentInfo.performance_metrics.average_cycle_time 
+                                ? `${agentInfo.performance_metrics.average_cycle_time.toFixed(2)}s`
+                                : 'N/A'
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </Card.Body>
+                </Card>
+              ))}
+            </div>
+          )}
+        </Modal.Body>
       </Modal>
     </div>
   );

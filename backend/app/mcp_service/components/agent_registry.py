@@ -42,6 +42,8 @@ class AgentRegistry:
             config_dir = base_dir / "app" / "config"
             agent_config_file = config_dir / "agent_config.yaml"
             
+            self.logger.info(f"Loading agent configs from: {config_dir}")
+            
             if agent_config_file.exists():
                 with open(agent_config_file, 'r') as f:
                     config = yaml.safe_load(f)
@@ -60,15 +62,23 @@ class AgentRegistry:
             # Load from new agents directory if it exists
             agents_config_dir = config_dir / "agents"
             if agents_config_dir.exists():
+                self.logger.info(f"Loading from agents directory: {agents_config_dir}")
                 for config_file in agents_config_dir.glob("*.yaml"):
                     agent_id = config_file.stem
+                    self.logger.info(f"Loading config file: {config_file}")
                     with open(config_file, 'r') as f:
                         config = yaml.safe_load(f)
                         self.agent_configs[agent_id] = config
                         self.logger.info(f"Loaded {agent_id} agent configuration from agents directory")
+                        self.logger.info(f"  Process Filters: {config.get('process_filters', [])}")
+                        self.logger.info(f"  Capabilities: {config.get('capabilities', [])}")
+            else:
+                self.logger.warning(f"Agents directory not found: {agents_config_dir}")
                         
         except Exception as e:
             self.logger.error(f"Error loading agent configurations: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
     
     def create_agent(self, agent_id: str, data_service, model_manager=None) -> Optional[BaseAgent]:
         """Create agent instance from configuration.
@@ -436,64 +446,53 @@ class AgentRegistry:
             return False
     
     def get_available_models(self) -> List[Dict[str, Any]]:
-        """Get list of available models for agents.
+        """Get list of available models.
         
         Returns:
-            List[Dict[str, Any]]: List of available models
+            list: List of model information dictionaries
         """
         try:
-            # Use the enhanced model management system
-            from app.components.model_manager import ModelManager
-            from app.models.config import ModelConfig
-            
-            config = ModelConfig()
-            model_manager_instance = ModelManager(config)
-            
-            # Get models from the enhanced system using asyncio
-            import asyncio
-            try:
-                # Try to get the current event loop
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # If loop is running, we need to create a new one
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    models = loop.run_until_complete(model_manager_instance.list_models())
-                    loop.close()
-                else:
-                    # Use the existing loop
-                    models = loop.run_until_complete(model_manager_instance.list_models())
-            except RuntimeError:
-                # No event loop, create a new one
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    models = loop.run_until_complete(model_manager_instance.list_models())
-                finally:
-                    loop.close()
-            
-            # Transform to the expected format
-            available_models = []
-            for model in models:
-                # Get the model name from metadata
-                metadata = model.get('metadata', {})
-                model_info = metadata.get('model_info', {})
-                name = model_info.get('description', model.get('version', 'Unknown'))
-                
-                model_info = {
-                    'name': name,
-                    'path': model.get('path', ''),
-                    'size': 0,  # Size not available in enhanced system
-                    'modified': model.get('last_updated', model.get('created_at', ''))
-                }
-                available_models.append(model_info)
-            
-            self.logger.info(f"Found {len(available_models)} available models")
-            return available_models
-            
+            all_models = self.model_manager.get_all_models()
+            # If all_models is a dict with 'models' key, use .items(), else treat as list
+            if isinstance(all_models, dict) and 'models' in all_models:
+                models_iter = all_models['models'].items()
+            elif isinstance(all_models, list):
+                models_iter = enumerate(all_models)
+            else:
+                models_iter = []
+            models_list = []
+            for model_id, model_data in models_iter:
+                models_list.append({
+                    'name': model_data.get('name', model_id),
+                    'path': model_data.get('path', f'/models/{model_id}'),
+                    'size': model_data.get('size', 0),
+                    'modified': model_data.get('created_at', datetime.now().isoformat())
+                })
+            return models_list
         except Exception as e:
             self.logger.error(f"Error getting available models: {e}")
             return []
+    
+    def reset(self):
+        """Reset the agent registry by clearing and reloading configurations."""
+        self.logger.info("Resetting agent registry...")
+        
+        # Clear current state
+        self.agents.clear()
+        self.agent_configs.clear()
+        
+        self.logger.info("Cleared agents and configurations")
+        
+        # Reload configurations
+        self._load_agent_configs()
+        
+        self.logger.info(f"Reloaded {len(self.agent_configs)} configurations")
+        
+        # Log what was loaded
+        for agent_id, config in self.agent_configs.items():
+            self.logger.info(f"  - {agent_id}:")
+            self.logger.info(f"    Process Filters: {config.get('process_filters', [])}")
+            self.logger.info(f"    Capabilities: {config.get('capabilities', [])}")
     
     def _update_agent_status(self, agent_id: str, status_data: Dict[str, Any]):
         """Update agent status in Redis.
