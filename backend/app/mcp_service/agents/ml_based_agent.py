@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
 import os
+from datetime import datetime
 
 from .generic_agent import GenericAgent
 from ..components.feature_extractor import FeatureExtractor
@@ -80,6 +81,25 @@ class MLBasedAgent(GenericAgent):
             logs: List of log entries to analyze
         """
         try:
+            # Check if model is available before analysis
+            if not self.model or not hasattr(self.model, 'predict'):
+                self.logger.warning(f"Skipping analysis for {self.agent_name}: No valid model loaded.")
+                self.status = "inactive"
+                # Update status in Redis
+                self._update_redis_status({
+                    'id': self.agent_id,
+                    'name': self.agent_name,
+                    'status': 'inactive',
+                    'is_running': True,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description,
+                    'agent_type': self.agent_type,
+                    'model_loaded': False,
+                    'reason': 'No valid model loaded'
+                })
+                return
+            
             # Extract features from logs
             features = await self.feature_extractor.extract_features(logs)
             self.logger.info("Extracted features from logs")
@@ -111,10 +131,24 @@ class MLBasedAgent(GenericAgent):
     async def start(self):
         """Start the ML-based agent."""
         try:
-            # Validate model availability
-            if not self.model:
-                self.logger.warning("No model available, using default model")
-                self._create_default_model()
+            # Validate model availability before starting
+            if not self.model or not hasattr(self.model, 'predict'):
+                self.status = "inactive"
+                self.logger.warning(f"MLBasedAgent {self.agent_name} inactive: No valid model loaded.")
+                # Update status in Redis to reflect inactive state
+                self._update_redis_status({
+                    'id': self.agent_id,
+                    'name': self.agent_name,
+                    'status': 'inactive',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description,
+                    'agent_type': self.agent_type,
+                    'model_loaded': False,
+                    'reason': 'No valid model loaded'
+                })
+                return
             
             # Start the generic agent
             await super().start()
@@ -138,14 +172,19 @@ class MLBasedAgent(GenericAgent):
             dict: Model information
         """
         if not self.model:
-            return {}
+            return {
+                'model_loaded': False,
+                'model_path': self.model_path,
+                'error': 'No model loaded'
+            }
         
         return {
             'model_path': self.model_path,
             'model_type': self.model.get('type', 'unknown'),
             'model_version': self.model.get('version', 'unknown'),
             'thresholds': self.model.get('thresholds', {}),
-            'is_loaded': self.model is not None
+            'is_loaded': self.model is not None,
+            'model_loaded': bool(self.model and hasattr(self.model, 'predict'))
         }
     
     def update_model(self, new_model_path: str):
@@ -171,9 +210,19 @@ class MLBasedAgent(GenericAgent):
             dict: Dictionary containing agent status information
         """
         status = super().get_status()
+        
+        # Check if model is loaded
+        model_loaded = bool(self.model and hasattr(self.model, 'predict'))
+        
+        # If no model is loaded, set status to inactive
+        if not model_loaded:
+            status['status'] = 'inactive'
+            status['reason'] = 'No valid model loaded'
+        
         status.update({
             'model_info': self.get_model_info(),
             'feature_extraction_config': self.feature_extraction_config,
-            'thresholds': self.thresholds
+            'thresholds': self.thresholds,
+            'model_loaded': model_loaded
         })
         return status 

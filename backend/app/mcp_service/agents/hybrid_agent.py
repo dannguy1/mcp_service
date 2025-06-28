@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Any, Optional
 import os
+from datetime import datetime
 
 from .generic_agent import GenericAgent
 from .ml_based_agent import MLBasedAgent
@@ -50,11 +51,15 @@ class HybridAgent(GenericAgent):
                 self.rule_agent = RuleBasedAgent(self.config, self.data_service, self.model_manager)
                 self.logger.info("Initialized rule-based sub-agent")
             
+            # Check if at least one detection method is available
             if not self.ml_agent and not self.rule_agent:
+                self.status = "inactive"
+                self.logger.error("HybridAgent inactive: No detection methods available (no model and no fallback rules)")
                 raise ValueError("No detection method available for hybrid agent")
                 
         except Exception as e:
             self.logger.error(f"Error initializing sub-agents: {e}")
+            self.status = "inactive"
             raise
     
     async def _perform_analysis(self, logs: List[Dict[str, Any]]):
@@ -65,6 +70,24 @@ class HybridAgent(GenericAgent):
             logs: List of log entries to analyze
         """
         try:
+            # Check if any detection method is available
+            if not self.ml_agent and not self.rule_agent:
+                self.logger.warning(f"Skipping analysis for {self.agent_name}: No detection methods available.")
+                self.status = "inactive"
+                # Update status in Redis
+                self._update_redis_status({
+                    'id': self.agent_id,
+                    'name': self.agent_name,
+                    'status': 'inactive',
+                    'is_running': True,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description,
+                    'agent_type': self.agent_type,
+                    'reason': 'No detection methods available'
+                })
+                return
+            
             anomalies_detected = 0
             
             # Primary detection method
@@ -103,6 +126,24 @@ class HybridAgent(GenericAgent):
     async def start(self):
         """Start the hybrid agent."""
         try:
+            # Check if any detection method is available before starting
+            if not self.ml_agent and not self.rule_agent:
+                self.status = "inactive"
+                self.logger.warning(f"HybridAgent {self.agent_name} inactive: No detection methods available.")
+                # Update status in Redis to reflect inactive state
+                self._update_redis_status({
+                    'id': self.agent_id,
+                    'name': self.agent_name,
+                    'status': 'inactive',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description,
+                    'agent_type': self.agent_type,
+                    'reason': 'No detection methods available'
+                })
+                return
+            
             # Start sub-agents
             if self.ml_agent:
                 await self.ml_agent.start()
@@ -151,7 +192,8 @@ class HybridAgent(GenericAgent):
             'rule_based_detection': self.rule_based_detection,
             'ml_agent_available': self.ml_agent is not None,
             'rule_agent_available': self.rule_agent is not None,
-            'fallback_rules': self.fallback_rules
+            'fallback_rules': self.fallback_rules,
+            'any_detection_available': bool(self.ml_agent or self.rule_agent)
         }
     
     def update_detection_config(self, new_config: Dict[str, Any]):
@@ -188,10 +230,20 @@ class HybridAgent(GenericAgent):
             dict: Dictionary containing agent status information
         """
         status = super().get_status()
+        
+        # Check if any detection method is available
+        any_detection_available = bool(self.ml_agent or self.rule_agent)
+        
+        # If no detection methods are available, set status to inactive
+        if not any_detection_available:
+            status['status'] = 'inactive'
+            status['reason'] = 'No detection methods available'
+        
         status.update({
             'detection_methods': self.get_detection_methods(),
             'ml_agent_status': self.ml_agent.get_status() if self.ml_agent else None,
-            'rule_agent_status': self.rule_agent.get_status() if self.rule_agent else None
+            'rule_agent_status': self.rule_agent.get_status() if self.rule_agent else None,
+            'any_detection_available': any_detection_available
         })
         return status
     

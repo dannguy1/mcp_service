@@ -55,7 +55,7 @@ class GenericAgent(BaseAgent):
         self.status = "initialized"
         self.is_running = False
         self.last_run = None
-        self.logger = logging.getLogger(f"{self.__class__.__name__}.{self.agent_id}")
+        self.logger = logging.getLogger(f"{self.agent_name}.{self.agent_id}")
         
         # Validate configuration
         self._validate_config()
@@ -174,6 +174,11 @@ class GenericAgent(BaseAgent):
         This method should be overridden by specific agent types.
         """
         if not self.is_running:
+            return
+        
+        # Check if agent is in inactive state (e.g., no model loaded)
+        if self.status == 'inactive':
+            self.logger.debug(f"Skipping analysis cycle for {self.agent_name}: Agent is inactive")
             return
         
         try:

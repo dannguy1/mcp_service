@@ -215,7 +215,7 @@ class LogLevelAgent(BaseAgent):
             # Filter logs by level
             filtered_logs = []
             for log in logs:
-                log_level = log.get('level', '').lower()
+                log_level = log.get('log_level', '').lower()
                 if log_level in [level.lower() for level in self.target_levels]:
                     filtered_logs.append(log)
             
@@ -233,7 +233,7 @@ class LogLevelAgent(BaseAgent):
         """
         try:
             # Get log level and determine severity
-            log_level = log.get('level', '').lower()
+            log_level = log.get('log_level', '').lower()
             severity = self.severity_mapping.get(log_level, 3)
             
             # Create anomaly description
@@ -247,7 +247,7 @@ class LogLevelAgent(BaseAgent):
                 description=description,
                 features={
                     'log_level': log_level,
-                    'program': log.get('program', 'unknown'),
+                    'program': log.get('process_name', 'unknown'),
                     'message': log.get('message', ''),
                     'timestamp': log.get('timestamp', ''),
                     'source': 'log_level_agent'
@@ -267,8 +267,8 @@ class LogLevelAgent(BaseAgent):
         Returns:
             str: Description of the anomaly
         """
-        log_level = log.get('level', 'unknown')
-        program = log.get('program', 'unknown')
+        log_level = log.get('log_level', 'unknown')
+        program = log.get('process_name', 'unknown')
         message = log.get('message', '')
         
         # Truncate message if too long
