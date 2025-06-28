@@ -30,6 +30,7 @@ class ModelManager:
         self.model_registry = {
             'wifi_agent': {
                 'id': 'wifi_agent',
+                'name': 'WiFiAgent',
                 'version': '1.0.0',
                 'created_at': datetime.now().isoformat(),
                 'metrics': {
@@ -43,6 +44,78 @@ class ModelManager:
                     'Authentication failure detection',
                     'Deauthentication flood detection',
                     'Beacon frame flood detection'
+                ]
+            },
+            'dns_agent': {
+                'id': 'dns_agent',
+                'name': 'DNSAgent',
+                'version': '1.0.0',
+                'created_at': datetime.now().isoformat(),
+                'metrics': {
+                    'accuracy': 0.89,
+                    'false_positive_rate': 0.04,
+                    'false_negative_rate': 0.07
+                },
+                'status': 'active',
+                'description': 'DNS query anomaly detection',
+                'capabilities': [
+                    'DNS amplification detection',
+                    'Query flood detection',
+                    'Suspicious domain detection'
+                ]
+            },
+            'system_agent': {
+                'id': 'system_agent',
+                'name': 'SystemAgent',
+                'version': '1.0.0',
+                'created_at': datetime.now().isoformat(),
+                'metrics': {
+                    'accuracy': 0.91,
+                    'false_positive_rate': 0.03,
+                    'false_negative_rate': 0.06
+                },
+                'status': 'active',
+                'description': 'System-level anomaly detection',
+                'capabilities': [
+                    'System resource anomaly detection',
+                    'Authentication failure detection',
+                    'Process behavior analysis'
+                ]
+            },
+            'log_level_agent': {
+                'id': 'log_level_agent',
+                'name': 'LogLevelAgent',
+                'version': '1.0.0',
+                'created_at': datetime.now().isoformat(),
+                'metrics': {
+                    'accuracy': 0.95,
+                    'false_positive_rate': 0.02,
+                    'false_negative_rate': 0.03
+                },
+                'status': 'active',
+                'description': 'Rule-based log level monitoring',
+                'capabilities': [
+                    'Error log level detection',
+                    'Critical log level detection',
+                    'Warning level monitoring'
+                ]
+            },
+            'threshold_agent': {
+                'id': 'threshold_agent',
+                'name': 'ThresholdAgent',
+                'version': '1.0.0',
+                'created_at': datetime.now().isoformat(),
+                'metrics': {
+                    'accuracy': 0.93,
+                    'false_positive_rate': 0.03,
+                    'false_negative_rate': 0.04
+                },
+                'status': 'active',
+                'description': 'Threshold-based anomaly detection',
+                'capabilities': [
+                    'Threshold violation detection',
+                    'Rate limiting detection',
+                    'Resource usage monitoring'
                 ]
             }
         }
@@ -177,9 +250,12 @@ class ModelManager:
             # Determine if the model should be running based on its status
             is_running = model_data['status'] in ['active', 'analyzing', 'initialized']
             
+            # Use the correct name from model_data or fall back to model_id
+            agent_name = model_data.get('name', model_id)
+            
             self._update_model_status(model_id, {
                 'id': model_id,
-                'name': model_id,
+                'name': agent_name,
                 'status': model_data['status'],
                 'is_running': is_running,
                 'last_run': None,
@@ -194,10 +270,19 @@ class ModelManager:
                 self.logger.warning(f"Model {model_id} already registered")
                 return False
 
+            # Get agent name from configuration or fall back to class name
+            agent_name = getattr(agent, 'agent_name', None)
+            if not agent_name:
+                # Try to get name from agent configuration
+                agent_name = getattr(agent, 'name', None)
+            if not agent_name:
+                # Fall back to class name
+                agent_name = agent.__class__.__name__
+
             # Create model entry
             model_entry = {
                 'id': model_id,
-                'name': agent.__class__.__name__,
+                'name': agent_name,
                 'status': 'initialized',
                 'is_running': False,
                 'last_run': None,
@@ -218,7 +303,7 @@ class ModelManager:
             if self.status_manager:
                 self.status_manager.update_status('connected')
             
-            self.logger.info(f"Successfully registered model: {model_id}")
+            self.logger.info(f"Successfully registered model: {model_id} with name: {agent_name}")
             return True
             
         except Exception as e:

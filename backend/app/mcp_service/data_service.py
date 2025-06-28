@@ -113,17 +113,36 @@ class DataService:
                 if start_time is not None and end_time is not None:
                     if programs is not None:
                         # Both start/end time and programs provided
-                        query = """
+                        # Use case-insensitive matching with ILIKE and handle variations
+                        program_conditions = []
+                        params = [start_time, end_time]
+                        param_index = 3  # Start after time parameters
+                        
+                        for program in programs:
+                            # Handle common variations
+                            if program.lower() == 'cron':
+                                program_conditions.append(f"(process_name ILIKE ${param_index} OR process_name ILIKE ${param_index + 1})")
+                                params.extend([f'%{program}%', f'%{program}d%'])  # cron and crond
+                                param_index += 2
+                            elif program.lower() == 'watchdog':
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                            else:
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                        
+                        query = f"""
                             SELECT 
                                 id, device_id, device_ip, timestamp, log_level, 
                                 process_name, message, raw_message, structured_data,
                                 pushed_to_ai, pushed_at, push_attempts, last_push_error
                             FROM log_entries
                             WHERE timestamp >= $1 AND timestamp <= $2
-                            AND process_name = ANY($3::text[])
+                            AND ({' OR '.join(program_conditions)})
                             ORDER BY timestamp DESC
                         """
-                        params = [start_time, end_time, programs]
                     else:
                         # Only time constraints, no program filter
                         query = """
@@ -139,17 +158,36 @@ class DataService:
                 elif start_time is not None:
                     if programs is not None:
                         # Only start time and programs provided
-                        query = """
+                        # Use case-insensitive matching with ILIKE and handle variations
+                        program_conditions = []
+                        params = [start_time]
+                        param_index = 2  # Start after time parameter
+                        
+                        for program in programs:
+                            # Handle common variations
+                            if program.lower() == 'cron':
+                                program_conditions.append(f"(process_name ILIKE ${param_index} OR process_name ILIKE ${param_index + 1})")
+                                params.extend([f'%{program}%', f'%{program}d%'])  # cron and crond
+                                param_index += 2
+                            elif program.lower() == 'watchdog':
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                            else:
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                        
+                        query = f"""
                             SELECT 
                                 id, device_id, device_ip, timestamp, log_level, 
                                 process_name, message, raw_message, structured_data,
                                 pushed_to_ai, pushed_at, push_attempts, last_push_error
                             FROM log_entries
                             WHERE timestamp >= $1
-                            AND process_name = ANY($2::text[])
+                            AND ({' OR '.join(program_conditions)})
                             ORDER BY timestamp DESC
                         """
-                        params = [start_time, programs]
                     else:
                         # Only start time, no program filter
                         query = """
@@ -165,17 +203,36 @@ class DataService:
                 elif end_time is not None:
                     if programs is not None:
                         # Only end time and programs provided
-                        query = """
+                        # Use case-insensitive matching with ILIKE and handle variations
+                        program_conditions = []
+                        params = [end_time]
+                        param_index = 2  # Start after time parameter
+                        
+                        for program in programs:
+                            # Handle common variations
+                            if program.lower() == 'cron':
+                                program_conditions.append(f"(process_name ILIKE ${param_index} OR process_name ILIKE ${param_index + 1})")
+                                params.extend([f'%{program}%', f'%{program}d%'])  # cron and crond
+                                param_index += 2
+                            elif program.lower() == 'watchdog':
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                            else:
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                        
+                        query = f"""
                             SELECT 
                                 id, device_id, device_ip, timestamp, log_level, 
                                 process_name, message, raw_message, structured_data,
                                 pushed_to_ai, pushed_at, push_attempts, last_push_error
                             FROM log_entries
                             WHERE timestamp <= $1
-                            AND process_name = ANY($2::text[])
+                            AND ({' OR '.join(program_conditions)})
                             ORDER BY timestamp DESC
                         """
-                        params = [end_time, programs]
                     else:
                         # Only end time, no program filter
                         query = """
@@ -191,16 +248,35 @@ class DataService:
                 else:
                     if programs is not None:
                         # Only programs provided, no time constraints
-                        query = """
+                        # Use case-insensitive matching with ILIKE and handle variations
+                        program_conditions = []
+                        params = []
+                        param_index = 1  # Start from 1
+                        
+                        for program in programs:
+                            # Handle common variations
+                            if program.lower() == 'cron':
+                                program_conditions.append(f"(process_name ILIKE ${param_index} OR process_name ILIKE ${param_index + 1})")
+                                params.extend([f'%{program}%', f'%{program}d%'])  # cron and crond
+                                param_index += 2
+                            elif program.lower() == 'watchdog':
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                            else:
+                                program_conditions.append(f"process_name ILIKE ${param_index}")
+                                params.extend([f'%{program}%'])
+                                param_index += 1
+                        
+                        query = f"""
                             SELECT 
                                 id, device_id, device_ip, timestamp, log_level, 
                                 process_name, message, raw_message, structured_data,
                                 pushed_to_ai, pushed_at, push_attempts, last_push_error
                             FROM log_entries
-                            WHERE process_name = ANY($1::text[])
+                            WHERE ({' OR '.join(program_conditions)})
                             ORDER BY timestamp DESC
                         """
-                        params = [programs]
                     else:
                         # No constraints - get all logs
                         query = """
@@ -245,12 +321,12 @@ class DataService:
             logger.error(f"Error storing anomaly: {e}")
             raise
 
-    async def get_recent_logs(self, programs: List[str], minutes: int = 5) -> List[Dict[str, Any]]:
+    async def get_recent_logs(self, programs: Optional[List[str]], minutes: int = 5) -> List[Dict[str, Any]]:
         """
-        Get recent logs for specific programs.
+        Get recent logs for specific programs from the database.
         
         Args:
-            programs: List of program names to filter by
+            programs: List of program names to filter by (None for all programs)
             minutes: Number of minutes to look back
             
         Returns:
@@ -260,24 +336,14 @@ class DataService:
             end_time = datetime.now()
             start_time = end_time - timedelta(minutes=minutes)
             
-            logs = []
-            for program in programs:
-                # Get all logs for this program
-                program_logs = self.redis_client.lrange(f"logs:{program}", 0, -1)
-                
-                # Filter logs by time range
-                for log_str in program_logs:
-                    try:
-                        log = eval(log_str)  # Convert string representation to dict
-                        log_time = datetime.fromisoformat(log['timestamp'])
-                        
-                        if start_time <= log_time <= end_time:
-                            logs.append(log)
-                    except Exception as e:
-                        logger.error(f"Error parsing log entry: {e}")
-                        continue
+            # Use the existing get_logs_by_program method to get logs from database
+            logs = await self.get_logs_by_program(
+                start_time=start_time,
+                end_time=end_time,
+                programs=programs
+            )
             
-            logger.info(f"Retrieved {len(logs)} logs for programs {programs}")
+            logger.info(f"Retrieved {len(logs)} logs for programs {programs if programs else 'all'} from database")
             return logs
             
         except Exception as e:

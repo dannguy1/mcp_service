@@ -260,10 +260,17 @@ class AgentRegistry:
             self.agents[agent_id] = agent
             self.logger.info(f"Registered agent: {agent_id}")
             
+            # Get agent name from agent instance or configuration
+            agent_name = getattr(agent, 'agent_name', None)
+            if not agent_name and agent_id in self.agent_configs:
+                agent_name = self.agent_configs[agent_id].get('name', agent.__class__.__name__)
+            elif not agent_name:
+                agent_name = agent.__class__.__name__
+            
             # Update status in Redis
             self._update_agent_status(agent_id, {
                 'id': agent_id,
-                'name': agent.__class__.__name__,
+                'name': agent_name,
                 'status': 'registered',
                 'is_running': agent.is_running,
                 'last_run': agent.last_run.isoformat() if agent.last_run else None,
