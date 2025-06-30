@@ -5,19 +5,34 @@ import shutil
 import logging
 import hashlib
 import tempfile
+import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import joblib
+
+from ..models.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
 class ModelLoader:
     """Service for loading and validating model packages."""
     
-    def __init__(self, models_directory: str = "backend/models"):
-        self.models_directory = Path(models_directory)
+    def __init__(self, config: Optional[ModelConfig] = None):
+        self.config = config or ModelConfig()
+        
+        # Use the configuration's storage directory
+        models_dir = self.config.storage.directory
+        
+        # Resolve the models directory path relative to the project root
+        # This ensures consistency with ModelManager
+        project_root = Path(__file__).parent.parent.parent
+        self.models_directory = project_root / models_dir
+        
+        # Ensure models directory exists
         self.models_directory.mkdir(parents=True, exist_ok=True)
+        
+        logger.info(f"ModelLoader initialized with models directory: {self.models_directory}")
         
         # Define required and optional components
         self.required_files = [
@@ -33,6 +48,20 @@ class ModelLoader:
             'README.md'
         ]
     
+    def _handle_version_warnings(self, warnings_list: List[warnings.WarningMessage]) -> List[str]:
+        """Handle scikit-learn version warnings based on configuration."""
+        version_warnings = []
+        
+        for warning in warnings_list:
+            if "InconsistentVersionWarning" in str(warning.message) or "version" in str(warning.message).lower():
+                if self.config.compatibility.log_version_warnings:
+                    logger.warning(f"Version compatibility warning: {warning.message}")
+                
+                if not self.config.compatibility.suppress_version_warnings:
+                    version_warnings.append(f"Version compatibility warning: {warning.message}")
+        
+        return version_warnings
+
     async def process_model_package(self, zip_path: str, validate: bool = True) -> Dict[str, Any]:
         """Process uploaded model package ZIP file."""
         try:
@@ -163,21 +192,44 @@ class ModelLoader:
                     validation_result['is_valid'] = False
                     validation_result['errors'].append("Invalid deployment_manifest.json format")
             
-            # Test model loading
+            # Test model loading with scikit-learn version compatibility handling
             try:
                 model_file = model_dir / 'model.joblib'
                 if model_file.exists():
-                    model = joblib.load(str(model_file))
-                    validation_result['metadata']['model_type'] = type(model).__name__
-                    
-                    # Basic model validation
-                    if not hasattr(model, 'predict'):
-                        validation_result['is_valid'] = False
-                        validation_result['errors'].append("Model does not have required 'predict' method")
+                    # Suppress scikit-learn version warnings during loading
+                    with warnings.catch_warnings(record=True) as w:
+                        warnings.simplefilter("ignore", category=UserWarning)
+                        warnings.simplefilter("ignore", category=FutureWarning)
+                        
+                        # Try to load the model
+                        model = joblib.load(str(model_file))
+                        
+                        # Handle version warnings based on configuration
+                        version_warnings = self._handle_version_warnings(w)
+                        validation_result['warnings'].extend(version_warnings)
+                        
+                        validation_result['metadata']['model_type'] = type(model).__name__
+                        
+                        # Basic model validation
+                        if not hasattr(model, 'predict'):
+                            validation_result['is_valid'] = False
+                            validation_result['errors'].append("Model does not have required 'predict' method")
                     
             except Exception as e:
-                validation_result['is_valid'] = False
-                validation_result['errors'].append(f"Failed to load model: {str(e)}")
+                # Check if it's a scikit-learn version compatibility issue
+                error_str = str(e).lower()
+                if "inconsistentversionwarning" in error_str or "version" in error_str:
+                    if self.config.compatibility.allow_version_mismatch:
+                        validation_result['warnings'].append(f"Version compatibility issue: {str(e)}")
+                        if self.config.compatibility.log_version_warnings:
+                            logger.warning(f"Model loading encountered version compatibility issue: {e}")
+                        # Don't fail the import for version warnings if allowed
+                    else:
+                        validation_result['is_valid'] = False
+                        validation_result['errors'].append(f"Version compatibility error: {str(e)}")
+                else:
+                    validation_result['is_valid'] = False
+                    validation_result['errors'].append(f"Failed to load model: {str(e)}")
             
             # Add summary information
             if validation_result['optional_files_missing']:

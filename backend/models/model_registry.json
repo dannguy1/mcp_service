@@ -9,13 +9,20 @@
       "last_updated": "2025-06-23T08:42:43.363057"
     },
     {
-      "version": "test_model_20250618_151129",
-      "path": "models/test_model_20250618_151129",
-      "status": "available",
-      "created_at": "2025-06-27T14:27:35.230796",
-      "last_updated": "2025-06-27T14:27:35.230806",
+      "version": "model_tmpro35_reu.zip",
+      "path": "models/model_tmpro35_reu.zip",
+      "status": "deployed",
+      "created_at": "2025-06-30T13:09:26.590285",
+      "last_updated": "2025-06-30T13:10:13.615148",
       "model_type": "IsolationForest"
     }
   ],
-  "last_updated": "2025-06-27T14:27:35.230809"
+  "last_updated": "2025-06-30T13:10:13.615157",
+  "tmpro35_reu.zip": {
+    "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpro35_reu.zip",
+    "created_at": "2025-06-30T13:09:22.397116",
+    "status": "imported",
+    "last_updated": "2025-06-30T13:09:22.397127",
+    "import_method": "zip_upload"
+  }
 }

@@ -9,7 +9,29 @@ interface ModelValidationSummaryProps {
 const ModelValidationSummaryComponent: React.FC<ModelValidationSummaryProps> = ({ 
   validationSummary 
 }) => {
-  const { required_files_present, optional_files_missing, warnings } = validationSummary;
+  // Handle cases where validationSummary might be undefined or have different structure
+  if (!validationSummary) {
+    return (
+      <Card className="mt-3">
+        <Card.Header>
+          <h6 className="mb-0">Import Validation Summary</h6>
+        </Card.Header>
+        <Card.Body>
+          <div className="text-muted">
+            <i className="fas fa-info-circle me-2"></i>
+            No validation summary available
+          </div>
+        </Card.Body>
+      </Card>
+    );
+  }
+
+  // Safely destructure with defaults
+  const { 
+    required_files_present = [], 
+    optional_files_missing = [], 
+    warnings = [] 
+  } = validationSummary;
 
   return (
     <Card className="mt-3">
@@ -24,12 +46,19 @@ const ModelValidationSummaryComponent: React.FC<ModelValidationSummaryProps> = (
               Required Files Present ({required_files_present.length})
             </h6>
             <ListGroup variant="flush" className="mb-3">
-              {required_files_present.map((file, index) => (
-                <ListGroup.Item key={index} className="py-1">
-                  <Badge bg="success" className="me-2">✓</Badge>
-                  {file}
+              {required_files_present.length > 0 ? (
+                required_files_present.map((file, index) => (
+                  <ListGroup.Item key={index} className="py-1">
+                    <Badge bg="success" className="me-2">✓</Badge>
+                    {file}
+                  </ListGroup.Item>
+                ))
+              ) : (
+                <ListGroup.Item className="py-1 text-muted">
+                  <Badge bg="secondary" className="me-2">?</Badge>
+                  No required files information available
                 </ListGroup.Item>
-              ))}
+              )}
             </ListGroup>
           </div>
           

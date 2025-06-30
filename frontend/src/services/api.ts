@@ -189,6 +189,11 @@ export const endpoints = {
     return api.post(`/model-management/${version}/rollback`).then(res => res.data);
   },
 
+  deleteModel: (version: string) => {
+    console.log("Deleting model version:", version);
+    return api.delete(`/model-management/${version}`).then(res => res.data);
+  },
+
   getTransferHistory: () => {
     console.log("Fetching transfer history...");
     return api.get<ModelTransferHistory[]>('/model-management/transfer-history').then(res => res.data);

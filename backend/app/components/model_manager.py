@@ -1,6 +1,7 @@
 import os
 import pickle
 import logging
+import warnings
 from typing import Any, Optional, Dict, List, Tuple
 import asyncio
 from datetime import datetime, timedelta
@@ -162,42 +163,71 @@ class ModelManager:
             
             # Load and validate metadata
             if (model_dir / 'metadata.json').exists():
-                with open(model_dir / 'metadata.json', 'r') as f:
-                    metadata = json.load(f)
-                
-                validation_result['metadata'] = metadata
-                
-                # Check metadata structure (warnings for missing fields, not errors)
-                required_metadata_fields = ['model_info', 'training_info', 'evaluation_info']
-                for field in required_metadata_fields:
-                    if field not in metadata:
-                        validation_result['warnings'].append(f"Missing metadata field: {field}")
-                
-                # Check model type compatibility
-                model_type = metadata.get('model_info', {}).get('model_type', '')
-                if model_type not in ['IsolationForest', 'LocalOutlierFactor']:
-                    validation_result['warnings'].append(f"Unknown model type: {model_type}")
-                
-                # Check evaluation metrics
-                evaluation_metrics = metadata.get('evaluation_info', {}).get('basic_metrics', {})
-                if evaluation_metrics:
-                    # Check if metrics meet minimum thresholds
-                    if evaluation_metrics.get('f1_score', 0) < 0.5:
-                        validation_result['warnings'].append("Low F1 score detected")
+                try:
+                    with open(model_dir / 'metadata.json', 'r') as f:
+                        metadata = json.load(f)
                     
-                    if evaluation_metrics.get('roc_auc', 0) < 0.6:
-                        validation_result['warnings'].append("Low ROC AUC detected")
+                    validation_result['metadata'] = metadata
+                    
+                    # Check metadata structure (warnings for missing fields, not errors)
+                    required_metadata_fields = ['model_info', 'training_info', 'evaluation_info']
+                    for field in required_metadata_fields:
+                        if field not in metadata:
+                            validation_result['warnings'].append(f"Missing metadata field: {field}")
+                    
+                    # Check model type compatibility
+                    model_type = metadata.get('model_info', {}).get('model_type', '')
+                    if model_type not in ['IsolationForest', 'LocalOutlierFactor']:
+                        validation_result['warnings'].append(f"Unknown model type: {model_type}")
+                    
+                    # Check evaluation metrics
+                    evaluation_metrics = metadata.get('evaluation_info', {}).get('basic_metrics', {})
+                    if evaluation_metrics:
+                        # Check if metrics meet minimum thresholds
+                        if evaluation_metrics.get('f1_score', 0) < 0.5:
+                            validation_result['warnings'].append("Low F1 score detected")
+                        
+                        if evaluation_metrics.get('roc_auc', 0) < 0.6:
+                            validation_result['warnings'].append("Low ROC AUC detected")
+                
+                except json.JSONDecodeError:
+                    validation_result['is_valid'] = False
+                    validation_result['errors'].append("Invalid metadata.json format")
             
-            # Test model loading
+            # Test model loading with scikit-learn version compatibility handling
             if (model_dir / 'model.joblib').exists():
                 try:
-                    test_model = joblib.load(model_dir / 'model.joblib')
-                    if not hasattr(test_model, 'predict'):
-                        validation_result['is_valid'] = False
-                        validation_result['errors'].append("Model does not have predict method")
+                    # Suppress scikit-learn version warnings during loading
+                    with warnings.catch_warnings(record=True) as w:
+                        warnings.simplefilter("ignore", category=UserWarning)
+                        warnings.simplefilter("ignore", category=FutureWarning)
+                        
+                        # Try to load the model
+                        test_model = joblib.load(model_dir / 'model.joblib')
+                        
+                        # Handle version warnings based on configuration
+                        version_warnings = self._handle_version_warnings(w)
+                        validation_result['warnings'].extend(version_warnings)
+                        
+                        if not hasattr(test_model, 'predict'):
+                            validation_result['is_valid'] = False
+                            validation_result['errors'].append("Model does not have predict method")
+                
                 except Exception as e:
-                    validation_result['is_valid'] = False
-                    validation_result['errors'].append(f"Model loading failed: {str(e)}")
+                    # Check if it's a scikit-learn version compatibility issue
+                    error_str = str(e).lower()
+                    if "inconsistentversionwarning" in error_str or "version" in error_str:
+                        if self.config.compatibility.allow_version_mismatch:
+                            validation_result['warnings'].append(f"Version compatibility issue: {str(e)}")
+                            if self.config.compatibility.log_version_warnings:
+                                logger.warning(f"Model loading encountered version compatibility issue: {e}")
+                            # Don't fail the import for version warnings if allowed
+                        else:
+                            validation_result['is_valid'] = False
+                            validation_result['errors'].append(f"Version compatibility error: {str(e)}")
+                    else:
+                        validation_result['is_valid'] = False
+                        validation_result['errors'].append(f"Model loading failed: {str(e)}")
             
             # Check feature compatibility
             if 'training_info' in metadata:
@@ -242,6 +272,20 @@ class ModelManager:
             with open(metadata_path, 'w') as f:
                 json.dump(metadata, f, indent=2, default=str)
     
+    def _handle_version_warnings(self, warnings_list: List[warnings.WarningMessage]) -> List[str]:
+        """Handle scikit-learn version warnings based on configuration."""
+        version_warnings = []
+        
+        for warning in warnings_list:
+            if "InconsistentVersionWarning" in str(warning.message) or "version" in str(warning.message).lower():
+                if self.config.compatibility.log_version_warnings:
+                    logger.warning(f"Version compatibility warning: {warning.message}")
+                
+                if not self.config.compatibility.suppress_version_warnings:
+                    version_warnings.append(f"Version compatibility warning: {warning.message}")
+        
+        return version_warnings
+    
     async def load_model(self, model_path: str, scaler_path: Optional[str] = None) -> bool:
         """Load a trained model from file paths."""
         try:
@@ -252,13 +296,34 @@ class ModelManager:
                 logger.error(f"Model file not found: {model_path}")
                 return False
             
-            # Load model
-            self.current_model = joblib.load(model_path)
+            # Load model with scikit-learn version compatibility handling
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("ignore", category=UserWarning)
+                warnings.simplefilter("ignore", category=FutureWarning)
+                
+                # Load the model
+                self.current_model = joblib.load(model_path)
+                
+                # Handle version warnings based on configuration
+                version_warnings = self._handle_version_warnings(w)
+                for warning in version_warnings:
+                    logger.warning(f"Model loaded with version compatibility warning: {warning}")
+            
             logger.info(f"Model loaded successfully: {type(self.current_model).__name__}")
             
             # Load scaler if provided
             if scaler_path and Path(scaler_path).exists():
-                self.current_scaler = joblib.load(scaler_path)
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("ignore", category=UserWarning)
+                    warnings.simplefilter("ignore", category=FutureWarning)
+                    
+                    self.current_scaler = joblib.load(scaler_path)
+                    
+                    # Handle version warnings based on configuration
+                    version_warnings = self._handle_version_warnings(w)
+                    for warning in version_warnings:
+                        logger.warning(f"Scaler loaded with version compatibility warning: {warning}")
+                
                 logger.info("Scaler loaded successfully")
             else:
                 logger.warning("No scaler provided, using unscaled features")
@@ -356,6 +421,75 @@ class ModelManager:
         except Exception as e:
             logger.error(f"Error rolling back to version {version}: {e}")
             return False
+    
+    async def delete_model(self, version: str) -> bool:
+        """Delete a model version from the registry and filesystem."""
+        try:
+            # Check if version exists
+            models = await self.list_models()
+            model_info = next((m for m in models if m['version'] == version), None)
+            
+            if not model_info:
+                logger.error(f"Model version not found in registry: {version}")
+                return False
+            
+            model_path = Path(model_info['path'])
+            
+            # Check if this is the currently deployed model
+            if model_info.get('status') == 'deployed':
+                logger.warning(f"Cannot delete currently deployed model: {version}")
+                return False
+            
+            # Remove from registry first
+            await self._remove_from_registry(version)
+            
+            # Delete model files
+            if model_path.exists():
+                try:
+                    shutil.rmtree(model_path)
+                    logger.info(f"Deleted model directory: {model_path}")
+                except Exception as e:
+                    logger.error(f"Error deleting model directory {model_path}: {e}")
+                    # Continue even if file deletion fails, as registry is already updated
+            
+            logger.info(f"Model version {version} deleted successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error deleting model version {version}: {e}")
+            return False
+
+    async def _remove_from_registry(self, version: str):
+        """Remove a model from the registry."""
+        try:
+            if not self.model_registry_file.exists():
+                return
+            
+            with open(self.model_registry_file, 'r') as f:
+                registry_data = json.load(f)
+            
+            # Handle both old and new registry formats
+            if isinstance(registry_data, dict) and 'models' in registry_data:
+                # Old format: {"models": [...], "last_updated": "..."}
+                models_list = registry_data.get('models', [])
+                # Remove the model from the list
+                registry_data['models'] = [m for m in models_list if m.get('version') != version]
+                registry_data['last_updated'] = datetime.now().isoformat()
+                
+            elif isinstance(registry_data, dict):
+                # New format: {"version": {...}, "version2": {...}}
+                if version in registry_data:
+                    del registry_data[version]
+            
+            # Save updated registry
+            with open(self.model_registry_file, 'w') as f:
+                json.dump(registry_data, f, indent=2)
+                
+            logger.info(f"Model {version} removed from registry")
+            
+        except Exception as e:
+            logger.error(f"Error removing model from registry: {e}")
+            raise
     
     async def _update_deployment_status(self, version: str, status: str):
         """Update deployment status in model metadata."""

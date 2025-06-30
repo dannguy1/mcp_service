@@ -57,12 +57,30 @@ const Models: React.FC = () => {
 
   const handleDelete = async (version: string) => {
     try {
-      // For now, just show a message since delete endpoint might not exist
-      toast.error('Delete functionality not implemented yet');
+      await endpoints.deleteModel(version);
+      toast.success(`Model ${version} deleted successfully`);
       setShowDeleteModal(null);
+      refetch();
     } catch (error: any) {
       console.error('Failed to delete model:', error);
-      toast.error('Failed to delete model');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to delete model';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -141,20 +159,70 @@ const Models: React.FC = () => {
       const result = await endpoints.importModelPackage(formData);
       
       console.log("Upload successful:", result);
-      toast.success(`Model imported successfully: ${result.version}`);
       
-      // Show validation summary if available
-      if (result.validation_summary) {
+      // Check for validation warnings
+      if (result.validation_summary && result.validation_summary.warnings && result.validation_summary.warnings.length > 0) {
+        // Show success message with warnings
+        toast.success(`Model imported successfully: ${result.version}`, {
+          duration: 5000
+        });
+        
+        // Show warnings in a more detailed way
+        const warningMessage = result.validation_summary.warnings.join('; ');
+        toast(`Import completed with warnings: ${warningMessage}`, {
+          duration: 8000,
+          icon: '⚠️',
+          style: {
+            background: '#fff3cd',
+            color: '#856404',
+            border: '1px solid #ffeaa7'
+          }
+        });
+        
+        // Set validation summary for detailed view
         setShowValidationSummary(result.validation_summary);
+      } else {
+        // Clean success
+        toast.success(`Model imported successfully: ${result.version}`);
       }
       
       setShowAddModal(false);
       setSelectedFile(null);
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Upload failed:", error);
       console.error("Error details:", error.response?.data || error.message);
-      toast.error('Failed to upload model package');
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to upload model package';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        if (typeof errorData === 'string') {
+          errorMessage = errorData;
+        } else if (errorData.detail) {
+          errorMessage = errorData.detail;
+        } else if (errorData.message) {
+          errorMessage = errorData.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check if it's a validation error with warnings
+      if (errorMessage.includes('validation') || errorMessage.includes('warning')) {
+        toast(`Validation warning: ${errorMessage}`, {
+          duration: 8000,
+          icon: '⚠️',
+          style: {
+            background: '#fff3cd',
+            color: '#856404',
+            border: '1px solid #ffeaa7'
+          }
+        });
+      } else {
+        toast.error(errorMessage);
+      }
     }
   };
 
@@ -784,7 +852,7 @@ const Models: React.FC = () => {
         </Modal.Header>
         <Modal.Body>
           {showValidationSummary && (
-            <ModelValidationSummaryComponent summary={showValidationSummary} />
+            <ModelValidationSummaryComponent validationSummary={showValidationSummary} />
           )}
         </Modal.Body>
         <Modal.Footer>

@@ -38,8 +38,9 @@ async def import_model_package(
         if not file.filename:
             raise HTTPException(status_code=400, detail="No file provided")
         
-        # Initialize model loader for validation
-        model_loader = ModelLoader()
+        # Initialize model loader with configuration
+        config = ModelConfig()
+        model_loader = ModelLoader(config=config)
         
         # Validate file
         content = await file.read()
@@ -156,6 +157,27 @@ async def rollback_model(version: str) -> Dict[str, Any]:
             
     except Exception as e:
         logger.error(f"Error rolling back model: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{version}")
+async def delete_model(version: str) -> Dict[str, Any]:
+    """Delete a specific model version."""
+    try:
+        config = ModelConfig()
+        model_manager = ModelManager(config)
+        success = await model_manager.delete_model(version)
+        
+        if success:
+            return {
+                "version": version,
+                "status": "deleted",
+                "deleted_at": datetime.now().isoformat()
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to delete model")
+            
+    except Exception as e:
+        logger.error(f"Error deleting model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/transfer-history")

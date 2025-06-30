@@ -67,11 +67,15 @@ class LoggingConfig(BaseModel):
     """Logging configuration."""
     level: str = Field(default="INFO", description="Logging level")
     format: str = Field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s", description="Log format")
-    file: str = Field(default="logs/model_training.log", description="Log file path")
-    rotation: Dict[str, Any] = Field(default_factory=lambda: {
-        "max_size": "100MB",
-        "backup_count": 10
-    }, description="Log rotation configuration")
+    file: str = Field(default="logs/model_inference.log", description="Log file path")
+    rotation: Dict[str, Any] = Field(default_factory=lambda: {"max_size": "100MB", "backup_count": 10}, description="Log rotation settings")
+
+class CompatibilityConfig(BaseModel):
+    """Model compatibility configuration."""
+    suppress_version_warnings: bool = Field(default=True, description="Suppress scikit-learn version compatibility warnings")
+    allow_version_mismatch: bool = Field(default=True, description="Allow models trained with different scikit-learn versions")
+    max_version_difference: str = Field(default="2.0", description="Maximum allowed version difference (e.g., '2.0' means 2 major versions)")
+    log_version_warnings: bool = Field(default=True, description="Log version warnings even when suppressed")
 
 class ModelConfig(BaseModel):
     """Enhanced configuration for model management and inference."""
@@ -100,6 +104,9 @@ class ModelConfig(BaseModel):
     
     # Logging configuration
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    
+    # Compatibility configuration
+    compatibility: CompatibilityConfig = Field(default_factory=CompatibilityConfig)
     
     model_config = {
         'protected_namespaces': ()  # Disable protected namespaces
