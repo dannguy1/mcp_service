@@ -166,7 +166,9 @@ class AgentRegistry:
         """
         try:
             # Create agents directory if it doesn't exist
-            agents_config_dir = Path("backend/app/config/agents")
+            # Use the same path resolution as _load_agent_configs
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent  # Go up to project root
+            agents_config_dir = base_dir / "app" / "config" / "agents"
             agents_config_dir.mkdir(exist_ok=True)
             
             # Save configuration file
@@ -193,7 +195,27 @@ class AgentRegistry:
         Returns:
             dict: Agent configuration or None if not found
         """
-        return self.agent_configs.get(agent_id)
+        # First check in-memory config
+        if agent_id in self.agent_configs:
+            return self.agent_configs.get(agent_id)
+        
+        # If not in memory, try to load from file
+        try:
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent  # Go up to project root
+            agents_config_dir = base_dir / "app" / "config" / "agents"
+            config_file = agents_config_dir / f"{agent_id}.yaml"
+            
+            if config_file.exists():
+                with open(config_file, 'r') as f:
+                    config = yaml.safe_load(f)
+                    # Update in-memory cache
+                    self.agent_configs[agent_id] = config
+                    self.logger.info(f"Loaded {agent_id} configuration from file")
+                    return config
+        except Exception as e:
+            self.logger.error(f"Error loading {agent_id} configuration from file: {e}")
+        
+        return None
     
     def list_agent_configs(self) -> List[Dict[str, Any]]:
         """List all available agent configurations.
@@ -234,7 +256,8 @@ class AgentRegistry:
                 del self.agents[agent_id]
             
             # Delete configuration file
-            agents_config_dir = Path("backend/app/config/agents")
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent  # Go up to project root
+            agents_config_dir = base_dir / "app" / "config" / "agents"
             config_file = agents_config_dir / f"{agent_id}.yaml"
             if config_file.exists():
                 config_file.unlink()
