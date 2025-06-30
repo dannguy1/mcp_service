@@ -11,9 +11,61 @@ from ...services.model_performance_monitor import ModelPerformanceMonitor
 from ...services.model_loader import ModelLoader
 from ...components.model_manager import ModelManager
 from ...models.config import ModelConfig
+from app.mcp_service.components.agent_registry import agent_registry
 
 router = APIRouter(tags=["model-management"])
 logger = logging.getLogger(__name__)
+
+def _get_model_agent_assignments() -> Dict[str, List[Dict[str, Any]]]:
+    """Get which agents are assigned to each model path."""
+    try:
+        agent_assignments = {}
+        
+        # Get all agent configurations
+        for agent_id, config in agent_registry.agent_configs.items():
+            model_path = config.get('model_path')
+            if model_path:
+                if model_path not in agent_assignments:
+                    agent_assignments[model_path] = []
+                
+                agent_assignments[model_path].append({
+                    'agent_id': agent_id,
+                    'agent_name': config.get('name', agent_id),
+                    'agent_type': config.get('agent_type', 'unknown'),
+                    'capabilities': config.get('capabilities', []),
+                    'status': 'configured'
+                })
+        
+        # Also check running agents
+        for agent_id, agent in agent_registry.agents.items():
+            if hasattr(agent, 'model_path') and agent.model_path:
+                if agent.model_path not in agent_assignments:
+                    agent_assignments[agent.model_path] = []
+                
+                # Check if agent is already in the list
+                existing_agent = next(
+                    (a for a in agent_assignments[agent.model_path] if a['agent_id'] == agent_id), 
+                    None
+                )
+                
+                if existing_agent:
+                    # Update status for running agent
+                    existing_agent['status'] = 'running' if agent.is_running else 'stopped'
+                else:
+                    # Add new agent entry
+                    agent_assignments[agent.model_path].append({
+                        'agent_id': agent_id,
+                        'agent_name': getattr(agent, 'agent_name', agent_id),
+                        'agent_type': getattr(agent, 'agent_type', 'unknown'),
+                        'capabilities': getattr(agent, 'capabilities', []),
+                        'status': 'running' if agent.is_running else 'stopped'
+                    })
+        
+        return agent_assignments
+        
+    except Exception as e:
+        logger.error(f"Error getting model agent assignments: {e}")
+        return {}
 
 @router.get("/training-service/models")
 async def get_training_service_models() -> List[Dict[str, Any]]:
@@ -204,6 +256,17 @@ async def list_models() -> List[Dict[str, Any]]:
         await model_manager.scan_model_directory()
         
         models = await model_manager.list_models()
+        
+        # Get agent assignments for each model
+        agent_assignments = _get_model_agent_assignments()
+        
+        # Add agent assignment information to each model
+        for model in models:
+            model_path = model.get('path', '')
+            assigned_agents = agent_assignments.get(model_path, [])
+            model['assigned_agents'] = assigned_agents
+            model['agent_count'] = len(assigned_agents)
+        
         return models
     except Exception as e:
         logger.error(f"Error listing models: {e}")
@@ -221,6 +284,13 @@ async def get_model_info(version: str) -> Dict[str, Any]:
         
         if not model_info:
             raise HTTPException(status_code=404, detail="Model not found")
+        
+        # Get agent assignments for this model
+        agent_assignments = _get_model_agent_assignments()
+        model_path = model_info.get('path', '')
+        assigned_agents = agent_assignments.get(model_path, [])
+        model_info['assigned_agents'] = assigned_agents
+        model_info['agent_count'] = len(assigned_agents)
         
         return model_info
         

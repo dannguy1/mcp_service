@@ -366,6 +366,14 @@ export interface EnhancedModel {
   created_at: string;
   last_updated: string;
   import_method: string;
+  assigned_agents?: Array<{
+    agent_id: string;
+    agent_name: string;
+    agent_type: string;
+    capabilities: string[];
+    status: string;
+  }>;
+  agent_count?: number;
   metadata: {
     model_info: {
       version: string;

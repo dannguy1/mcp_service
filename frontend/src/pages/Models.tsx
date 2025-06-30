@@ -300,6 +300,7 @@ const Models: React.FC = () => {
               <tr>
                 <th>Version</th>
                 <th>Status</th>
+                <th>Assigned Agents</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -319,6 +320,36 @@ const Models: React.FC = () => {
                     >
                       {model.status}
                     </Badge>
+                  </td>
+                  <td>
+                    {model.assigned_agents && model.assigned_agents.length > 0 ? (
+                      <div>
+                        <Badge bg="info" className="me-1">
+                          {model.agent_count || model.assigned_agents.length} agent(s)
+                        </Badge>
+                        <div className="small text-muted mt-1">
+                          {model.assigned_agents.slice(0, 2).map((agent: any) => (
+                            <div key={agent.agent_id} className="d-flex align-items-center">
+                              <Badge 
+                                bg={agent.status === 'running' ? 'success' : 'secondary'} 
+                                size="sm"
+                                className="me-1"
+                              >
+                                {agent.status}
+                              </Badge>
+                              {agent.agent_name}
+                            </div>
+                          ))}
+                          {model.assigned_agents.length > 2 && (
+                            <div className="text-muted">
+                              +{model.assigned_agents.length - 2} more...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-muted">No agents assigned</span>
+                    )}
                   </td>
                   <td>{new Date(model.created_at).toLocaleDateString()}</td>
                   <td>
@@ -599,6 +630,77 @@ const Models: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Agent Assignment Section */}
+              {(modelInfo as any).assigned_agents && (modelInfo as any).assigned_agents.length > 0 ? (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Assigned Agents</h5>
+                  <div className="row">
+                    <div className="col-12">
+                      <p><strong>Total Agents:</strong> <Badge bg="info">{(modelInfo as any).agent_count || (modelInfo as any).assigned_agents.length}</Badge></p>
+                      <div className="table-responsive">
+                        <Table striped bordered size="sm">
+                          <thead>
+                            <tr>
+                              <th>Agent Name</th>
+                              <th>Type</th>
+                              <th>Status</th>
+                              <th>Capabilities</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(modelInfo as any).assigned_agents.map((agent: any) => (
+                              <tr key={agent.agent_id}>
+                                <td>
+                                  <strong>{agent.agent_name}</strong>
+                                  <br />
+                                  <small className="text-muted">ID: {agent.agent_id}</small>
+                                </td>
+                                <td>
+                                  <Badge bg="secondary" size="sm">
+                                    {agent.agent_type}
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <Badge 
+                                    bg={agent.status === 'running' ? 'success' : 
+                                        agent.status === 'configured' ? 'info' : 'secondary'} 
+                                    size="sm"
+                                  >
+                                    {agent.status}
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <div className="small">
+                                    {agent.capabilities.slice(0, 3).map((capability: string, index: number) => (
+                                      <Badge key={index} bg="light" text="dark" size="sm" className="me-1 mb-1">
+                                        {capability}
+                                      </Badge>
+                                    ))}
+                                    {agent.capabilities.length > 3 && (
+                                      <Badge bg="light" text="dark" size="sm">
+                                        +{agent.capabilities.length - 3} more
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-4">
+                  <h5 className="border-bottom pb-2">Assigned Agents</h5>
+                  <Alert variant="info">
+                    <FaInfoCircle className="me-2" />
+                    No agents are currently assigned to this model.
+                  </Alert>
+                </div>
+              )}
 
               {/* Model Metadata Section */}
               {(modelInfo as any).metadata && (
