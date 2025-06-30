@@ -57,6 +57,12 @@ class ModelValidator:
             validation_result['warnings'].extend(age_check['warnings'])
             validation_result['recommendations'].extend(age_check['recommendations'])
             
+            # Check package structure
+            structure_check = self._validate_package_structure(model_dir)
+            validation_result['errors'].extend(structure_check['errors'])
+            validation_result['warnings'].extend(structure_check['warnings'])
+            validation_result['recommendations'].extend(structure_check['recommendations'])
+            
             # Calculate overall validation score
             validation_result['score'] = self._calculate_validation_score(validation_result)
             
@@ -223,6 +229,105 @@ class ModelValidator:
         
         return issues
     
+    def _validate_package_structure(self, model_dir: Path) -> Dict[str, Any]:
+        """Validate model package structure and required files."""
+        errors = []
+        warnings = []
+        recommendations = []
+        
+        # Required files
+        required_files = ['model.joblib', 'metadata.json']
+        for file in required_files:
+            if not (model_dir / file).exists():
+                errors.append(f"Missing required file: {file}")
+        
+        # Optional but recommended files
+        optional_files = [
+            'deployment_manifest.json',
+            'requirements.txt',
+            'README.md',
+            'validate_model.py',
+            'inference_example.py'
+        ]
+        
+        missing_optional = []
+        for file in optional_files:
+            if not (model_dir / file).exists():
+                missing_optional.append(file)
+        
+        if missing_optional:
+            warnings.append(f"Missing optional files: {', '.join(missing_optional)}")
+            recommendations.append("Consider adding missing optional files for better deployment experience")
+        
+        # Check metadata.json structure
+        metadata_file = model_dir / 'metadata.json'
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, 'r') as f:
+                    metadata = json.load(f)
+                
+                # Check required metadata sections
+                required_sections = ['model_info', 'training_info', 'evaluation_info']
+                missing_sections = []
+                for section in required_sections:
+                    if section not in metadata:
+                        missing_sections.append(section)
+                
+                if missing_sections:
+                    warnings.append(f"Missing metadata sections: {', '.join(missing_sections)}")
+                    recommendations.append("Add missing metadata sections for better model documentation")
+                
+                # Check model_info fields
+                model_info = metadata.get('model_info', {})
+                if not model_info.get('model_type'):
+                    warnings.append("Model type not specified in metadata")
+                if not model_info.get('description'):
+                    warnings.append("Model description not provided")
+                
+                # Check training_info fields
+                training_info = metadata.get('training_info', {})
+                if not training_info.get('n_samples'):
+                    warnings.append("Number of training samples not specified")
+                if not training_info.get('feature_names'):
+                    warnings.append("Feature names not provided")
+                
+                # Check evaluation_info fields
+                evaluation_info = metadata.get('evaluation_info', {})
+                basic_metrics = evaluation_info.get('basic_metrics', {})
+                if not basic_metrics:
+                    warnings.append("No evaluation metrics found")
+                else:
+                    required_metrics = ['f1_score', 'precision', 'recall', 'roc_auc']
+                    missing_metrics = [m for m in required_metrics if m not in basic_metrics]
+                    if missing_metrics:
+                        warnings.append(f"Missing evaluation metrics: {', '.join(missing_metrics)}")
+                
+            except json.JSONDecodeError:
+                errors.append("Invalid JSON format in metadata.json")
+            except Exception as e:
+                warnings.append(f"Error reading metadata.json: {str(e)}")
+        
+        # Check deployment_manifest.json if it exists
+        manifest_file = model_dir / 'deployment_manifest.json'
+        if manifest_file.exists():
+            try:
+                with open(manifest_file, 'r') as f:
+                    manifest = json.load(f)
+                
+                if 'file_hashes' not in manifest:
+                    warnings.append("No file hashes found in deployment manifest")
+                if 'dependencies' not in manifest:
+                    warnings.append("No dependencies listed in deployment manifest")
+                    
+            except json.JSONDecodeError:
+                warnings.append("Invalid JSON format in deployment_manifest.json")
+        
+        return {
+            'errors': errors,
+            'warnings': warnings,
+            'recommendations': recommendations
+        }
+    
     async def validate_model_compatibility(self, model_path: str, target_features: List[str]) -> Dict[str, Any]:
         """Validate model compatibility with target feature set."""
         try:
@@ -366,11 +471,21 @@ class ModelValidator:
             with open(model_dir / 'metadata.json', 'r') as f:
                 metadata = json.load(f)
             
+            # Get package structure information
+            package_structure = self._get_package_structure_info(model_dir)
+            
+            # Get comprehensive package information
+            package_info = self._get_comprehensive_package_info(model_dir, metadata)
+            
             report = {
                 'report_id': f"validation_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
                 'generated_at': datetime.now().isoformat(),
                 'model_path': model_path,
+                'package_info': package_info,
                 'model_info': metadata.get('model_info', {}),
+                'training_info': metadata.get('training_info', {}),
+                'evaluation_info': metadata.get('evaluation_info', {}),
+                'package_structure': package_structure,
                 'validation_summary': {
                     'is_valid': quality_result['is_valid'],
                     'score': quality_result['score'],
@@ -381,7 +496,8 @@ class ModelValidator:
                 'quality_metrics': quality_result['quality_metrics'],
                 'issues': quality_result['issues'],
                 'recommendations': quality_result['recommendations'],
-                'next_steps': self._generate_next_steps(quality_result)
+                'next_steps': self._generate_next_steps(quality_result),
+                'trainer_notes': self._generate_trainer_notes(quality_result, metadata, package_structure)
             }
             
             logger.info(f"Validation report generated: {report['report_id']}")
@@ -416,4 +532,277 @@ class ModelValidator:
         if validation_result['recommendations']:
             next_steps.extend(validation_result['recommendations'])
         
-        return next_steps 
+        return next_steps
+    
+    def _get_package_structure_info(self, model_dir: Path) -> Dict[str, Any]:
+        """Get detailed information about the model package structure."""
+        structure_info = {
+            'required_files': {
+                'model.joblib': (model_dir / 'model.joblib').exists(),
+                'metadata.json': (model_dir / 'metadata.json').exists()
+            },
+            'optional_files': {
+                'deployment_manifest.json': (model_dir / 'deployment_manifest.json').exists(),
+                'requirements.txt': (model_dir / 'requirements.txt').exists(),
+                'README.md': (model_dir / 'README.md').exists(),
+                'validate_model.py': (model_dir / 'validate_model.py').exists(),
+                'inference_example.py': (model_dir / 'inference_example.py').exists()
+            },
+            'file_sizes': {},
+            'total_package_size': 0
+        }
+        
+        # Calculate file sizes
+        total_size = 0
+        for file_path in model_dir.rglob('*'):
+            if file_path.is_file():
+                file_size = file_path.stat().st_size
+                relative_path = str(file_path.relative_to(model_dir))
+                structure_info['file_sizes'][relative_path] = file_size
+                total_size += file_size
+        
+        structure_info['total_package_size'] = total_size
+        
+        return structure_info
+    
+    def _generate_trainer_notes(self, validation_result: Dict[str, Any], metadata: Dict[str, Any], package_structure: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate specific notes for model trainers."""
+        trainer_notes = {
+            'critical_issues': [],
+            'quality_concerns': [],
+            'missing_components': [],
+            'improvement_suggestions': [],
+            'priority_actions': []
+        }
+        
+        # Critical issues that prevent deployment
+        if not validation_result['is_valid']:
+            trainer_notes['critical_issues'].append("Model failed validation - cannot be deployed")
+            trainer_notes['priority_actions'].append("Address all validation errors before resubmitting")
+        
+        # Quality concerns
+        quality_metrics = validation_result.get('quality_metrics', {})
+        if quality_metrics.get('f1_score', 0) < 0.5:
+            trainer_notes['quality_concerns'].append("F1 score below acceptable threshold (0.5)")
+            trainer_notes['improvement_suggestions'].append("Consider retraining with more balanced data or different model parameters")
+        
+        if quality_metrics.get('roc_auc', 0) < 0.6:
+            trainer_notes['quality_concerns'].append("ROC AUC below acceptable threshold (0.6)")
+            trainer_notes['improvement_suggestions'].append("Review feature engineering and model selection")
+        
+        # Missing components
+        required_files = package_structure.get('required_files', {})
+        for file_name, exists in required_files.items():
+            if not exists:
+                trainer_notes['missing_components'].append(f"Missing required file: {file_name}")
+        
+        optional_files = package_structure.get('optional_files', {})
+        missing_optional = [name for name, exists in optional_files.items() if not exists]
+        if missing_optional:
+            trainer_notes['missing_components'].append(f"Missing optional files: {', '.join(missing_optional)}")
+        
+        # Metadata issues
+        model_info = metadata.get('model_info', {})
+        if not model_info.get('description'):
+            trainer_notes['improvement_suggestions'].append("Add model description to metadata")
+        
+        training_info = metadata.get('training_info', {})
+        if not training_info.get('n_samples'):
+            trainer_notes['improvement_suggestions'].append("Specify number of training samples in metadata")
+        
+        if not training_info.get('feature_names'):
+            trainer_notes['improvement_suggestions'].append("Include feature names in metadata")
+        
+        evaluation_info = metadata.get('evaluation_info', {})
+        basic_metrics = evaluation_info.get('basic_metrics', {})
+        if not basic_metrics:
+            trainer_notes['missing_components'].append("No evaluation metrics found in metadata")
+        
+        # Priority actions
+        if validation_result['errors']:
+            trainer_notes['priority_actions'].append("Fix all validation errors")
+        
+        if validation_result['warnings']:
+            trainer_notes['priority_actions'].append("Review and address validation warnings")
+        
+        if trainer_notes['missing_components']:
+            trainer_notes['priority_actions'].append("Add missing components to model package")
+        
+        return trainer_notes
+    
+    def _get_comprehensive_package_info(self, model_dir: Path, metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Get comprehensive information about the model package for reference."""
+        package_info = {
+            'package_identifier': {
+                'name': None,
+                'version': None,
+                'type': None,
+                'description': None,
+                'author': None,
+                'organization': None
+            },
+            'source_information': {
+                'training_source': None,
+                'training_id': None,
+                'export_files': [],
+                'original_path': None,
+                'import_timestamp': None
+            },
+            'model_details': {
+                'model_type': None,
+                'model_name': None,
+                'algorithm': None,
+                'framework': None,
+                'framework_version': None
+            },
+            'creation_info': {
+                'created_at': None,
+                'created_by': None,
+                'training_duration': None,
+                'last_modified': None
+            },
+            'deployment_info': {
+                'deployment_ready': False,
+                'deployment_requirements': [],
+                'environment_dependencies': [],
+                'resource_requirements': {}
+            }
+        }
+        
+        # Extract package identifier information
+        model_info = metadata.get('model_info', {})
+        package_info['package_identifier'].update({
+            'name': model_info.get('model_name') or model_info.get('name'),
+            'version': model_info.get('version'),
+            'type': model_info.get('model_type'),
+            'description': model_info.get('description'),
+            'author': model_info.get('author'),
+            'organization': model_info.get('organization')
+        })
+        
+        # Extract source information
+        package_info['source_information'].update({
+            'training_source': model_info.get('training_source'),
+            'training_id': model_info.get('training_id'),
+            'export_files': model_info.get('export_files', []),
+            'original_path': str(model_dir),
+            'import_timestamp': model_info.get('created_at')
+        })
+        
+        # Extract model details
+        package_info['model_details'].update({
+            'model_type': model_info.get('model_type'),
+            'model_name': model_info.get('model_name'),
+            'algorithm': self._extract_algorithm_info(model_dir),
+            'framework': self._extract_framework_info(model_dir),
+            'framework_version': self._extract_framework_version(model_dir)
+        })
+        
+        # Extract creation information
+        package_info['creation_info'].update({
+            'created_at': model_info.get('created_at'),
+            'created_by': model_info.get('created_by'),
+            'training_duration': metadata.get('training_info', {}).get('training_duration'),
+            'last_modified': self._get_last_modified_time(model_dir)
+        })
+        
+        # Extract deployment information
+        deployment_manifest_path = model_dir / 'deployment_manifest.json'
+        if deployment_manifest_path.exists():
+            try:
+                with open(deployment_manifest_path, 'r') as f:
+                    deployment_manifest = json.load(f)
+                
+                package_info['deployment_info'].update({
+                    'deployment_ready': deployment_manifest.get('deployment_ready', False),
+                    'deployment_requirements': deployment_manifest.get('requirements', []),
+                    'environment_dependencies': deployment_manifest.get('dependencies', []),
+                    'resource_requirements': deployment_manifest.get('resource_requirements', {})
+                })
+            except Exception as e:
+                logger.warning(f"Error reading deployment manifest: {e}")
+        
+        # Extract requirements if available
+        requirements_path = model_dir / 'requirements.txt'
+        if requirements_path.exists():
+            try:
+                with open(requirements_path, 'r') as f:
+                    requirements = [line.strip() for line in f.readlines() if line.strip() and not line.startswith('#')]
+                package_info['deployment_info']['environment_dependencies'] = requirements
+            except Exception as e:
+                logger.warning(f"Error reading requirements.txt: {e}")
+        
+        return package_info
+    
+    def _extract_algorithm_info(self, model_dir: Path) -> str:
+        """Extract algorithm information from the model file."""
+        try:
+            model_path = model_dir / 'model.joblib'
+            if model_path.exists():
+                model = joblib.load(model_path)
+                return type(model).__name__
+        except Exception as e:
+            logger.warning(f"Error extracting algorithm info: {e}")
+        return "Unknown"
+    
+    def _extract_framework_info(self, model_dir: Path) -> str:
+        """Extract framework information."""
+        try:
+            # Check for common ML framework indicators
+            if (model_dir / 'requirements.txt').exists():
+                with open(model_dir / 'requirements.txt', 'r') as f:
+                    content = f.read().lower()
+                    if 'scikit-learn' in content or 'sklearn' in content:
+                        return 'scikit-learn'
+                    elif 'tensorflow' in content:
+                        return 'tensorflow'
+                    elif 'pytorch' in content or 'torch' in content:
+                        return 'pytorch'
+                    elif 'xgboost' in content:
+                        return 'xgboost'
+                    elif 'lightgbm' in content:
+                        return 'lightgbm'
+        except Exception as e:
+            logger.warning(f"Error extracting framework info: {e}")
+        return "Unknown"
+    
+    def _extract_framework_version(self, model_dir: Path) -> str:
+        """Extract framework version information."""
+        try:
+            if (model_dir / 'requirements.txt').exists():
+                with open(model_dir / 'requirements.txt', 'r') as f:
+                    content = f.read()
+                    # Look for version patterns
+                    import re
+                    patterns = [
+                        r'scikit-learn[=<>~!]+([\d.]+)',
+                        r'sklearn[=<>~!]+([\d.]+)',
+                        r'tensorflow[=<>~!]+([\d.]+)',
+                        r'torch[=<>~!]+([\d.]+)',
+                        r'xgboost[=<>~!]+([\d.]+)',
+                        r'lightgbm[=<>~!]+([\d.]+)'
+                    ]
+                    for pattern in patterns:
+                        match = re.search(pattern, content)
+                        if match:
+                            return match.group(1)
+        except Exception as e:
+            logger.warning(f"Error extracting framework version: {e}")
+        return "Unknown"
+    
+    def _get_last_modified_time(self, model_dir: Path) -> str:
+        """Get the last modified time of the model directory."""
+        try:
+            # Get the most recent modification time of any file in the directory
+            latest_time = 0
+            for file_path in model_dir.rglob('*'):
+                if file_path.is_file():
+                    mtime = file_path.stat().st_mtime
+                    if mtime > latest_time:
+                        latest_time = mtime
+            
+            if latest_time > 0:
+                return datetime.fromtimestamp(latest_time).isoformat()
+        except Exception as e:
+            logger.warning(f"Error getting last modified time: {e}")
+        return None 

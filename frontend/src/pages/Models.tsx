@@ -3,10 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, Table, Badge, Button, Spinner, Alert, Modal, Form, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { FaInfoCircle, FaTrash, FaPlus, FaSync, FaExclamationTriangle, FaUpload, FaChartLine, FaHistory } from 'react-icons/fa';
 import { endpoints } from '../services/api';
-import type { Model, ModelValidationSummary, ModelPerformanceMetrics, ModelTransferHistory } from '../services/types';
+import type { Model, ModelValidationSummary, ModelValidationResult, ModelPerformanceMetrics, ModelTransferHistory } from '../services/types';
 import { toast } from 'react-hot-toast';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import ModelValidationSummaryComponent from '../components/models/ModelValidationSummary';
+import ModelValidationModal from '../components/models/ModelValidationModal';
 import TabbedLayout from '../components/common/TabbedLayout';
 import type { TabItem } from '../components/common/types';
 
@@ -18,6 +19,9 @@ const Models: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [modelInfo, setModelInfo] = useState<Model | null>(null);
   const [showValidationSummary, setShowValidationSummary] = useState<ModelValidationSummary | null>(null);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationResult, setValidationResult] = useState<ModelValidationResult | null>(null);
+  const [validatingModel, setValidatingModel] = useState<string | null>(null);
   const [modelInfoLoading, setModelInfoLoading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
@@ -108,15 +112,24 @@ const Models: React.FC = () => {
 
   const handleValidate = async (version: string) => {
     try {
-      const result = await endpoints.validateModel(version);
+      setValidatingModel(version);
+      setShowValidationModal(true);
+      
+      const result = await endpoints.generateValidationReport(version);
+      setValidationResult(result);
+      
+      // Show a brief toast for immediate feedback
       if (result.is_valid) {
-        toast.success(`Model ${version} validation passed`);
+        toast.success(`Model ${version} validation completed`);
       } else {
-        toast.error(`Model ${version} validation failed: ${result.errors.join(', ')}`);
+        toast.error(`Model ${version} validation found issues`);
       }
     } catch (error) {
       console.error('Failed to validate model:', error);
       toast.error('Failed to validate model');
+      setShowValidationModal(false);
+    } finally {
+      setValidatingModel(null);
     }
   };
 
@@ -963,6 +976,18 @@ const Models: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      {/* Model Validation Modal */}
+      <ModelValidationModal
+        show={showValidationModal}
+        onHide={() => {
+          setShowValidationModal(false);
+          setValidationResult(null);
+        }}
+        validationResult={validationResult}
+        modelVersion={validatingModel || ''}
+        isLoading={!!validatingModel}
+      />
     </div>
   );
 };

@@ -15,14 +15,29 @@
       "created_at": "2025-06-30T13:09:26.590285",
       "last_updated": "2025-06-30T13:10:13.615148",
       "model_type": "IsolationForest"
+    },
+    {
+      "version": "model_tmpdsqatrek.zip",
+      "path": "models/model_tmpdsqatrek.zip",
+      "status": "deployed",
+      "created_at": "2025-06-30T15:23:57.089944",
+      "last_updated": "2025-06-30T15:24:13.935106",
+      "model_type": "IsolationForest"
     }
   ],
-  "last_updated": "2025-06-30T13:10:13.615157",
+  "last_updated": "2025-06-30T15:24:13.935115",
   "tmpro35_reu.zip": {
     "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpro35_reu.zip",
     "created_at": "2025-06-30T13:09:22.397116",
     "status": "imported",
     "last_updated": "2025-06-30T13:09:22.397127",
+    "import_method": "zip_upload"
+  },
+  "tmpdsqatrek.zip": {
+    "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpdsqatrek.zip",
+    "created_at": "2025-06-30T15:23:52.133121",
+    "status": "imported",
+    "last_updated": "2025-06-30T15:23:52.133134",
     "import_method": "zip_upload"
   }
 }

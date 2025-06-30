@@ -112,7 +112,74 @@ export interface ModelValidationResult {
   errors: string[];
   warnings: string[];
   recommendations: string[];
+  quality_metrics?: {
+    f1_score: number;
+    roc_auc: number;
+    precision: number;
+    recall: number;
+    accuracy: number;
+  };
+  issues?: Array<{
+    severity: 'error' | 'warning' | 'info';
+    description: string;
+  }>;
   metadata?: any;
+  // Enhanced validation report fields
+  report_id?: string;
+  generated_at?: string;
+  model_path?: string;
+  package_info?: {
+    package_identifier: {
+      name: string | null;
+      version: string | null;
+      type: string | null;
+      description: string | null;
+      author: string | null;
+      organization: string | null;
+    };
+    source_information: {
+      training_source: string | null;
+      training_id: string | null;
+      export_files: string[];
+      original_path: string | null;
+      import_timestamp: string | null;
+    };
+    model_details: {
+      model_type: string | null;
+      model_name: string | null;
+      algorithm: string | null;
+      framework: string | null;
+      framework_version: string | null;
+    };
+    creation_info: {
+      created_at: string | null;
+      created_by: string | null;
+      training_duration: number | null;
+      last_modified: string | null;
+    };
+    deployment_info: {
+      deployment_ready: boolean;
+      deployment_requirements: string[];
+      environment_dependencies: string[];
+      resource_requirements: Record<string, any>;
+    };
+  };
+  model_info?: any;
+  training_info?: any;
+  evaluation_info?: any;
+  package_structure?: {
+    required_files: Record<string, boolean>;
+    optional_files: Record<string, boolean>;
+    file_sizes: Record<string, number>;
+    total_package_size: number;
+  };
+  trainer_notes?: {
+    critical_issues: string[];
+    quality_concerns: string[];
+    missing_components: string[];
+    improvement_suggestions: string[];
+    priority_actions: string[];
+  };
 }
 
 export interface ModelValidationSummary {
