@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Container, Nav, Offcanvas, Navbar } from 'react-bootstrap';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import {
   DashboardOutlined,
   SettingOutlined,
@@ -77,6 +78,32 @@ const Layout: React.FC = () => {
 
   return (
     <div className="d-flex flex-column min-vh-100">
+      {/* Toast Notifications */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      
       {/* Top Bar */}
       <Navbar bg="dark" variant="dark" className="px-3">
         <Navbar.Brand>
