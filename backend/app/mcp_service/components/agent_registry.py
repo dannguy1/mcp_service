@@ -368,14 +368,17 @@ class AgentRegistry:
             elif not agent_name:
                 agent_name = agent.__class__.__name__
             
+            # Get status from agent's get_status method for consistency
+            agent_status = agent.get_status() if hasattr(agent, 'get_status') else {}
+            
             agent_info = {
                 'id': agent_id,
                 'name': agent_name,
-                'status': agent.status,
-                'is_running': agent.is_running,
-                'last_run': agent.last_run.isoformat() if agent.last_run else None,
-                'capabilities': agent.capabilities,
-                'description': agent.description,
+                'status': agent_status.get('status', agent.status),
+                'is_running': agent_status.get('is_running', agent.is_running),
+                'last_run': agent_status.get('last_run'),
+                'capabilities': agent_status.get('capabilities', agent.capabilities),
+                'description': agent_status.get('description', agent.description),
                 'model_path': getattr(agent, 'model_path', None),
                 'config': self.agent_configs.get(agent_id, {})
             }
@@ -383,19 +386,22 @@ class AgentRegistry:
             # Get additional status from Redis if available
             if self.redis_client:
                 try:
-                    # Check model status first (what WiFi agent updates)
+                    # Check agent status first (more reliable)
+                    agent_key = f"mcp:agent:{agent_id}:status"
+                    agent_status_data = self.redis_client.get(agent_key)
+                    if agent_status_data:
+                        agent_status = json.loads(agent_status_data)
+                        # Only update if the agent status is more recent or if we don't have model status
+                        agent_info.update(agent_status)
+                    
+                    # Check model status as fallback (what WiFi agent updates)
                     model_key = f"mcp:model:{agent_id}:status"
                     model_status_data = self.redis_client.get(model_key)
                     if model_status_data:
                         model_status = json.loads(model_status_data)
-                        agent_info.update(model_status)
-                    else:
-                        # Fallback to agent status
-                        agent_key = f"mcp:agent:{agent_id}:status"
-                        agent_status_data = self.redis_client.get(agent_key)
-                        if agent_status_data:
-                            agent_status = json.loads(agent_status_data)
-                            agent_info.update(agent_status)
+                        # Only update if we don't have agent status or if model status is more recent
+                        if not agent_status_data:
+                            agent_info.update(model_status)
                 except Exception as e:
                     self.logger.warning(f"Error getting Redis status for {agent_id}: {e}")
             
