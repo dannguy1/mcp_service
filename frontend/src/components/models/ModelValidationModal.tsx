@@ -75,6 +75,16 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
   };
 
   const generateValidationReport = () => {
+    // Check if validationResult exists
+    if (!validationResult) {
+      console.error('Validation result is null or undefined');
+      return {
+        report_generated_at: new Date().toISOString(),
+        model_version: modelVersion,
+        error: 'No validation result available'
+      };
+    }
+
     const report = {
       report_generated_at: new Date().toISOString(),
       model_version: modelVersion,
@@ -84,25 +94,25 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
         algorithm: validationResult.package_info?.model_details?.algorithm || 'Unknown',
         framework: validationResult.package_info?.model_details?.framework || 'Unknown',
         validation_status: validationResult.is_valid ? 'PASSED' : 'FAILED',
-        overall_score: validationResult.score,
-        score_label: getScoreLabel(validationResult.score),
-        critical_issues: validationResult.errors.length,
-        warnings: validationResult.warnings.length,
-        recommendations: validationResult.recommendations.length
+        overall_score: validationResult.score || 0,
+        score_label: getScoreLabel(validationResult.score || 0),
+        critical_issues: validationResult.errors?.length || 0,
+        warnings: validationResult.warnings?.length || 0,
+        recommendations: validationResult.recommendations?.length || 0
       },
       validation_summary: {
-        is_valid: validationResult.is_valid,
-        overall_score: validationResult.score,
-        score_label: getScoreLabel(validationResult.score),
-        error_count: validationResult.errors.length,
-        warning_count: validationResult.warnings.length,
-        recommendation_count: validationResult.recommendations.length
+        is_valid: validationResult.is_valid || false,
+        overall_score: validationResult.score || 0,
+        score_label: getScoreLabel(validationResult.score || 0),
+        error_count: validationResult.errors?.length || 0,
+        warning_count: validationResult.warnings?.length || 0,
+        recommendation_count: validationResult.recommendations?.length || 0
       },
       quality_metrics: validationResult.quality_metrics || {},
       issues: validationResult.issues || [],
-      errors: validationResult.errors,
-      warnings: validationResult.warnings,
-      recommendations: validationResult.recommendations,
+      errors: validationResult.errors || [],
+      warnings: validationResult.warnings || [],
+      recommendations: validationResult.recommendations || [],
       next_steps: validationResult.is_valid ? [
         "Model is ready for deployment",
         "Monitor model performance in production",
@@ -119,7 +129,12 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
 
   const exportToFile = () => {
     try {
+      console.log('Exporting validation report...');
+      console.log('Validation result:', validationResult);
+      
       const report = generateValidationReport();
+      console.log('Generated report:', report);
+      
       const reportJson = JSON.stringify(report, null, 2);
       const blob = new Blob([reportJson], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -127,9 +142,9 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
       a.href = url;
       
       // Create a more descriptive filename
-      const packageName = validationResult.package_info?.package_identifier?.name || 'unknown';
-      const packageVersion = validationResult.package_info?.package_identifier?.version || modelVersion;
-      const algorithm = validationResult.package_info?.model_details?.algorithm || 'unknown';
+      const packageName = validationResult?.package_info?.package_identifier?.name || 'unknown';
+      const packageVersion = validationResult?.package_info?.package_identifier?.version || modelVersion;
+      const algorithm = validationResult?.package_info?.model_details?.algorithm || 'unknown';
       const date = new Date().toISOString().split('T')[0];
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' + new Date().toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
       
@@ -147,7 +162,12 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
 
   const copyToClipboard = async () => {
     try {
+      console.log('Copying validation report to clipboard...');
+      console.log('Validation result:', validationResult);
+      
       const report = generateValidationReport();
+      console.log('Generated report:', report);
+      
       const reportText = JSON.stringify(report, null, 2);
       await navigator.clipboard.writeText(reportText);
       toast.success('Validation report copied to clipboard');
@@ -184,7 +204,8 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
                   variant="outline-secondary"
                   size="sm"
                   onClick={copyToClipboard}
-                  title="Copy validation report to clipboard"
+                  disabled={!validationResult}
+                  title={!validationResult ? "No validation data available" : "Copy validation report to clipboard"}
                 >
                   <FaCopy className="me-1" />
                   Copy Report
@@ -193,7 +214,8 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
                   variant="outline-primary"
                   size="sm"
                   onClick={exportToFile}
-                  title="Download validation report as JSON file"
+                  disabled={!validationResult}
+                  title={!validationResult ? "No validation data available" : "Download validation report as JSON file"}
                 >
                   <FaDownload className="me-1" />
                   Export Report
@@ -202,7 +224,7 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
             </div>
 
             {/* Package Information */}
-            {validationResult.package_info && (
+            {validationResult?.package_info && (
               <Card className="mb-4 border-primary">
                 <Card.Header className="bg-primary text-white">
                   <h6 className="mb-0">Model Package Information</h6>
@@ -270,57 +292,74 @@ const ModelValidationModal: React.FC<ModelValidationModalProps> = ({
               </Card>
             )}
 
+            {/* No Validation Data Message */}
+            {!validationResult && (
+              <Alert variant="warning" className="mb-4">
+                <div className="d-flex align-items-center gap-2">
+                  <FaExclamationTriangle />
+                  <strong>No Validation Data Available</strong>
+                </div>
+                <p className="mb-0 mt-2">
+                  The validation result is not available. Please try validating the model again.
+                </p>
+              </Alert>
+            )}
+
             {/* Header Summary */}
-            <Row className="mb-4">
-              <Col md={6}>
-                <Card>
-                  <Card.Body>
-                    <h6 className="text-muted mb-2">Model Version</h6>
-                    <h5>{modelVersion}</h5>
-                  </Card.Body>
-                </Card>
-              </Col>
-              <Col md={6}>
-                <Card>
-                  <Card.Body>
-                    <h6 className="text-muted mb-2">Overall Score</h6>
-                    <div className="d-flex align-items-center gap-2">
-                      <h5 className={`text-${getScoreColor(validationResult.score)}`}>
-                        {(validationResult.score * 100).toFixed(1)}%
-                      </h5>
-                      <Badge bg={getScoreColor(validationResult.score)}>
-                        {getScoreLabel(validationResult.score)}
-                      </Badge>
-                    </div>
-                    <ProgressBar 
-                      now={validationResult.score * 100} 
-                      variant={getScoreColor(validationResult.score)}
-                      className="mt-2"
-                    />
-                  </Card.Body>
-                </Card>
-              </Col>
-            </Row>
+            {validationResult && (
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Card>
+                    <Card.Body>
+                      <h6 className="text-muted mb-2">Model Version</h6>
+                      <h5>{modelVersion}</h5>
+                    </Card.Body>
+                  </Card>
+                </Col>
+                <Col md={6}>
+                  <Card>
+                    <Card.Body>
+                      <h6 className="text-muted mb-2">Overall Score</h6>
+                      <div className="d-flex align-items-center gap-2">
+                        <h5 className={`text-${getScoreColor(validationResult.score)}`}>
+                          {(validationResult.score * 100).toFixed(1)}%
+                        </h5>
+                        <Badge bg={getScoreColor(validationResult.score)}>
+                          {getScoreLabel(validationResult.score)}
+                        </Badge>
+                      </div>
+                      <ProgressBar 
+                        now={validationResult.score * 100} 
+                        variant={getScoreColor(validationResult.score)}
+                        className="mt-2"
+                      />
+                    </Card.Body>
+                  </Card>
+                </Col>
+              </Row>
+            )}
 
             {/* Validation Status */}
-            <Alert variant={validationResult.is_valid ? 'success' : 'danger'} className="mb-4">
-              <div className="d-flex align-items-center gap-2">
-                {validationResult.is_valid ? (
-                  <FaCheckCircle />
-                ) : (
-                  <FaTimesCircle />
-                )}
-                <strong>
-                  {validationResult.is_valid ? 'Validation Passed' : 'Validation Failed'}
-                </strong>
-              </div>
-              <p className="mb-0 mt-2">
-                {validationResult.is_valid 
-                  ? 'This model meets the minimum quality requirements and is ready for deployment.'
-                  : 'This model has issues that should be addressed before deployment.'
-                }
-              </p>
-            </Alert>
+            {validationResult && (
+              <Alert variant={validationResult.is_valid ? 'success' : 'danger'} className="mb-4">
+                <div className="d-flex align-items-center gap-2">
+                  {validationResult.is_valid ? (
+                    <FaCheckCircle />
+                  ) : (
+                    <FaTimesCircle />
+                  )}
+                  <strong>
+                    {validationResult.is_valid ? 'Validation Passed' : 'Validation Failed'}
+                  </strong>
+                </div>
+                <p className="mb-0 mt-2">
+                  {validationResult.is_valid 
+                    ? 'This model meets the minimum quality requirements and is ready for deployment.'
+                    : 'This model has issues that should be addressed before deployment.'
+                  }
+                </p>
+              </Alert>
+            )}
 
             {/* Quality Metrics */}
             {validationResult.quality_metrics && (

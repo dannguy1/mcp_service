@@ -115,11 +115,47 @@ const Models: React.FC = () => {
       setValidatingModel(version);
       setShowValidationModal(true);
       
+      console.log('Starting validation for model:', version);
       const result = await endpoints.generateValidationReport(version);
-      setValidationResult(result);
+      console.log('Validation result:', result);
+      
+      // Check the structure of the result
+      let validationData;
+      if (result.quality_validation) {
+        // New structure with quality_validation wrapper
+        validationData = result.quality_validation;
+      } else if (result.validation_summary) {
+        // Structure with validation_summary - construct ModelValidationResult
+        validationData = {
+          is_valid: result.validation_summary.is_valid,
+          score: result.validation_summary.score,
+          errors: result.errors || [],
+          warnings: result.warnings || [],
+          recommendations: result.recommendations || [],
+          quality_metrics: result.quality_metrics || {},
+          issues: result.issues || [],
+          package_info: result.package_info,
+          model_info: result.model_info,
+          training_info: result.training_info,
+          evaluation_info: result.evaluation_info,
+          package_structure: result.package_structure,
+          trainer_notes: result.trainer_notes
+        };
+      } else if (result.is_valid !== undefined) {
+        // Direct ModelValidationResult structure
+        validationData = result;
+      } else {
+        console.error('Unexpected validation result structure:', result);
+        toast.error('Invalid validation result format');
+        setShowValidationModal(false);
+        return;
+      }
+      
+      console.log('Extracted validation data:', validationData);
+      setValidationResult(validationData);
       
       // Show a brief toast for immediate feedback
-      if (result.is_valid) {
+      if (validationData.is_valid) {
         toast.success(`Model ${version} validation completed`);
       } else {
         toast.error(`Model ${version} validation found issues`);
