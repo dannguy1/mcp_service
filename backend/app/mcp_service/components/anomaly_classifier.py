@@ -130,24 +130,58 @@ class AnomalyClassifier:
             return []
             
         try:
-            # Convert features to model input format
-            X = self._prepare_features(features)
+            # Handle dictionary-based models (rule-based fallback)
+            if isinstance(self.model, dict):
+                self.logger.info("Using dictionary-based model for rule-based detection")
+                return self._detect_rule_based_anomalies(features)
             
-            # Get model predictions
-            predictions = self.model.predict_proba(X)
-            
-            # Find anomalies
-            anomalies = []
-            for i, pred in enumerate(predictions):
-                if pred[1] > self.threshold:  # Assuming binary classification
-                    anomaly = self._create_anomaly(
-                        features,
-                        pred[1],
-                        i
-                    )
-                    anomalies.append(anomaly)
-            
-            return anomalies
+            # Handle sklearn models
+            if hasattr(self.model, 'predict_proba'):
+                # Convert features to model input format
+                X = self._prepare_features(features)
+                
+                # Get model predictions
+                predictions = self.model.predict_proba(X)
+                
+                # Find anomalies
+                anomalies = []
+                for i, pred in enumerate(predictions):
+                    if pred[1] > self.threshold:  # Assuming binary classification
+                        anomaly = self._create_anomaly(
+                            features,
+                            pred[1],
+                            i
+                        )
+                        anomalies.append(anomaly)
+                
+                return anomalies
+            elif hasattr(self.model, 'predict'):
+                # Handle models that only have predict method (like IsolationForest)
+                X = self._prepare_features(features)
+                predictions = self.model.predict(X)
+                
+                # For IsolationForest, -1 means anomaly, 1 means normal
+                anomalies = []
+                for i, pred in enumerate(predictions):
+                    if pred == -1:  # Anomaly detected
+                        # Get anomaly score if available
+                        if hasattr(self.model, 'score_samples'):
+                            scores = self.model.score_samples(X)
+                            confidence = 1.0 - np.exp(scores[i])  # Convert to confidence
+                        else:
+                            confidence = 0.8  # Default confidence
+                        
+                        anomaly = self._create_anomaly(
+                            features,
+                            confidence,
+                            i
+                        )
+                        anomalies.append(anomaly)
+                
+                return anomalies
+            else:
+                self.logger.warning("Model does not have predict or predict_proba method")
+                return []
             
         except Exception as e:
             self.logger.error(f"Error in ML model detection: {e}")

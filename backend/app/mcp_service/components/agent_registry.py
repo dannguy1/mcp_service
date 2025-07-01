@@ -12,7 +12,7 @@ from ..agents.generic_agent import GenericAgent
 from ..agents.ml_based_agent import MLBasedAgent
 from ..agents.rule_based_agent import RuleBasedAgent
 from ..agents.hybrid_agent import HybridAgent
-from .model_manager import ModelManager
+from app.components.model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -92,15 +92,19 @@ class AgentRegistry:
             BaseAgent: Created agent instance or None if creation failed
         """
         try:
-            if agent_id not in self.agent_configs:
-                self.logger.error(f"Agent configuration not found: {agent_id}")
+            # Get agent configuration
+            config = self.agent_configs.get(agent_id)
+            if not config:
+                self.logger.error(f"Configuration not found for agent: {agent_id}")
                 return None
             
-            config = self.agent_configs[agent_id]
             agent_type = config.get('agent_type', 'ml_based')
             
-            # Create agent based on type
-            if agent_type == 'ml_based':
+            # Create agent based on agent_id and type
+            if agent_id == 'wifi_agent':
+                from ..agents.wifi_agent import WiFiAgent
+                agent = WiFiAgent(config, data_service, model_manager)
+            elif agent_type == 'ml_based':
                 agent = MLBasedAgent(config, data_service, model_manager)
             elif agent_type == 'rule_based':
                 agent = RuleBasedAgent(config, data_service, model_manager)
@@ -136,8 +140,11 @@ class AgentRegistry:
             
             agent_type = config.get('agent_type', 'ml_based')
             
-            # Create agent based on type
-            if agent_type == 'ml_based':
+            # Create agent based on agent_id and type
+            if agent_id == 'wifi_agent':
+                from ..agents.wifi_agent import WiFiAgent
+                agent = WiFiAgent(config, data_service, model_manager)
+            elif agent_type == 'ml_based':
                 agent = MLBasedAgent(config, data_service, model_manager)
             elif agent_type == 'rule_based':
                 agent = RuleBasedAgent(config, data_service, model_manager)
@@ -471,6 +478,11 @@ class AgentRegistry:
             
             # Stop the agent without unregistering it
             await agent.stop(unregister=False)
+            
+            # For WiFiAgent, reload the model before starting
+            if agent_id == 'wifi_agent' and hasattr(agent, 'reload_model'):
+                self.logger.info(f"Reloading model for {agent_id}")
+                agent.reload_model()
             
             # Start the agent
             await agent.start()

@@ -4,18 +4,23 @@ from typing import List, Dict, Any
 import json
 import os
 
-from .base_agent import BaseAgent
+from .ml_based_agent import MLBasedAgent
 from ..components.feature_extractor import FeatureExtractor
-from ..components.model_manager import model_manager as global_model_manager
 from ..components.anomaly_classifier import AnomalyClassifier
 
-class WiFiAgent(BaseAgent):
+class WiFiAgent(MLBasedAgent):
     def __init__(self, config, data_service, model_manager=None):
         """Initialize the WiFi agent."""
-        super().__init__(config, data_service)
+        # Store config before calling parent init
+        self.original_config = config
+        self.model_path = config.get('model_path')
+        
+        # Call parent init but skip model loading
+        super().__init__(config, data_service, model_manager)
+        
+        # Override the model loading with WiFiAgent's specific method
         self.feature_extractor = FeatureExtractor()
         self.classifier = AnomalyClassifier()
-        self.model_path = os.path.join(config.model_dir, 'wifi_anomaly_model.pkl')
         self.programs = ['hostapd', 'wpa_supplicant']
         self.description = "WiFi anomaly detection agent"
         self.capabilities = [
@@ -28,43 +33,223 @@ class WiFiAgent(BaseAgent):
         self.last_run = None
         self.logger = logging.getLogger(__name__)
         self.model_id = "wifi_agent"  # Consistent model identifier
-        self.model_manager = model_manager or global_model_manager  # Use provided instance or global singleton
+        self.model_manager = model_manager  # Use provided instance
+        self.model = None
+        self.scaler = None
+        
+        # Now load the model using WiFiAgent's method
+        # Clear any model that might have been set by parent
+        self.model = None
+        self.logger.info(f"[DEBUG] WiFiAgent.__init__() - About to call _load_model()")
+        self._load_model()
+        self.logger.info(f"[DEBUG] WiFiAgent.__init__() - After _load_model(), model: {self.model}")
+        self.logger.info(f"[DEBUG] WiFiAgent.__init__() - Model type: {type(self.model) if self.model else None}")
+        self.logger.info(f"[DEBUG] WiFiAgent.__init__() - Model is valid: {self._is_valid_model(self.model) if self.model else False}")
+
+    def _load_model_from_directory(self, model_dir: str):
+        """Load model and scaler from a directory containing model files."""
+        try:
+            self.logger.info(f"[DEBUG] _load_model_from_directory called with: {model_dir}")
+            
+            # Check if the path is a directory
+            if not os.path.isdir(model_dir):
+                self.logger.warning(f"Model path {model_dir} is not a directory")
+                return False
+            
+            # Look for model files
+            model_file = os.path.join(model_dir, 'model.joblib')
+            scaler_file = os.path.join(model_dir, 'scaler.joblib')
+            metadata_file = os.path.join(model_dir, 'metadata.json')
+            
+            self.logger.info(f"[DEBUG] Looking for model file: {model_file}")
+            self.logger.info(f"[DEBUG] Looking for scaler file: {scaler_file}")
+            self.logger.info(f"[DEBUG] Looking for metadata file: {metadata_file}")
+            
+            # Load model
+            if os.path.exists(model_file):
+                try:
+                    import joblib
+                    self.logger.info(f"[DEBUG] Loading model from {model_file}")
+                    self.model = joblib.load(model_file)
+                    self.logger.info(f"Loaded model from {model_file}")
+                    self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+                    self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                except Exception as e:
+                    self.logger.error(f"Error loading model from {model_file}: {e}")
+                    import traceback
+                    self.logger.error(f"Traceback: {traceback.format_exc()}")
+                    return False
+            else:
+                self.logger.warning(f"Model file not found at {model_file}")
+                return False
+            
+            # Load scaler
+            if os.path.exists(scaler_file):
+                try:
+                    import joblib
+                    self.logger.info(f"[DEBUG] Loading scaler from {scaler_file}")
+                    self.scaler = joblib.load(scaler_file)
+                    self.logger.info(f"Loaded scaler from {scaler_file}")
+                except Exception as e:
+                    self.logger.error(f"Error loading scaler from {scaler_file}: {e}")
+                    # Continue without scaler if it fails to load
+                    self.scaler = None
+            
+            # Load metadata for additional info
+            if os.path.exists(metadata_file):
+                try:
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                    self.logger.info(f"Loaded metadata from {metadata_file}")
+                    # Store metadata for reference
+                    self.model_metadata = metadata
+                except Exception as e:
+                    self.logger.warning(f"Error loading metadata from {metadata_file}: {e}")
+            
+            self.logger.info(f"[DEBUG] _load_model_from_directory completed successfully")
+            self.logger.info(f"[DEBUG] Final model: {self.model}")
+            self.logger.info(f"[DEBUG] Final model type: {type(self.model)}")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error loading model from directory {model_dir}: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+
+    def _load_model(self):
+        """Load the ML model from the specified path (file or directory)."""
+        try:
+            self.logger.info(f"[DEBUG] WiFiAgent._load_model() called with model_path: {self.model_path}")
+            self.logger.info(f"[DEBUG] Current model before loading: {self.model}")
+            self.logger.info(f"[DEBUG] Model path exists: {os.path.exists(self.model_path) if self.model_path else False}")
+            self.logger.info(f"[DEBUG] Model path is directory: {os.path.isdir(self.model_path) if self.model_path else False}")
+            
+            # Try to get the model from the ModelManager if available
+            if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
+                self.model = self.model_manager.current_model
+                self.logger.info(f"[DEBUG] Loaded model from ModelManager: {type(self.model)}")
+                self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                self.classifier.set_model(self.model)
+                return
+            
+            # For WiFiAgent, always try to load from directory first
+            if self.model_path:
+                self.logger.info(f"[DEBUG] Checking model_path: {self.model_path}")
+                if os.path.isdir(self.model_path):
+                    self.logger.info(f"[DEBUG] Model path is a directory, calling _load_model_from_directory")
+                    # Load from directory using WiFiAgent's specific method
+                    success = self._load_model_from_directory(self.model_path)
+                    self.logger.info(f"[DEBUG] _load_model_from_directory returned: {success}")
+                    if success:
+                        self.logger.info(f"[DEBUG] Loaded model from directory: {self.model_path}")
+                        self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+                        self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                        self.classifier.set_model(self.model)
+                        return
+                    else:
+                        self.logger.warning(f"[DEBUG] Failed to load model from directory: {self.model_path}")
+                        self._create_default_model()
+                        return
+                elif os.path.isfile(self.model_path):
+                    # Load from single file (fallback)
+                    import joblib
+                    self.logger.info(f"[DEBUG] model_path is a file, loading directly: {self.model_path}")
+                    self.model = joblib.load(self.model_path)
+                    self.logger.info(f"[DEBUG] Loaded model from file: {self.model_path}")
+                    self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+                    self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                    self.classifier.set_model(self.model)
+                    return
+                else:
+                    self.logger.warning(f"[DEBUG] Model path does not exist: {self.model_path}")
+                    self._create_default_model()
+                    return
+            else:
+                self.logger.warning("No model path provided, using default model")
+                self._create_default_model()
+        except Exception as e:
+            self.logger.error(f"[DEBUG] Error loading model from {self.model_path}: {e}")
+            import traceback
+            self.logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            self._create_default_model()
+
+    def _create_default_model(self):
+        """Create a default model when no model file is available."""
+        try:
+            # Try to create a simple IsolationForest model as fallback
+            from sklearn.ensemble import IsolationForest
+            self.model = IsolationForest(contamination=0.1, random_state=42)
+            self.logger.info("Created IsolationForest default model for WiFiAgent")
+        except ImportError:
+            # Fallback to dictionary-based model if sklearn is not available
+            self.model = {
+                'type': f'{self.agent_id}_anomaly',
+                'version': '1.0.0',
+                'thresholds': getattr(self, 'thresholds', {}) or {
+                    'auth_failures': 5,
+                    'deauth_count': 10,
+                    'beacon_count': 100
+                }
+            }
+            self.logger.info("Created dictionary-based default model for WiFiAgent")
+        
+        self.classifier.set_model(self.model)
+
+    def _is_valid_model(self, model):
+        """Check if the model is valid (has predict method or is a dictionary-based model)."""
+        if model is None:
+            return False
+        if hasattr(model, 'predict'):
+            return True
+        elif isinstance(model, dict):
+            # Any dictionary can be considered a valid model for rule-based detection
+            return True
+        return False
+
+    def reload_model(self):
+        """Reload the model from the main ModelManager or directory."""
+        try:
+            # Try to get the model from the main ModelManager first
+            if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
+                self.logger.info(f"[DEBUG] Reloading model from main ModelManager")
+                self.model = self.model_manager.current_model
+                self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+                self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                self.classifier.set_model(self.model)
+                return True
+            else:
+                # Fallback to loading from directory
+                self.logger.info(f"[DEBUG] Main ModelManager has no model, loading from directory")
+                self._load_model()
+                return self.model is not None and self._is_valid_model(self.model)
+        except Exception as e:
+            self.logger.error(f"[DEBUG] Error reloading model: {e}")
+            return False
 
     async def start(self):
         """Start the WiFi agent."""
-        try:
-            # Load model
-            model_path = os.path.join(self.config.model_dir, 'wifi_anomaly_model.pkl')
-            if not os.path.exists(model_path):
-                self.logger.warning(f"Model file not found at {model_path}, using default model")
-                self.model = {
-                    'type': 'wifi_anomaly',
-                    'version': '1.0.0',
-                    'thresholds': {
-                        'auth_failures': 5,
-                        'deauth_count': 10,
-                        'beacon_count': 100
-                    }
-                }
-            else:
-                self.model = self.model_manager.load_model(model_path)
-            self.logger.info("Loaded WiFi anomaly detection model")
-            
-            # Initialize classifier and set model
-            self.classifier = AnomalyClassifier()
+        # Try to reload model from main ModelManager if available
+        if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
+            self.logger.info(f"[DEBUG] Reloading model from main ModelManager")
+            self.model = self.model_manager.current_model
+            self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+            self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
             self.classifier.set_model(self.model)
-            self.logger.info("Initialized anomaly classifier")
-            
-            # Register with ModelManager
-            if not self.model_manager.register_model(self, self.model_id):
-                raise Exception("Failed to register model")
-            
-            # Set running state
-            self.is_running = True
-            self.status = 'active'
-            self.last_run = datetime.now()
-            
-            # Update status in Redis
+        elif not self.model or not self._is_valid_model(self.model):
+            # If no model is loaded, try to load from directory again
+            self.logger.info(f"[DEBUG] No valid model loaded, trying to load from directory")
+            self._load_model()
+        
+        await super().start()
+        
+        # Set the agent as running and active
+        self.is_running = True
+        self.status = 'active'
+        self.last_run = datetime.now()
+        
+        # Update status in ModelManager
+        if self.model_manager:
             self.model_manager._update_model_status(self.model_id, {
                 'id': self.model_id,
                 'name': self.__class__.__name__,
@@ -74,24 +259,8 @@ class WiFiAgent(BaseAgent):
                 'capabilities': self.capabilities,
                 'description': self.description
             })
-            
-            self.logger.info("WiFi agent started")
-            
-        except Exception as e:
-            self.logger.error(f"Failed to start WiFi agent: {e}")
-            self.status = 'error'
-            # Update status in Redis
-            if self.model_manager:
-                self.model_manager._update_model_status(self.model_id, {
-                    'id': self.model_id,
-                    'name': self.__class__.__name__,
-                    'status': 'error',
-                    'is_running': False,
-                    'last_run': datetime.now().isoformat(),
-                    'capabilities': self.capabilities,
-                    'description': self.description
-                })
-            raise
+        
+        self.logger.info("WiFi agent started successfully")
 
     async def stop(self, unregister=True):
         """Stop the WiFi agent.

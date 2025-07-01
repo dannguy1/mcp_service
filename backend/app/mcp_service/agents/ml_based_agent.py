@@ -24,7 +24,7 @@ class MLBasedAgent(GenericAgent):
         """
         super().__init__(config, data_service, model_manager)
         
-        # ML-specific components
+        # Initialize components
         self.feature_extractor = FeatureExtractor()
         self.classifier = AnomalyClassifier()
         self.model = None
@@ -34,29 +34,60 @@ class MLBasedAgent(GenericAgent):
         self.thresholds = self.analysis_rules.get('thresholds', {})
         
         # Load model if path is provided
-        if self.model_path and os.path.exists(self.model_path):
-            self._load_model()
+        if self.model_path:
+            if os.path.isfile(self.model_path):
+                # Load from single file
+                self._load_model()
+            elif os.path.isdir(self.model_path):
+                # Load from directory (handled by subclasses)
+                self.logger.info(f"Model path is a directory: {self.model_path}")
+                # Don't load model here - let subclasses handle directory loading
+            else:
+                self.logger.warning(f"Model path not found: {self.model_path}")
+                self._create_default_model()
         else:
-            self.logger.warning(f"Model file not found at {self.model_path}, using default model")
+            self.logger.warning("No model path provided, using default model")
             self._create_default_model()
     
     def _load_model(self):
-        """Load the ML model from the specified path."""
+        """Load the ML model from the specified path (file or directory)."""
         try:
-            if self.model_manager:
-                self.model = self.model_manager.load_model(self.model_path)
+            # Try to get the model from the ModelManager if available
+            if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
+                self.model = self.model_manager.current_model
+                self.logger.info(f"[DEBUG] Loaded model from ModelManager: {type(self.model)}")
+                self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+                self.classifier.set_model(self.model)
+                return
+            
+            # Fallback to loading from path if ModelManager doesn't have a model
+            import os
+            import joblib
+            model_path = self.model_path
+            self.logger.info(f"[DEBUG] Attempting to load model from: {model_path}")
+            if os.path.isdir(model_path):
+                model_file = os.path.join(model_path, 'model.joblib')
+                self.logger.info(f"[DEBUG] model_path is a directory, looking for: {model_file}")
+                if os.path.exists(model_file):
+                    self.model = joblib.load(model_file)
+                    self.logger.info(f"[DEBUG] Loaded model from directory: {model_file}")
+                else:
+                    self.logger.warning(f"[DEBUG] No model.joblib found in directory: {model_path}")
+                    self._create_default_model()
+                    return
+            elif os.path.isfile(model_path):
+                self.logger.info(f"[DEBUG] model_path is a file, loading directly: {model_path}")
+                self.model = joblib.load(model_path)
+                self.logger.info(f"[DEBUG] Loaded model from file: {model_path}")
             else:
-                # Fallback to direct loading
-                import pickle
-                with open(self.model_path, 'rb') as f:
-                    self.model = pickle.load(f)
-            
-            # Set model in classifier
+                self.logger.warning(f"[DEBUG] Model path does not exist: {model_path}")
+                self._create_default_model()
+                return
+            self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+            self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
             self.classifier.set_model(self.model)
-            self.logger.info(f"Loaded model from {self.model_path}")
-            
         except Exception as e:
-            self.logger.error(f"Error loading model from {self.model_path}: {e}")
+            self.logger.error(f"[DEBUG] Error loading model from {self.model_path}: {e}")
             self._create_default_model()
     
     def _create_default_model(self):
@@ -73,6 +104,18 @@ class MLBasedAgent(GenericAgent):
         self.classifier.set_model(self.model)
         self.logger.info("Created default model")
     
+    def _is_valid_model(self, model):
+        """Check if the model is valid (has predict method or is a dictionary-based model)."""
+        if hasattr(model, 'predict'):
+            return True
+        elif isinstance(model, dict) and 'type' in model:
+            # Dictionary-based model is also valid
+            return True
+        elif isinstance(model, dict):
+            # Any dictionary can be considered a valid model for rule-based detection
+            return True
+        return False
+
     async def _perform_analysis(self, logs: List[Dict[str, Any]]):
         """
         Perform ML-based analysis on logs.
@@ -82,7 +125,7 @@ class MLBasedAgent(GenericAgent):
         """
         try:
             # Check if model is available before analysis
-            if not self.model or not hasattr(self.model, 'predict'):
+            if not self.model or not self._is_valid_model(self.model):
                 self.logger.warning(f"Skipping analysis for {self.agent_name}: No valid model loaded.")
                 self.status = "inactive"
                 # Update status in Redis
@@ -131,11 +174,10 @@ class MLBasedAgent(GenericAgent):
     async def start(self):
         """Start the ML-based agent."""
         try:
-            # Validate model availability before starting
-            if not self.model or not hasattr(self.model, 'predict'):
+            self.logger.info(f"[DEBUG] MLBasedAgent.start() - model: {self.model}, has predict: {hasattr(self.model, 'predict') if self.model else False}")
+            if not self.model or not self._is_valid_model(self.model):
                 self.status = "inactive"
-                self.logger.warning(f"MLBasedAgent {self.agent_name} inactive: No valid model loaded.")
-                # Update status in Redis to reflect inactive state
+                self.logger.warning(f"[DEBUG] MLBasedAgent {self.agent_name} inactive: No valid model loaded.")
                 self._update_redis_status({
                     'id': self.agent_id,
                     'name': self.agent_name,
@@ -149,19 +191,13 @@ class MLBasedAgent(GenericAgent):
                     'reason': 'No valid model loaded'
                 })
                 return
-            
-            # Start the generic agent
             await super().start()
-            
-            # Register with ModelManager if available
             if self.model_manager and self.model_path:
                 if not self.model_manager.register_model(self, self.agent_id):
                     self.logger.warning("Failed to register model with ModelManager")
-            
-            self.logger.info(f"{self.agent_name} ML-based agent started successfully")
-            
+            self.logger.info(f"[DEBUG] {self.agent_name} ML-based agent started successfully")
         except Exception as e:
-            self.logger.error(f"Failed to start ML-based agent: {e}")
+            self.logger.error(f"[DEBUG] Failed to start ML-based agent: {e}")
             raise
     
     def get_model_info(self) -> Dict[str, Any]:
@@ -184,7 +220,7 @@ class MLBasedAgent(GenericAgent):
             'model_version': self.model.get('version', 'unknown'),
             'thresholds': self.model.get('thresholds', {}),
             'is_loaded': self.model is not None,
-            'model_loaded': bool(self.model and hasattr(self.model, 'predict'))
+            'model_loaded': bool(self.model and self._is_valid_model(self.model))
         }
     
     def update_model(self, new_model_path: str):
@@ -212,7 +248,7 @@ class MLBasedAgent(GenericAgent):
         status = super().get_status()
         
         # Check if model is loaded
-        model_loaded = bool(self.model and hasattr(self.model, 'predict'))
+        model_loaded = bool(self.model and self._is_valid_model(self.model))
         
         # If no model is loaded, set status to inactive
         if not model_loaded:
