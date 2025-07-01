@@ -3,7 +3,7 @@ name: "DNSAgent"
 description: "DNS query anomaly detection"
 agent_type: "ml_based"
 process_filters: ["named", "dnsmasq", "systemd-resolved", "dnsmasq-dhcp"]
-model_path: "/app/models/dns_anomaly_model.pkl"
+model_path: "/home/dannguyen/WNC/mcp_service/backend/models/dns_anomaly_model.pkl"
 capabilities: [
   "DNS amplification detection",
   "Query flood detection",

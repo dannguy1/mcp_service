@@ -22,6 +22,9 @@ class HybridAgent(GenericAgent):
             data_service: DataService instance for database access
             model_manager: ModelManager instance for model handling
         """
+        # Store the original config dictionary for sub-agents
+        self.original_config = config
+        
         super().__init__(config, data_service, model_manager)
         
         # Hybrid-specific configuration
@@ -43,12 +46,12 @@ class HybridAgent(GenericAgent):
         try:
             # Create ML-based agent if model is available
             if self.model_path and os.path.exists(self.model_path):
-                self.ml_agent = MLBasedAgent(self.config, self.data_service, self.model_manager)
+                self.ml_agent = MLBasedAgent(self.original_config, self.data_service, self.model_manager)
                 self.logger.info("Initialized ML-based sub-agent")
             
             # Create rule-based agent for fallback or primary detection
             if self.enable_fallback or self.primary_method == 'rule_based':
-                self.rule_agent = RuleBasedAgent(self.config, self.data_service, self.model_manager)
+                self.rule_agent = RuleBasedAgent(self.original_config, self.data_service, self.model_manager)
                 self.logger.info("Initialized rule-based sub-agent")
             
             # Check if at least one detection method is available

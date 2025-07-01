@@ -9,7 +9,7 @@ capabilities:
 - Deauthentication flood detection
 - Beacon frame flood detection
 description: WiFi anomaly detection agent
-model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpdsqatrek.zip
+model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpo3jl9ugx.zip
 name: WiFiAgent
 process_filters:
 - hostapd
