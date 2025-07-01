@@ -112,17 +112,6 @@ async def download_export_file(export_id: str):
         media_type="application/octet-stream"
     )
 
-@router.get("/{export_id}/status")
-async def get_export_status(export_id: str):
-    """Get export status"""
-    try:
-        status = await ExportStatusManager.get_status(export_id)
-        if not status:
-            raise HTTPException(status_code=404, detail="Export not found")
-        return status.to_dict()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.get("/")
 async def list_exports(
     limit: int = 100,
@@ -132,6 +121,17 @@ async def list_exports(
     try:
         statuses = await ExportStatusManager.list_statuses(limit, offset)
         return [status.to_dict() for status in statuses]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{export_id}/status")
+async def get_export_status(export_id: str):
+    """Get export status"""
+    try:
+        status = await ExportStatusManager.get_status(export_id)
+        if not status:
+            raise HTTPException(status_code=404, detail="Export not found")
+        return status.to_dict()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

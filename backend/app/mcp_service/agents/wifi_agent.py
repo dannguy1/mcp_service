@@ -5,7 +5,7 @@ import json
 import os
 
 from .ml_based_agent import MLBasedAgent
-from ..components.feature_extractor import FeatureExtractor
+from app.components.feature_extractor import FeatureExtractor
 from ..components.anomaly_classifier import AnomalyClassifier
 
 class WiFiAgent(MLBasedAgent):
@@ -340,7 +340,7 @@ class WiFiAgent(MLBasedAgent):
                 return
 
             # Extract features
-            features = await self.feature_extractor.extract_features(logs)
+            features = self.feature_extractor.extract_features(logs)
             self.logger.info("Extracted features from logs")
 
             # Detect anomalies

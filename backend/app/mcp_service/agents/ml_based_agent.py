@@ -1,11 +1,15 @@
 import logging
+import asyncio
 from typing import List, Dict, Any, Optional
 import os
 from datetime import datetime
 
 from .generic_agent import GenericAgent
-from ..components.feature_extractor import FeatureExtractor
+from app.components.feature_extractor import FeatureExtractor
 from ..components.anomaly_classifier import AnomalyClassifier
+from .base_agent import BaseAgent
+from ..data_service import DataService
+from app.components.model_manager import ModelManager
 
 class MLBasedAgent(GenericAgent):
     """
@@ -144,7 +148,7 @@ class MLBasedAgent(GenericAgent):
                 return
             
             # Extract features from logs
-            features = await self.feature_extractor.extract_features(logs)
+            features = self.feature_extractor.extract_features(logs)
             self.logger.info("Extracted features from logs")
             
             # Detect anomalies using the classifier
