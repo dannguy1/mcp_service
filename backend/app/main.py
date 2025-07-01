@@ -20,7 +20,8 @@ load_dotenv()
 # Import existing components
 from app.mcp_service.data_service import DataService
 from app.mcp_service.components.resource_monitor import ResourceMonitor
-from app.mcp_service.components.model_manager import model_manager
+from app.components.model_manager import ModelManager
+from app.models.config import ModelConfig
 from app.mcp_service.components.agent_registry import agent_registry
 from app.mcp_service.status_manager import MCPStatusManager
 from app.config.config import config
@@ -51,8 +52,12 @@ data_service = DataService(config=config)
 resource_monitor = ResourceMonitor()
 status_manager = MCPStatusManager(redis_host=config.redis['host'], redis_port=config.redis['port'])
 
+# Initialize main ModelManager for ML model loading
+model_config = ModelConfig()
+main_model_manager = ModelManager(model_config)
+
 # Set Redis client for model manager
-model_manager.set_redis_client(redis_client)
+main_model_manager.set_redis_client(redis_client)
 
 # Set Redis client for agent registry
 agent_registry.redis_client = redis_client
@@ -72,7 +77,6 @@ async def lifespan(app: FastAPI):
         
         # Start services
         await data_service.start()
-        model_manager.start()
         status_manager.start_status_updates()
         
         # Create and start agents using the Generic Agent Framework
@@ -90,7 +94,7 @@ async def lifespan(app: FastAPI):
             logger.info(f"Creating {agent_type} agent: {agent_name} ({agent_id})")
             
             # Create agent from configuration
-            agent = agent_registry.create_agent(agent_id, data_service, model_manager)
+            agent = agent_registry.create_agent(agent_id, data_service, main_model_manager)
             if agent:
                 # Register and start the agent
                 agent_registry.register_agent(agent, agent_id)
@@ -104,26 +108,19 @@ async def lifespan(app: FastAPI):
         
         logger.info("MCP Service components initialized successfully")
         
-        # Initialize model manager for enhanced model management
-        from app.components.model_manager import ModelManager
-        from app.models.config import ModelConfig
-        
-        model_config = ModelConfig()
-        model_manager_instance = ModelManager(model_config)
-        
         # Scan for new models
-        new_models = await model_manager_instance.scan_model_directory()
+        new_models = await main_model_manager.scan_model_directory()
         if new_models:
             logger.info(f"Found {len(new_models)} new models during startup")
         
         # Load the most recent deployed model
-        models = await model_manager_instance.list_models()
+        models = await main_model_manager.list_models()
         deployed_models = [m for m in models if m['status'] == 'deployed']
         
         if deployed_models:
             # Use 'created_at' field instead of 'imported_at'
             latest_model = max(deployed_models, key=lambda x: x.get('created_at', ''))
-            await model_manager_instance.load_model_version(latest_model['version'])
+            await main_model_manager.load_model_version(latest_model['version'])
             logger.info(f"Loaded deployed model: {latest_model['version']}")
         
     except Exception as e:
@@ -155,8 +152,6 @@ async def lifespan(app: FastAPI):
         # Stop services
         if data_service:
             await data_service.stop()
-        if model_manager:
-            model_manager.stop()
         if status_manager:
             status_manager.stop_status_updates()
         
@@ -258,8 +253,8 @@ async def health_check():
         else:
             services_healthy = False
             
-        if model_manager:
-            services_healthy = services_healthy and model_manager.is_running()
+        if main_model_manager:
+            services_healthy = services_healthy and main_model_manager.is_running()
         else:
             services_healthy = False
             
@@ -603,7 +598,7 @@ async def get_dashboard():
 async def get_models():
     """Get list of models"""
     try:
-        models = model_manager.get_all_models()
+        models = main_model_manager.get_all_models()
         return models
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -612,7 +607,7 @@ async def get_models():
 async def get_model_info(model_id: str):
     """Get model details"""
     try:
-        model_info = model_manager.get_model_info(model_id)
+        model_info = main_model_manager.get_model_info(model_id)
         if not model_info:
             raise HTTPException(status_code=404, detail="Model not found")
         return model_info
@@ -623,7 +618,7 @@ async def get_model_info(model_id: str):
 async def activate_model(model_id: str):
     """Activate a model"""
     try:
-        success = model_manager.activate_model(model_id)
+        success = main_model_manager.activate_model(model_id)
         if not success:
             raise HTTPException(status_code=400, detail="Failed to activate model")
         return {"status": "success", "message": f"Model {model_id} activated"}
@@ -634,7 +629,7 @@ async def activate_model(model_id: str):
 async def deactivate_model(model_id: str):
     """Deactivate a model"""
     try:
-        success = model_manager.deactivate_model(model_id)
+        success = main_model_manager.deactivate_model(model_id)
         if not success:
             raise HTTPException(status_code=400, detail="Failed to deactivate model")
         return {"status": "success", "message": f"Model {model_id} deactivated"}

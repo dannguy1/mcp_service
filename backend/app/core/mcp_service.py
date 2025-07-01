@@ -10,7 +10,7 @@ from app.config.config import config
 from app.mcp_service.data_service import DataService
 from app.mcp_service.agents.wifi_agent import WiFiAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor
-from app.mcp_service.components.model_manager import ModelManager
+from app.components.model_manager import ModelManager
 from app.services.status_manager import ServiceStatusManager
 
 # Load environment variables from .env file

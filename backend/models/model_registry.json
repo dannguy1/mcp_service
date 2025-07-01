@@ -9,15 +9,15 @@
       "last_updated": "2025-06-23T08:42:43.363057"
     },
     {
-      "version": "model_tmpdsqatrek.zip",
-      "path": "models/model_tmpdsqatrek.zip",
+      "version": "model_tmpo3jl9ugx.zip",
+      "path": "models/model_tmpo3jl9ugx.zip",
       "status": "deployed",
-      "created_at": "2025-06-30T15:23:57.089944",
-      "last_updated": "2025-06-30T15:24:13.935106",
+      "created_at": "2025-07-01T01:06:10.109610",
+      "last_updated": "2025-07-01T01:08:11.397741",
       "model_type": "IsolationForest"
     }
   ],
-  "last_updated": "2025-06-30T17:04:44.270804",
+  "last_updated": "2025-07-01T01:13:14.853144",
   "tmpro35_reu.zip": {
     "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpro35_reu.zip",
     "created_at": "2025-06-30T13:09:22.397116",
@@ -30,6 +30,13 @@
     "created_at": "2025-06-30T15:23:52.133121",
     "status": "imported",
     "last_updated": "2025-06-30T15:23:52.133134",
+    "import_method": "zip_upload"
+  },
+  "tmpo3jl9ugx.zip": {
+    "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpo3jl9ugx.zip",
+    "created_at": "2025-07-01T01:06:04.899252",
+    "status": "imported",
+    "last_updated": "2025-07-01T01:06:04.899263",
     "import_method": "zip_upload"
   }
 }

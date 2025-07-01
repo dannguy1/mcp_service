@@ -28,6 +28,8 @@ class ModelManager:
         self.current_model_metadata = None
         self.feature_names = []
         self.model_loaded = False
+        self.models: Dict[str, Dict[str, Any]] = {}  # agent registration
+        self.redis_client: Optional[Any] = None
         
         # Resolve models directory path relative to project root
         models_dir = self.config.storage.directory
@@ -800,4 +802,147 @@ class ModelManager:
                 
         except Exception as e:
             logger.error(f"Error during directory structure validation: {e}")
-            raise 
+            raise
+
+    def set_redis_client(self, redis_client):
+        self.redis_client = redis_client
+
+    def _update_model_status(self, model_id: str, model_entry: Dict[str, Any]):
+        try:
+            if not self.redis_client:
+                logger.warning("Redis client not available, skipping status update")
+                return
+            # Clean up old keys with variations of the model ID
+            old_keys = [
+                f"mcp:model:wi_fi_agent:status",
+                f"mcp:model:WiFiAgent:status",
+                f"mcp:model:wifiagent:status",
+                f"mcp:model:wifi_agent:status"
+            ]
+            for key in old_keys:
+                self.redis_client.delete(key)
+            key = f"mcp:model:{model_id}:status"
+            # Map agent status to frontend status
+            if model_entry['status'] in ['active', 'analyzing', 'initialized']:
+                frontend_status = 'active'
+            elif model_entry['status'] == 'error':
+                frontend_status = 'error'
+            else:
+                frontend_status = 'inactive'
+            model_entry['status'] = frontend_status
+            self.redis_client.set(key, json.dumps(model_entry))
+            logger.info(f"Setting Redis key: {key}")
+            logger.info(f"Setting Redis value: {json.dumps(model_entry)}")
+        except Exception as e:
+            logger.error(f"Error updating model status in Redis: {e}")
+
+    def register_model(self, agent, model_id: str) -> bool:
+        try:
+            if model_id in self.models:
+                logger.warning(f"Model {model_id} already registered")
+                return False
+            agent_name = getattr(agent, 'agent_name', None) or getattr(agent, 'name', None) or agent.__class__.__name__
+            model_entry = {
+                'id': model_id,
+                'name': agent_name,
+                'status': 'initialized',
+                'is_running': False,
+                'last_run': None,
+                'capabilities': getattr(agent, 'capabilities', []),
+                'description': getattr(agent, 'description', '')
+            }
+            self.models[model_id] = {
+                'agent': agent,
+                'entry': model_entry
+            }
+            self._update_model_status(model_id, model_entry)
+            logger.info(f"Successfully registered model: {model_id} with name: {agent_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to register model {model_id}: {e}")
+            return False
+
+    def unregister_model(self, model_id: str) -> bool:
+        try:
+            if model_id not in self.models:
+                logger.warning(f"Model {model_id} not registered")
+                return False
+            model_entry = self.models[model_id]['entry']
+            model_entry['status'] = 'inactive'
+            model_entry['is_running'] = False
+            model_entry['last_run'] = datetime.now().isoformat()
+            self._update_model_status(model_id, model_entry)
+            del self.models[model_id]
+            logger.info(f"Successfully unregistered model: {model_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to unregister model {model_id}: {e}")
+            return False
+
+    def activate_model(self, model_id: str) -> bool:
+        try:
+            if model_id not in self.models:
+                logger.warning(f"Model {model_id} not found in registry")
+                return False
+            model_entry = self.models[model_id]['entry']
+            model_entry['status'] = 'active'
+            model_entry['is_running'] = True
+            model_entry['last_run'] = datetime.now().isoformat()
+            self._update_model_status(model_id, model_entry)
+            logger.info(f"Model {model_id} activated successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error activating model {model_id}: {e}")
+            return False
+
+    def deactivate_model(self, model_id: str) -> bool:
+        try:
+            if model_id not in self.models:
+                logger.warning(f"Model {model_id} not found in registry")
+                return False
+            model_entry = self.models[model_id]['entry']
+            model_entry['status'] = 'inactive'
+            model_entry['is_running'] = False
+            model_entry['last_run'] = datetime.now().isoformat()
+            self._update_model_status(model_id, model_entry)
+            logger.info(f"Model {model_id} deactivated successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error deactivating model {model_id}: {e}")
+            return False
+
+    def get_all_models(self) -> List[Dict[str, Any]]:
+        models = []
+        for model_id, model_data in self.models.items():
+            entry = model_data['entry']
+            status = entry.get('status', 'inactive')
+            if self.redis_client:
+                try:
+                    key = f"mcp:model:{model_id}:status"
+                    status_data = self.redis_client.get(key)
+                    if status_data:
+                        agent_status = json.loads(status_data)
+                        status = agent_status.get('status', status)
+                except Exception as e:
+                    logger.error(f"Error getting Redis status for {model_id}: {e}")
+            entry['status'] = status
+            models.append(entry)
+        return models
+
+    def get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
+        if model_id not in self.models:
+            logger.warning(f"Model {model_id} not found in registry")
+            return None
+        entry = self.models[model_id]['entry']
+        status = entry.get('status', 'inactive')
+        if self.redis_client:
+            try:
+                key = f"mcp:model:{model_id}:status"
+                status_data = self.redis_client.get(key)
+                if status_data:
+                    agent_status = json.loads(status_data)
+                    status = agent_status.get('status', status)
+            except Exception as e:
+                logger.error(f"Error getting Redis status for {model_id}: {e}")
+        entry['status'] = status
+        return entry 
