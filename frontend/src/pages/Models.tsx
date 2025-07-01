@@ -419,15 +419,25 @@ const Models: React.FC = () => {
                       </OverlayTrigger>
                       <OverlayTrigger
                         placement="top"
-                        overlay={<Tooltip>Delete Model</Tooltip>}
+                        overlay={
+                          <Tooltip>
+                            {model.assigned_agents && model.assigned_agents.length > 0
+                              ? 'Cannot delete: model is assigned to one or more agents'
+                              : 'Delete Model'}
+                          </Tooltip>
+                        }
                       >
-                        <Button
-                          size="sm"
-                          variant="outline-danger"
-                          onClick={() => setShowDeleteModal(model.version)}
-                        >
-                          <FaTrash />
-                        </Button>
+                        <span>
+                          <Button
+                            size="sm"
+                            variant="outline-danger"
+                            onClick={() => setShowDeleteModal(model.version)}
+                            disabled={model.assigned_agents && model.assigned_agents.length > 0}
+                            style={(model.assigned_agents && model.assigned_agents.length > 0) ? { pointerEvents: 'none' } : {}}
+                          >
+                            <FaTrash />
+                          </Button>
+                        </span>
                       </OverlayTrigger>
                     </div>
                   </td>

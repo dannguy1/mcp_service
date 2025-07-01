@@ -435,11 +435,6 @@ class ModelManager:
             
             model_path = Path(model_info['path'])
             
-            # Check if this is the currently deployed model
-            if model_info.get('status') == 'deployed':
-                logger.warning(f"Cannot delete currently deployed model: {version}")
-                return False
-            
             # Remove from registry first
             await self._remove_from_registry(version)
             

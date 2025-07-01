@@ -213,12 +213,25 @@ async def rollback_model(version: str) -> Dict[str, Any]:
 
 @router.delete("/{version}")
 async def delete_model(version: str) -> Dict[str, Any]:
-    """Delete a specific model version."""
+    """Delete a specific model version. Only allowed if not assigned to any agent."""
     try:
         config = ModelConfig()
         model_manager = ModelManager(config)
-        success = await model_manager.delete_model(version)
+        # Find model path
+        models = await model_manager.list_models()
+        model_info = next((m for m in models if m['version'] == version), None)
+        if not model_info:
+            raise HTTPException(status_code=404, detail="Model not found")
         
+        # Check agent assignments first
+        agent_assignments = _get_model_agent_assignments()
+        model_path = model_info.get('path', '')
+        assigned_agents = agent_assignments.get(model_path, [])
+        if assigned_agents:
+            raise HTTPException(status_code=400, detail="Model is currently assigned to one or more agents and cannot be deleted.")
+        
+        # If no agent assignments, allow deletion regardless of deployment status
+        success = await model_manager.delete_model(version)
         if success:
             return {
                 "version": version,
@@ -227,7 +240,8 @@ async def delete_model(version: str) -> Dict[str, Any]:
             }
         else:
             raise HTTPException(status_code=400, detail="Failed to delete model")
-            
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error deleting model: {e}")
         raise HTTPException(status_code=500, detail=str(e))
