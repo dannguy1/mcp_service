@@ -35,11 +35,12 @@ import {
   FaHistory
 } from 'react-icons/fa';
 import { endpoints } from '../services/api';
-import type { Agent, AgentConfig, AgentConfigValidationResponse, ConfigTemplates } from '../services/types';
+import type { Agent, AgentConfig, AgentConfigValidationResponse, ConfigTemplates, AvailableModel } from '../services/types';
 
 const AgentConfig: React.FC = () => {
   // State management
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [originalConfig, setOriginalConfig] = useState<AgentConfig | null>(null);
@@ -55,9 +56,10 @@ const AgentConfig: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Load agents and templates on component mount
+  // Load agents, models, and templates on component mount
   useEffect(() => {
     loadAgents();
+    loadAvailableModels();
     loadTemplates();
   }, []);
 
@@ -72,6 +74,16 @@ const AgentConfig: React.FC = () => {
       console.error('Error loading agents:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Load available models
+  const loadAvailableModels = async () => {
+    try {
+      const modelsData = await endpoints.listModels();
+      setAvailableModels(modelsData);
+    } catch (err) {
+      console.error('Error loading available models:', err);
     }
   };
 
