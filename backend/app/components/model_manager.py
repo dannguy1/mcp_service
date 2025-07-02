@@ -613,8 +613,11 @@ class ModelManager:
                             with open(metadata_path, 'r') as f:
                                 metadata = json.load(f)
                         
+                        # Use version from metadata if available, otherwise use registry version
+                        model_version = metadata.get('model_info', {}).get('version', version)
+                        
                         models.append({
-                            'version': version,
+                            'version': model_version,
                             'path': str(model_path),
                             'status': model_info.get('status', 'unknown'),
                             'created_at': model_info.get('created_at', ''),
@@ -645,11 +648,22 @@ class ModelManager:
                         validation_result = await self._validate_imported_model(str(model_dir))
                         if validation_result['is_valid']:
                             await self._update_model_registry(model_dir, 'available')
+                            # Load metadata to get proper version
+                            metadata_path = model_dir / 'metadata.json'
+                            metadata = {}
+                            model_version = model_dir.name
+                            
+                            if metadata_path.exists():
+                                with open(metadata_path, 'r') as f:
+                                    metadata = json.load(f)
+                                model_version = metadata.get('model_info', {}).get('version', model_dir.name)
+                            
                             models.append({
-                                'version': model_dir.name,
+                                'version': model_version,
                                 'path': str(model_dir),
                                 'status': 'available',
-                                'created_at': datetime.now().isoformat()
+                                'created_at': datetime.now().isoformat(),
+                                'metadata': metadata
                             })
                             logger.info(f"Discovered and registered new model: {model_dir.name}")
                         else:

@@ -1,27 +1,30 @@
-agent_id: "dns_agent"
-name: "DNSAgent"
-description: "DNS query anomaly detection"
-agent_type: "ml_based"
-process_filters: ["named", "dnsmasq", "systemd-resolved", "dnsmasq-dhcp"]
-model_path: "/home/dannguyen/WNC/mcp_service/backend/models/dns_anomaly_model.pkl"
-capabilities: [
-  "DNS amplification detection",
-  "Query flood detection",
-  "Suspicious domain detection"
-]
+agent_id: dns_agent
+agent_type: ml_based
 analysis_rules:
-  lookback_minutes: 10
   analysis_interval: 120
   feature_extraction:
-    query_count: true
-    response_time: true
     domain_patterns: true
+    query_count: true
     query_types: true
+    response_time: true
+  lookback_minutes: 10
   severity_mapping:
     dns_amplification: 5
     query_flood: 4
     suspicious_domain: 3
   thresholds:
+    amplification_ratio_threshold: 10
     query_flood_threshold: 1000
     response_time_threshold: 5000
-    amplification_ratio_threshold: 10 
+capabilities:
+- DNS amplification detection
+- Query flood detection
+- Suspicious domain detection
+description: DNS query anomaly detection
+model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpfn8jxrmk.zip
+name: DNSAgent
+process_filters:
+- named
+- dnsmasq
+- systemd-resolved
+- dnsmasq-dhcp

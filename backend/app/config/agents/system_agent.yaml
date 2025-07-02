@@ -1,28 +1,32 @@
-agent_id: "system_agent"
-name: "SystemAgent"
-description: "System-level anomaly detection"
-agent_type: "ml_based"
-process_filters: ["systemd", "cron", "sshd", "sudo", "watchdog"]
-model_path: "/home/dannguyen/WNC/mcp_service/backend/models/system_anomaly_model.pkl"
-capabilities: [
-  "System resource anomaly detection",
-  "Authentication failure detection",
-  "Process behavior analysis"
-]
+agent_id: system_agent
+agent_type: ml_based
 analysis_rules:
-  lookback_minutes: 15
   analysis_interval: 300
   feature_extraction:
     cpu_usage: true
-    memory_usage: true
     disk_io: true
-    network_connections: true
     failed_logins: true
+    memory_usage: true
+    network_connections: true
+  lookback_minutes: 15
   severity_mapping:
-    resource_anomaly: 4
     auth_failure: 3
     process_anomaly: 5
+    resource_anomaly: 4
   thresholds:
     cpu_threshold: 90
+    failed_login_threshold: 5
     memory_threshold: 85
-    failed_login_threshold: 5 
+capabilities:
+- System resource anomaly detection
+- Authentication failure detection
+- Process behavior analysis
+description: System-level anomaly detection
+model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpjgzrlhlg.zip
+name: SystemAgent
+process_filters:
+- systemd
+- cron
+- sshd
+- sudo
+- watchdog

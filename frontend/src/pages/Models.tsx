@@ -670,6 +670,14 @@ const Models: React.FC = () => {
                 <div className="row">
                   <div className="col-md-6">
                     <p><strong>Version:</strong> {modelInfo.version}</p>
+                    {((modelInfo as any).metadata?.model_info?.name || (modelInfo as any).metadata?.model_info?.model_name) ? (
+                      <p><strong>Name:</strong> {(modelInfo as any).metadata.model_info.name || (modelInfo as any).metadata.model_info.model_name}</p>
+                    ) : (
+                      <p><strong>Name:</strong> <span className="text-muted">Not specified</span></p>
+                    )}
+                    {(modelInfo as any).metadata?.model_info?.training_id && (
+                      <p><strong>Training ID:</strong> <code className="small">{(modelInfo as any).metadata.model_info.training_id}</code></p>
+                    )}
                     <p><strong>Status:</strong> 
                       <Badge 
                         bg={(modelInfo as any).status === 'deployed' ? 'success' : 'secondary'} 
