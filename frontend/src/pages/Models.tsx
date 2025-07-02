@@ -23,6 +23,7 @@ const Models: React.FC = () => {
   const [validationResult, setValidationResult] = useState<ModelValidationResult | null>(null);
   const [validatingModel, setValidatingModel] = useState<string | null>(null);
   const [modelInfoLoading, setModelInfoLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['models'],
@@ -41,6 +42,24 @@ const Models: React.FC = () => {
     queryFn: () => endpoints.getTransferHistory(),
     refetchInterval: 300000, // Refresh every 5 minutes
   });
+
+  // Helper function to get model name from metadata
+  const getModelName = (model: any): string => {
+    if (model.metadata?.model_info?.model_name) {
+      return model.metadata.model_info.model_name;
+    }
+    // Fallback to version if no model name is available
+    return model.version;
+  };
+
+  // Helper function to get model name with version
+  const getModelNameWithVersion = (model: any): string => {
+    const modelName = getModelName(model);
+    if (modelName === model.version) {
+      return model.version;
+    }
+    return `${modelName} (${model.version})`;
+  };
 
   const handleInfo = async (version: string) => {
     try {
@@ -347,7 +366,7 @@ const Models: React.FC = () => {
           <Table responsive hover>
             <thead>
               <tr>
-                <th>Version</th>
+                <th>Model Name</th>
                 <th>Status</th>
                 <th>Assigned Agents</th>
                 <th>Created</th>
@@ -357,7 +376,12 @@ const Models: React.FC = () => {
             <tbody>
               {data?.map((model: any) => (
                 <tr key={model.version}>
-                  <td>{model.version}</td>
+                  <td>
+                    <div>
+                      <strong>{getModelName(model)}</strong>
+                      <div className="small text-muted">{model.version}</div>
+                    </div>
+                  </td>
                   <td>
                     <Badge
                       bg={
@@ -502,9 +526,14 @@ const Models: React.FC = () => {
           {performanceData.map((performance) => (
             <div key={performance.model_version} className="col-md-6 mb-4">
               <Card>
-                <Card.Header>
-                  <h6 className="mb-0">Model {performance.model_version}</h6>
-                </Card.Header>
+                              <Card.Header>
+                <h6 className="mb-0">
+                  {(() => {
+                    const model = data?.find((m: any) => m.version === performance.model_version);
+                    return model ? getModelName(model) : `Model ${performance.model_version}`;
+                  })()}
+                </h6>
+              </Card.Header>
                 <Card.Body>
                   <div className="row">
                     <div className="col-6">
@@ -653,7 +682,7 @@ const Models: React.FC = () => {
       {/* Model Info Modal */}
       <Modal show={showInfoModal} onHide={() => setShowInfoModal(false)} size="xl">
         <Modal.Header closeButton>
-          <Modal.Title>Model Information - {modelInfo?.version}</Modal.Title>
+                          <Modal.Title>Model Information - {modelInfo?.metadata?.model_info?.model_name || modelInfo?.version}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {modelInfoLoading ? (
@@ -780,10 +809,12 @@ const Models: React.FC = () => {
                       <h6>Model Information</h6>
                       <div className="row">
                         <div className="col-md-6">
+                          <p><strong>Model Name:</strong> {(modelInfo as any).metadata.model_info.model_name || 'N/A'}</p>
                           <p><strong>Model Type:</strong> {(modelInfo as any).metadata.model_info.model_type}</p>
                           <p><strong>Description:</strong> {(modelInfo as any).metadata.model_info.description || 'No description available'}</p>
                         </div>
                         <div className="col-md-6">
+                          <p><strong>Version:</strong> {(modelInfo as any).metadata.model_info.version}</p>
                           <p><strong>Created At:</strong> {new Date((modelInfo as any).metadata.model_info.created_at).toLocaleString()}</p>
                         </div>
                       </div>
