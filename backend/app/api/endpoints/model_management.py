@@ -84,64 +84,49 @@ async def import_model_package(
     file: UploadFile = File(...),
     validate: bool = True
 ) -> Dict[str, Any]:
-    """Import a model package ZIP file."""
+    """Import a model package from a zip file."""
     try:
-        # File validation
-        if not file.filename:
-            raise HTTPException(status_code=400, detail="No file provided")
-        
-        # Initialize model loader with configuration
         config = ModelConfig()
-        model_loader = ModelLoader(config=config)
+        model_manager = ModelManager.get_instance(config)
         
-        # Validate file
-        content = await file.read()
-        if not model_loader.validate_uploaded_file(file.filename, len(content)):
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid file. Must be a ZIP file following naming convention: model_{version}_deployment.zip"
-            )
-        
-        # Save to temporary location
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
-            tmp_file.write(content)
-            tmp_file_path = tmp_file.name
+        # Create temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
         
         try:
-            # Process the model package
-            result = await model_loader.process_model_package(tmp_file_path, validate)
+            # Import the model
+            result = await model_manager.import_model_from_training_service(temp_file_path, validate)
             return result
         finally:
-            # Cleanup temporary file
-            if os.path.exists(tmp_file_path):
-                os.unlink(tmp_file_path)
-        
-    except HTTPException:
-        raise
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
     except Exception as e:
         logger.error(f"Error importing model package: {e}")
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/import/{model_path:path}")
 async def import_model_from_training_service(model_path: str, 
                                            validate: bool = True) -> Dict[str, Any]:
-    """Import a model from training service."""
+    """Import a model from the training service."""
     try:
         config = ModelConfig()
-        transfer_service = ModelTransferService(config)
-        result = await transfer_service.import_model(model_path, validate)
+        model_manager = ModelManager.get_instance(config)
+        result = await model_manager.import_model_from_training_service(model_path, validate)
         return result
     except Exception as e:
-        logger.error(f"Error importing model: {e}")
+        logger.error(f"Error importing model from training service: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/import-latest")
 async def import_latest_model(validate: bool = True) -> Dict[str, Any]:
-    """Import the latest model from training service."""
+    """Import the latest model from the training service."""
     try:
         config = ModelConfig()
-        transfer_service = ModelTransferService(config)
-        result = await transfer_service.import_latest_model(validate)
+        model_manager = ModelManager.get_instance(config)
+        result = await model_manager.import_model_from_training_service("latest", validate)
         return result
     except Exception as e:
         logger.error(f"Error importing latest model: {e}")
@@ -152,8 +137,8 @@ async def validate_model(version: str) -> Dict[str, Any]:
     """Validate a specific model version."""
     try:
         config = ModelConfig()
+        model_manager = ModelManager.get_instance(config)
         validator = ModelValidator(config)
-        model_manager = ModelManager(config)
         
         # Find model path
         models = await model_manager.list_models()
@@ -162,7 +147,7 @@ async def validate_model(version: str) -> Dict[str, Any]:
         if not model_info:
             raise HTTPException(status_code=404, detail="Model not found")
         
-        validation_result = await validator.validate_model_quality(model_info['path'])
+        validation_result = await validator.validate_model(model_info['path'])
         return validation_result
         
     except Exception as e:
@@ -174,7 +159,8 @@ async def deploy_model(version: str) -> Dict[str, Any]:
     """Deploy a specific model version."""
     try:
         config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
+        
         success = await model_manager.deploy_model(version)
         
         if success:
@@ -195,7 +181,8 @@ async def rollback_model(version: str) -> Dict[str, Any]:
     """Rollback to a specific model version."""
     try:
         config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
+        
         success = await model_manager.rollback_model(version)
         
         if success:
@@ -216,7 +203,7 @@ async def delete_model(version: str) -> Dict[str, Any]:
     """Delete a specific model version. Only allowed if not assigned to any agent."""
     try:
         config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
         # Find model path
         models = await model_manager.list_models()
         model_info = next((m for m in models if m['version'] == version), None)
@@ -264,7 +251,7 @@ async def list_models() -> List[Dict[str, Any]]:
     """List all available models."""
     try:
         config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
         
         # Scan for new models first
         await model_manager.scan_model_directory()
@@ -291,7 +278,7 @@ async def get_model_info(version: str) -> Dict[str, Any]:
     """Get detailed information about a specific model."""
     try:
         config = ModelConfig()
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
         
         models = await model_manager.list_models()
         model_info = next((m for m in models if m['version'] == version), None)
@@ -366,7 +353,7 @@ async def validate_model_compatibility(version: str, target_features: List[str])
     try:
         config = ModelConfig()
         validator = ModelValidator(config)
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
         
         # Find model path
         models = await model_manager.list_models()
@@ -390,7 +377,7 @@ async def generate_validation_report(version: str) -> Dict[str, Any]:
     try:
         config = ModelConfig()
         validator = ModelValidator(config)
-        model_manager = ModelManager(config)
+        model_manager = ModelManager.get_instance(config)
         
         # Find model path
         models = await model_manager.list_models()

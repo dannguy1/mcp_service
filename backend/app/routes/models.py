@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-main_model_manager = ModelManager(ModelConfig())
+main_model_manager = ModelManager.get_instance(ModelConfig())
 
 @router.get("/models", response_model=List[Dict[str, Any]])
 async def get_models():

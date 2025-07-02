@@ -492,7 +492,7 @@ async def get_analysis_overview():
         total_models = len(models)
         
         # Calculate total model size
-        total_model_size = sum(model.get('size', 0) for model in models)
+        total_model_size = sum(model.get('size', 0) if isinstance(model, dict) else 0 for model in models)
         
         # Get agent type distribution
         agent_types = {}
@@ -976,11 +976,22 @@ def _get_model_info(agent, agent_registry) -> Optional[Dict[str, Any]]:
             "type": "unknown"
         }
         
-        # Try to get more model details from the model manager
+        # Try to get more model details from the agent's model attribute
+        model = getattr(agent, 'model', None)
+        if model is not None:
+            if isinstance(model, dict):
+                model_info["type"] = model.get("type", "unknown")
+                model_info["version"] = model.get("version", None)
+                model_info["thresholds"] = model.get("thresholds", None)
+            else:
+                # Assume sklearn or other class-based model
+                model_info["type"] = type(model).__name__
+                model_info["version"] = None
+                model_info["thresholds"] = None
+        
+        # Try to get more model details from the model manager (future extension)
         if hasattr(agent, 'model_manager') and agent.model_manager:
             try:
-                # This would need to be implemented in the model manager
-                # For now, we'll return basic info
                 pass
             except Exception as e:
                 logger.debug(f"Could not get detailed model info: {e}")

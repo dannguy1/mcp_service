@@ -3,20 +3,24 @@ import logging
 import json
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import shutil
+import aiohttp
 
-from ..components.model_manager import ModelManager
 from ..models.config import ModelConfig
+from ..components.model_manager import ModelManager
 
 logger = logging.getLogger(__name__)
 
 class ModelTransferService:
-    """Service for transferring models from training service to main service."""
+    """Service for transferring models between training service and inference service."""
     
     def __init__(self, config: ModelConfig):
         self.config = config
-        self.model_manager = ModelManager(config)
+        self.model_manager = ModelManager.get_instance(config)
+        self.training_service_url = config.integration.training_service_url
+        self.transfer_history: List[Dict[str, Any]] = []
+        self.logger = logger
         self.training_service_path = Path(config.integration.training_service_path)
         self.transfer_history_file = Path(config.storage.directory) / "transfer_history.json"
         

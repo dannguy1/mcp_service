@@ -1,10 +1,11 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import os
 import redis
 from dotenv import load_dotenv
+import json
 
 from app.config.config import config
 from app.mcp_service.data_service import DataService
@@ -12,6 +13,7 @@ from app.mcp_service.agents.wifi_agent import WiFiAgent
 from app.mcp_service.components.resource_monitor import ResourceMonitor
 from app.components.model_manager import ModelManager
 from app.services.status_manager import ServiceStatusManager
+from app.models.config import ModelConfig
 
 # Load environment variables from .env file
 load_dotenv()
@@ -23,12 +25,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global ModelManager instance
-model_manager = ModelManager()
-
 class MCPService:
+    """Core MCP (Model Context Protocol) service."""
+    
     def __init__(self):
-        self.config = config
+        self.config = ModelConfig()
+        self.model_manager = ModelManager.get_instance(self.config)
+        self.logger = logger
+        self.is_running = False
         self.data_service = DataService(self.config)
         self.resource_monitor = ResourceMonitor()
         
@@ -44,7 +48,7 @@ class MCPService:
         )
         
         # Initialize components with Redis client
-        model_manager.set_redis_client(self.redis_client)
+        self.model_manager.set_redis_client(self.redis_client)
         
         # Initialize status manager with Redis client
         self.status_manager = ServiceStatusManager('mcp_service', self.redis_client)
@@ -86,14 +90,14 @@ class MCPService:
             await self.data_service.start()
             
             # Ensure Redis client is set in ModelManager
-            if not model_manager.redis_client:
-                model_manager.set_redis_client(self.redis_client)
+            if not self.model_manager.redis_client:
+                self.model_manager.set_redis_client(self.redis_client)
             
             # Start ModelManager first
-            model_manager.start()
+            self.model_manager.start()
             
             # Create and start WiFi agent
-            self.wifi_agent = WiFiAgent(self.config, self.data_service, model_manager)
+            self.wifi_agent = WiFiAgent(self.config, self.data_service, self.model_manager)
             await self.wifi_agent.start()
             
             # Start status updates with more frequent checks
@@ -122,7 +126,7 @@ class MCPService:
             if self.wifi_agent:
                 await self.wifi_agent.stop()
             await self.data_service.stop()
-            model_manager.stop()
+            self.model_manager.stop()
             self.status_manager.stop_status_updates()
             
             logger.info("MCP service stopped successfully")

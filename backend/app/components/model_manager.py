@@ -20,7 +20,20 @@ logger = get_logger(__name__)
 class ModelManager:
     """Enhanced model manager for loading and managing trained models."""
     
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, config: Optional[ModelConfig] = None):
+        """Singleton pattern to ensure only one ModelManager instance exists."""
+        if cls._instance is None:
+            cls._instance = super(ModelManager, cls).__new__(cls)
+        return cls._instance
+    
     def __init__(self, config: Optional[ModelConfig] = None):
+        """Initialize the ModelManager (only once due to singleton pattern)."""
+        if self._initialized:
+            return
+            
         self.config = config or ModelConfig()
         self.current_model = None
         self.current_scaler = None
@@ -86,6 +99,22 @@ class ModelManager:
             logger.error(f"Failed to create models directory {self.models_directory}: {e}")
             raise
         
+        self._initialized = True
+        logger.info("ModelManager singleton initialized successfully")
+    
+    @classmethod
+    def get_instance(cls, config: Optional[ModelConfig] = None) -> 'ModelManager':
+        """Get the singleton instance of ModelManager."""
+        if cls._instance is None:
+            cls._instance = cls(config)
+        return cls._instance
+    
+    @classmethod
+    def reset_instance(cls):
+        """Reset the singleton instance (mainly for testing)."""
+        cls._instance = None
+        cls._initialized = False
+    
     async def import_model_from_training_service(self, model_path: str, 
                                                validate: bool = True) -> Dict[str, Any]:
         """Import a model from the standalone training service."""

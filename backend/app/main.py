@@ -52,9 +52,9 @@ data_service = DataService(config=config)
 resource_monitor = ResourceMonitor()
 status_manager = MCPStatusManager(redis_host=config.redis['host'], redis_port=config.redis['port'])
 
-# Initialize main ModelManager for ML model loading
+# Initialize core components
 model_config = ModelConfig()
-main_model_manager = ModelManager(model_config)
+main_model_manager = ModelManager.get_instance(model_config)
 
 # Set Redis client for model manager
 main_model_manager.set_redis_client(redis_client)
@@ -654,7 +654,7 @@ async def get_current_model():
         from app.models.config import ModelConfig
         
         model_config = ModelConfig()
-        model_manager = ModelManager(model_config)
+        model_manager = ModelManager.get_instance(model_config)
         current_model_info = model_manager.get_model_info()
         
         if not current_model_info:
@@ -672,7 +672,7 @@ async def load_model_version(version: str):
         from app.models.config import ModelConfig
         
         model_config = ModelConfig()
-        model_manager = ModelManager(model_config)
+        model_manager = ModelManager.get_instance(model_config)
         
         # Find model path
         models = await model_manager.list_models()
@@ -706,7 +706,7 @@ async def analyze_logs(logs: List[Dict[str, Any]]):
         import numpy as np
         
         model_config = ModelConfig()
-        model_manager = ModelManager(model_config)
+        model_manager = ModelManager.get_instance(model_config)
         
         # Check if model is loaded
         if not model_manager.is_model_loaded():

@@ -29,7 +29,8 @@ class AgentRegistry:
         self.redis_client = redis_client
         self.agents: Dict[str, BaseAgent] = {}
         self.agent_configs: Dict[str, Dict[str, Any]] = {}
-        self.model_manager = ModelManager()
+        # Use the singleton ModelManager instance
+        self.model_manager = ModelManager.get_instance()
         self.logger = logger
         
         # Load agent configurations
@@ -508,14 +509,7 @@ class AgentRegistry:
             list: List of model information dictionaries
         """
         try:
-            # Use the enhanced ModelManager to get models from registry
-            from app.components.model_manager import ModelManager
-            from app.models.config import ModelConfig
-            
-            config = ModelConfig()
-            enhanced_model_manager = ModelManager(config)
-            
-            # Get models from the enhanced model manager
+            # Use the singleton ModelManager instance
             models = []
             
             # Import asyncio to handle async calls
@@ -528,12 +522,12 @@ class AgentRegistry:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
             
-            # Get models from the enhanced model manager
+            # Get models from the singleton model manager
             try:
                 # Scan for new models first
-                loop.run_until_complete(enhanced_model_manager.scan_model_directory())
+                loop.run_until_complete(self.model_manager.scan_model_directory())
                 # List all models
-                enhanced_models = loop.run_until_complete(enhanced_model_manager.list_models())
+                enhanced_models = loop.run_until_complete(self.model_manager.list_models())
                 
                 for model in enhanced_models:
                     # Extract model name from metadata or use version
@@ -553,7 +547,7 @@ class AgentRegistry:
                     })
                     
             except Exception as e:
-                self.logger.error(f"Error getting models from enhanced model manager: {e}")
+                self.logger.error(f"Error getting models from model manager: {e}")
             
             # Also check the model registry file directly for any missing models
             try:
@@ -561,7 +555,7 @@ class AgentRegistry:
                 from pathlib import Path
                 
                 # Get the models directory path
-                models_dir = Path(enhanced_model_manager.models_directory)
+                models_dir = Path(self.model_manager.models_directory)
                 registry_file = models_dir / "model_registry.json"
                 
                 if registry_file.exists():
@@ -622,7 +616,7 @@ class AgentRegistry:
             
             # Fallback to old method if no models found
             if not models:
-                self.logger.warning("No models found from enhanced model manager, falling back to old method")
+                self.logger.warning("No models found from model manager, falling back to old method")
                 all_models = self.model_manager.get_all_models()
                 if isinstance(all_models, dict) and 'models' in all_models:
                     models_iter = all_models['models'].items()

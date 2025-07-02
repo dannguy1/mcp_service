@@ -37,18 +37,9 @@ class MLBasedAgent(GenericAgent):
         self.feature_extraction_config = self.analysis_rules.get('feature_extraction', {})
         self.thresholds = self.analysis_rules.get('thresholds', {})
         
-        # Load model if path is provided
+        # Always attempt to load the model if model_path is provided
         if self.model_path:
-            if os.path.isfile(self.model_path):
-                # Load from single file
-                self._load_model()
-            elif os.path.isdir(self.model_path):
-                # Load from directory (handled by subclasses)
-                self.logger.info(f"Model path is a directory: {self.model_path}")
-                # Don't load model here - let subclasses handle directory loading
-            else:
-                self.logger.warning(f"Model path not found: {self.model_path}")
-                self._create_default_model()
+            self._load_model()
         else:
             self.logger.warning("No model path provided, using default model")
             self._create_default_model()
@@ -56,15 +47,6 @@ class MLBasedAgent(GenericAgent):
     def _load_model(self):
         """Load the ML model from the specified path (file or directory)."""
         try:
-            # Try to get the model from the ModelManager if available
-            if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
-                self.model = self.model_manager.current_model
-                self.logger.info(f"[DEBUG] Loaded model from ModelManager: {type(self.model)}")
-                self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
-                self.classifier.set_model(self.model)
-                return
-            
-            # Fallback to loading from path if ModelManager doesn't have a model
             import os
             import joblib
             model_path = self.model_path
@@ -218,11 +200,22 @@ class MLBasedAgent(GenericAgent):
                 'error': 'No model loaded'
             }
         
+        # Handle different model types
+        if isinstance(self.model, dict):
+            model_type = self.model.get('type', 'unknown')
+            model_version = self.model.get('version', 'unknown')
+            thresholds = self.model.get('thresholds', {})
+        else:
+            # Assume sklearn or other class-based model
+            model_type = type(self.model).__name__
+            model_version = 'unknown'
+            thresholds = {}
+        
         return {
             'model_path': self.model_path,
-            'model_type': self.model.get('type', 'unknown'),
-            'model_version': self.model.get('version', 'unknown'),
-            'thresholds': self.model.get('thresholds', {}),
+            'model_type': model_type,
+            'model_version': model_version,
+            'thresholds': thresholds,
             'is_loaded': self.model is not None,
             'model_loaded': bool(self.model and self._is_valid_model(self.model))
         }
