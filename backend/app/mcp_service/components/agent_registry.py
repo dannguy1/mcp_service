@@ -13,6 +13,7 @@ from ..agents.ml_based_agent import MLBasedAgent
 from ..agents.rule_based_agent import RuleBasedAgent
 from ..agents.hybrid_agent import HybridAgent
 from app.components.model_manager import ModelManager
+from app.models.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -507,23 +508,139 @@ class AgentRegistry:
             list: List of model information dictionaries
         """
         try:
-            all_models = self.model_manager.get_all_models()
-            # If all_models is a dict with 'models' key, use .items(), else treat as list
-            if isinstance(all_models, dict) and 'models' in all_models:
-                models_iter = all_models['models'].items()
-            elif isinstance(all_models, list):
-                models_iter = enumerate(all_models)
-            else:
-                models_iter = []
-            models_list = []
-            for model_id, model_data in models_iter:
-                models_list.append({
-                    'name': model_data.get('name', model_id),
-                    'path': model_data.get('path', f'/models/{model_id}'),
-                    'size': model_data.get('size', 0),
-                    'modified': model_data.get('created_at', datetime.now().isoformat())
-                })
-            return models_list
+            # Use the enhanced ModelManager to get models from registry
+            from app.components.model_manager import ModelManager
+            from app.models.config import ModelConfig
+            
+            config = ModelConfig()
+            enhanced_model_manager = ModelManager(config)
+            
+            # Get models from the enhanced model manager
+            models = []
+            
+            # Import asyncio to handle async calls
+            import asyncio
+            
+            # Create event loop if one doesn't exist
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Get models from the enhanced model manager
+            try:
+                # Scan for new models first
+                loop.run_until_complete(enhanced_model_manager.scan_model_directory())
+                # List all models
+                enhanced_models = loop.run_until_complete(enhanced_model_manager.list_models())
+                
+                for model in enhanced_models:
+                    # Extract model name from metadata or use version
+                    model_name = model.get('metadata', {}).get('model_info', {}).get('description', '')
+                    if not model_name:
+                        # Try to get name from metadata model_info name field
+                        model_name = model.get('metadata', {}).get('model_info', {}).get('name', '')
+                    if not model_name:
+                        # Use version as fallback
+                        model_name = model.get('version', 'Unknown Model')
+                    
+                    models.append({
+                        'name': model_name,
+                        'path': model.get('path', ''),
+                        'size': model.get('size', 0),
+                        'modified': model.get('last_updated', model.get('created_at', datetime.now().isoformat()))
+                    })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting models from enhanced model manager: {e}")
+            
+            # Also check the model registry file directly for any missing models
+            try:
+                import json
+                from pathlib import Path
+                
+                # Get the models directory path
+                models_dir = Path(enhanced_model_manager.models_directory)
+                registry_file = models_dir / "model_registry.json"
+                
+                if registry_file.exists():
+                    with open(registry_file, 'r') as f:
+                        registry_data = json.load(f)
+                    
+                    # Handle both old format (with models array) and new format (flat dict)
+                    registry_items = []
+                    if isinstance(registry_data, dict) and 'models' in registry_data:
+                        # Old format: {"models": [...], "last_updated": "..."}
+                        registry_items = registry_data['models']
+                    elif isinstance(registry_data, dict):
+                        # New format: {"version": {...}, "version2": {...}}
+                        registry_items = [{'version': k, **v} for k, v in registry_data.items() if k != 'last_updated']
+                    
+                    # Add any models not already in the list
+                    existing_paths = {m['path'] for m in models}
+                    
+                    for item in registry_items:
+                        if isinstance(item, dict):
+                            model_path = item.get('path', '')
+                            
+                            # Skip if already in the list
+                            if model_path in existing_paths:
+                                continue
+                            
+                            # Handle different path formats
+                            if model_path.startswith('models/'):
+                                # Relative path from registry
+                                full_path = models_dir / model_path.replace('models/', '')
+                            else:
+                                # Absolute or relative path
+                                full_path = Path(model_path)
+                            
+                            # Check if the file/directory exists
+                            if full_path.exists():
+                                # Extract model name
+                                model_name = item.get('name', '')
+                                if not model_name:
+                                    # Try to create a meaningful name from version
+                                    version = item.get('version', '')
+                                    if version.endswith('.zip'):
+                                        # For zip files, create a better name
+                                        clean_version = version.replace('.zip', '').replace('model_', '').replace('tmp', '')
+                                        model_name = f"Model {clean_version}"
+                                    else:
+                                        model_name = version
+                                
+                                models.append({
+                                    'name': model_name,
+                                    'path': str(full_path),
+                                    'size': item.get('size', 0),
+                                    'modified': item.get('last_updated', item.get('created_at', datetime.now().isoformat()))
+                                })
+                                
+            except Exception as e:
+                self.logger.error(f"Error reading model registry directly: {e}")
+            
+            # Fallback to old method if no models found
+            if not models:
+                self.logger.warning("No models found from enhanced model manager, falling back to old method")
+                all_models = self.model_manager.get_all_models()
+                if isinstance(all_models, dict) and 'models' in all_models:
+                    models_iter = all_models['models'].items()
+                elif isinstance(all_models, list):
+                    models_iter = enumerate(all_models)
+                else:
+                    models_iter = []
+                
+                for model_id, model_data in models_iter:
+                    models.append({
+                        'name': model_data.get('name', model_id),
+                        'path': model_data.get('path', f'/models/{model_id}'),
+                        'size': model_data.get('size', 0),
+                        'modified': model_data.get('created_at', datetime.now().isoformat())
+                    })
+            
+            return models
+            
         except Exception as e:
             self.logger.error(f"Error getting available models: {e}")
             return []

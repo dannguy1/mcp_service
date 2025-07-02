@@ -31,9 +31,41 @@
       "created_at": "2025-07-01T16:18:19.230719",
       "last_updated": "2025-07-01T16:18:44.573366",
       "model_type": "IsolationForest"
+    },
+    {
+      "version": "model_tmp0w_c3mb2.zip",
+      "path": "models/model_tmp0w_c3mb2.zip",
+      "status": "available",
+      "created_at": "2025-07-01T17:26:56.198419",
+      "last_updated": "2025-07-01T17:26:56.198431",
+      "model_type": "IsolationForest"
+    },
+    {
+      "version": "model_tmpebpfo3a3.zip",
+      "path": "models/model_tmpebpfo3a3.zip",
+      "status": "available",
+      "created_at": "2025-07-01T17:27:48.617775",
+      "last_updated": "2025-07-01T17:27:48.617788",
+      "model_type": "IsolationForest"
+    },
+    {
+      "version": "20250701_160603",
+      "path": "models/20250701_160603",
+      "status": "deployed",
+      "created_at": "2025-07-01T17:28:16.331226",
+      "last_updated": "2025-07-01T17:31:00.161066",
+      "model_type": "IsolationForest"
+    },
+    {
+      "version": "20250701_160415",
+      "path": "models/20250701_160415",
+      "status": "deployed",
+      "created_at": "2025-07-01T17:28:20.839822",
+      "last_updated": "2025-07-01T17:30:58.092562",
+      "model_type": "IsolationForest"
     }
   ],
-  "last_updated": "2025-07-01T16:18:44.573381",
+  "last_updated": "2025-07-01T17:31:00.161082",
   "tmpro35_reu.zip": {
     "path": "/home/dannguyen/WNC/mcp_service/backend/models/model_tmpro35_reu.zip",
     "created_at": "2025-06-30T13:09:22.397116",
@@ -67,6 +99,20 @@
     "created_at": "2025-07-01T16:18:19.175464",
     "status": "imported",
     "last_updated": "2025-07-01T16:18:19.175483",
+    "import_method": "zip_upload"
+  },
+  "tmp0w_c3mb2.zip": {
+    "path": "/home/dannguyen/mcp_service/backend/models/model_tmp0w_c3mb2.zip",
+    "created_at": "2025-07-01T17:26:56.155677",
+    "status": "imported",
+    "last_updated": "2025-07-01T17:26:56.155690",
+    "import_method": "zip_upload"
+  },
+  "tmpebpfo3a3.zip": {
+    "path": "/home/dannguyen/mcp_service/backend/models/model_tmpebpfo3a3.zip",
+    "created_at": "2025-07-01T17:27:48.516494",
+    "status": "imported",
+    "last_updated": "2025-07-01T17:27:48.516507",
     "import_method": "zip_upload"
   }
 }

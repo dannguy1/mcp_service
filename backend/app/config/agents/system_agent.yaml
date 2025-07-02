@@ -22,7 +22,7 @@ capabilities:
 - Authentication failure detection
 - Process behavior analysis
 description: System-level anomaly detection
-model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpjgzrlhlg.zip
+model_path: /home/dannguyen/mcp_service/backend/models/model_tmpebpfo3a3.zip
 name: SystemAgent
 process_filters:
 - systemd

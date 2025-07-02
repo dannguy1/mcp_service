@@ -312,8 +312,37 @@ const Agents: React.FC = () => {
 
   const getModelName = (modelPath: string | null) => {
     if (!modelPath) return 'No model assigned';
+    
+    // First try to find the model in availableModels
     const model = availableModels.find(m => m.path === modelPath);
-    return model ? model.name : modelPath.split('/').pop() || modelPath;
+    if (model) {
+      return model.name;
+    }
+    
+    // If not found, try to find by path basename (for zip files)
+    const pathBasename = modelPath.split('/').pop() || modelPath;
+    const modelByBasename = availableModels.find(m => {
+      const mBasename = m.path.split('/').pop() || m.path;
+      return mBasename === pathBasename;
+    });
+    if (modelByBasename) {
+      return modelByBasename.name;
+    }
+    
+    // If still not found, try to extract a meaningful name from the path
+    if (pathBasename.endsWith('.zip')) {
+      // For zip files, try to extract a more meaningful name
+      const zipName = pathBasename.replace('.zip', '');
+      if (zipName.startsWith('model_')) {
+        // Convert model_tmpo3jl9ugx.zip to "Model tmpo3jl9ugx"
+        const cleanName = zipName.replace('model_', '').replace('tmp', '');
+        return `Model ${cleanName}`;
+      }
+      return zipName;
+    }
+    
+    // Final fallback: use the basename or full path
+    return pathBasename || modelPath;
   };
 
   if (isLoading) {

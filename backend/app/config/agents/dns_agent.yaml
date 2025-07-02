@@ -21,7 +21,7 @@ capabilities:
 - Query flood detection
 - Suspicious domain detection
 description: DNS query anomaly detection
-model_path: /home/dannguyen/WNC/mcp_service/backend/models/model_tmpfn8jxrmk.zip
+model_path: /home/dannguyen/mcp_service/backend/models/model_tmp0w_c3mb2.zip
 name: DNSAgent
 process_filters:
 - named
