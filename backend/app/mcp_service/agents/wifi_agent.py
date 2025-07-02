@@ -120,58 +120,33 @@ class WiFiAgent(MLBasedAgent):
     def _load_model(self):
         """Load the ML model from the specified path (file or directory)."""
         try:
-            self.logger.info(f"[DEBUG] WiFiAgent._load_model() called with model_path: {self.model_path}")
-            self.logger.info(f"[DEBUG] Current model before loading: {self.model}")
-            self.logger.info(f"[DEBUG] Model path exists: {os.path.exists(self.model_path) if self.model_path else False}")
-            self.logger.info(f"[DEBUG] Model path is directory: {os.path.isdir(self.model_path) if self.model_path else False}")
-            
-            # Try to get the model from the ModelManager if available
-            if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
-                self.model = self.model_manager.current_model
-                self.logger.info(f"[DEBUG] Loaded model from ModelManager: {type(self.model)}")
-                self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
-                self.classifier.set_model(self.model)
-                return
-            
-            # For WiFiAgent, always try to load from directory first
-            if self.model_path:
-                self.logger.info(f"[DEBUG] Checking model_path: {self.model_path}")
-                if os.path.isdir(self.model_path):
-                    self.logger.info(f"[DEBUG] Model path is a directory, calling _load_model_from_directory")
-                    # Load from directory using WiFiAgent's specific method
-                    success = self._load_model_from_directory(self.model_path)
-                    self.logger.info(f"[DEBUG] _load_model_from_directory returned: {success}")
-                    if success:
-                        self.logger.info(f"[DEBUG] Loaded model from directory: {self.model_path}")
-                        self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
-                        self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
-                        self.classifier.set_model(self.model)
-                        return
-                    else:
-                        self.logger.warning(f"[DEBUG] Failed to load model from directory: {self.model_path}")
-                        self._create_default_model()
-                        return
-                elif os.path.isfile(self.model_path):
-                    # Load from single file (fallback)
-                    import joblib
-                    self.logger.info(f"[DEBUG] model_path is a file, loading directly: {self.model_path}")
-                    self.model = joblib.load(self.model_path)
-                    self.logger.info(f"[DEBUG] Loaded model from file: {self.model_path}")
-                    self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
-                    self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
-                    self.classifier.set_model(self.model)
-                    return
+            import os
+            import joblib
+            model_path = self.model_path
+            self.logger.info(f"[DEBUG] Attempting to load model from: {model_path}")
+            if os.path.isdir(model_path):
+                model_file = os.path.join(model_path, 'model.joblib')
+                self.logger.info(f"[DEBUG] model_path is a directory, looking for: {model_file}")
+                if os.path.exists(model_file):
+                    self.model = joblib.load(model_file)
+                    self.logger.info(f"[DEBUG] Loaded model from directory: {model_file}")
                 else:
-                    self.logger.warning(f"[DEBUG] Model path does not exist: {self.model_path}")
+                    self.logger.warning(f"[DEBUG] No model.joblib found in directory: {model_path}")
                     self._create_default_model()
                     return
+            elif os.path.isfile(model_path):
+                self.logger.info(f"[DEBUG] model_path is a file, loading directly: {model_path}")
+                self.model = joblib.load(model_path)
+                self.logger.info(f"[DEBUG] Loaded model from file: {model_path}")
             else:
-                self.logger.warning("No model path provided, using default model")
+                self.logger.warning(f"[DEBUG] Model path does not exist: {model_path}")
                 self._create_default_model()
+                return
+            self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
+            self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
+            self.classifier.set_model(self.model)
         except Exception as e:
             self.logger.error(f"[DEBUG] Error loading model from {self.model_path}: {e}")
-            import traceback
-            self.logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
             self._create_default_model()
 
     def _create_default_model(self):
@@ -229,21 +204,35 @@ class WiFiAgent(MLBasedAgent):
 
     async def start(self):
         """Start the WiFi agent."""
-        # Try to reload model from main ModelManager if available
-        if self.model_manager and hasattr(self.model_manager, 'current_model') and self.model_manager.current_model:
-            self.logger.info(f"[DEBUG] Reloading model from main ModelManager")
-            self.model = self.model_manager.current_model
-            self.logger.info(f"[DEBUG] Model type: {type(self.model)}")
-            self.logger.info(f"[DEBUG] Model has predict: {hasattr(self.model, 'predict')}")
-            self.classifier.set_model(self.model)
-        elif not self.model or not self._is_valid_model(self.model):
-            # If no model is loaded, try to load from directory again
+        # Ensure we have a valid model before starting
+        if not self.model or not self._is_valid_model(self.model):
             self.logger.info(f"[DEBUG] No valid model loaded, trying to load from directory")
             self._load_model()
         
+        # Check if we have a valid model before starting
+        if not self.model or not self._is_valid_model(self.model):
+            self.status = "inactive"
+            self.is_running = False
+            self.logger.warning(f"[DEBUG] WiFiAgent inactive: No valid model loaded.")
+            # Update status in ModelManager
+            if self.model_manager:
+                self.model_manager._update_model_status(self.model_id, {
+                    'id': self.model_id,
+                    'name': self.__class__.__name__,
+                    'status': 'inactive',
+                    'is_running': False,
+                    'last_run': datetime.now().isoformat(),
+                    'capabilities': self.capabilities,
+                    'description': self.description,
+                    'model_loaded': False,
+                    'reason': 'No valid model loaded'
+                })
+            return
+        
+        # Call parent start method (which will handle the actual starting logic)
         await super().start()
         
-        # Set the agent as running and active
+        # Set the agent as running and active (only if we have a valid model)
         self.is_running = True
         self.status = 'active'
         self.last_run = datetime.now()
@@ -257,7 +246,8 @@ class WiFiAgent(MLBasedAgent):
                 'is_running': True,
                 'last_run': self.last_run.isoformat(),
                 'capabilities': self.capabilities,
-                'description': self.description
+                'description': self.description,
+                'model_loaded': True
             })
         
         self.logger.info("WiFi agent started successfully")
