@@ -416,8 +416,8 @@ class ModelManager:
             # Update deployment status in metadata
             await self._update_deployment_status(version, 'deployed')
             
-            # Update model registry
-            await self._update_model_registry(Path(self.models_directory) / version, 'deployed')
+            # Update model registry by version
+            await self._update_model_registry_by_version(version, 'deployed')
             
             logger.info(f"Model version {version} deployed successfully")
             return True
@@ -442,9 +442,13 @@ class ModelManager:
             # Update deployment status
             await self._update_deployment_status(version, 'deployed')
             
+            # Update model registry
+            await self._update_model_registry_by_version(version, 'deployed')
+            
             # Update current model status to available
             if self.current_model_version:
                 await self._update_deployment_status(self.current_model_version, 'available')
+                await self._update_model_registry_by_version(self.current_model_version, 'available')
             
             logger.info(f"Rolled back to model version {version}")
             return True
@@ -714,10 +718,39 @@ class ModelManager:
             # Handle both old and new registry formats
             if isinstance(registry_data, dict) and 'models' in registry_data:
                 # Old format: check in models array
-                return any(model.get('version') == version for model in registry_data['models'])
+                # First check by the provided version (could be directory name)
+                if any(model.get('version') == version for model in registry_data['models']):
+                    return True
+                
+                # If not found and it's a directory name, check if the actual version is registered
+                if version.startswith('model_') and version.endswith('.zip'):
+                    model_dir = self.models_directory / version
+                    if model_dir.exists():
+                        metadata_path = model_dir / 'metadata.json'
+                        if metadata_path.exists():
+                            with open(metadata_path, 'r') as f:
+                                metadata = json.load(f)
+                            actual_version = metadata.get('model_info', {}).get('version', '')
+                            if actual_version:
+                                return any(model.get('version') == actual_version for model in registry_data['models'])
+                
+                return False
             elif isinstance(registry_data, dict):
                 # New format: check in flat dictionary
-                return version in registry_data
+                if version in registry_data:
+                    return True
+                
+                # If not found and it's a directory name, check if the actual version is registered
+                if version.startswith('model_') and version.endswith('.zip'):
+                    model_dir = self.models_directory / version
+                    if model_dir.exists():
+                        metadata_path = model_dir / 'metadata.json'
+                        if metadata_path.exists():
+                            with open(metadata_path, 'r') as f:
+                                metadata = json.load(f)
+                            actual_version = metadata.get('model_info', {}).get('version', '')
+                            if actual_version:
+                                return actual_version in registry_data
             
             return False
         except Exception as e:
@@ -988,4 +1021,53 @@ class ModelManager:
             except Exception as e:
                 logger.error(f"Error getting Redis status for {model_id}: {e}")
         entry['status'] = status
-        return entry 
+        return entry
+
+    async def _update_model_registry_by_version(self, version: str, status: str):
+        """Update model registry by version number."""
+        try:
+            registry_data = {}
+            if self.model_registry_file.exists():
+                with open(self.model_registry_file, 'r') as f:
+                    registry_data = json.load(f)
+            
+            # Handle both old and new registry formats
+            if isinstance(registry_data, dict) and 'models' in registry_data:
+                # Old format: {"models": [...], "last_updated": "..."}
+                models_list = registry_data.get('models', [])
+                
+                # Check if model already exists by version
+                existing_model = next((m for m in models_list if m.get('version') == version), None)
+                if existing_model:
+                    # Update existing model
+                    existing_model.update({
+                        'status': status,
+                        'last_updated': datetime.now().isoformat()
+                    })
+                else:
+                    logger.warning(f"Model version {version} not found in registry")
+                    return
+                
+                registry_data['models'] = models_list
+                registry_data['last_updated'] = datetime.now().isoformat()
+                
+            else:
+                # New format: {"version": {...}, "version2": {...}}
+                if version in registry_data:
+                    registry_data[version].update({
+                        'status': status,
+                        'last_updated': datetime.now().isoformat()
+                    })
+                else:
+                    logger.warning(f"Model version {version} not found in registry")
+                    return
+            
+            # Save updated registry
+            with open(self.model_registry_file, 'w') as f:
+                json.dump(registry_data, f, indent=2)
+                
+            logger.info(f"Model version {version} registry updated successfully")
+            
+        except Exception as e:
+            logger.error(f"Error updating model registry: {e}")
+            raise 
