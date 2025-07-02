@@ -28,7 +28,11 @@ import type {
   AgentModelResponse,
   AvailableModel,
   AgentActionResponse,
-  EnhancedModel
+  EnhancedModel,
+  AgentStats,
+  AnalysisOverview,
+  AnomalyTestRequest,
+  AnomalyTestResponse
 } from "./types";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -354,15 +358,7 @@ export const endpoints = {
 
   getAvailableModels: () => {
     console.log("Fetching available models...");
-    return api.get<EnhancedModel[]>('/model-management/models').then(res => {
-      // Map enhanced models to AvailableModel format
-      return res.data.map(model => ({
-        name: model.metadata.model_info.description || model.version,
-        path: model.path,
-        size: 0, // Size not available in enhanced model response
-        modified: model.last_updated
-      }));
-    });
+    return api.get<AvailableModel[]>("/agents/available-models").then(res => res.data);
   },
 
   unregisterAgent: (agentId: string) => {
@@ -373,12 +369,12 @@ export const endpoints = {
   // Agent Analysis Stats endpoints
   getAnalysisOverview: () => {
     console.log("Fetching analysis overview...");
-    return api.get('/agents/stats/overview').then(res => res.data);
+    return api.get<AnalysisOverview>(`/agents/stats/overview`).then(res => res.data);
   },
 
   getAgentStats: (agentId: string) => {
     console.log("Fetching agent stats for:", agentId);
-    return api.get(`/agents/${agentId}/stats`).then(res => res.data);
+    return api.get<AgentStats>(`/agents/${agentId}/stats`).then(res => res.data);
   },
 
   // Agent Details endpoints
@@ -417,5 +413,10 @@ export const endpoints = {
   getConfigTemplates: () => {
     console.log("Fetching configuration templates");
     return api.get('/agents/configs/templates').then(res => res.data);
+  },
+
+  runAnomalyTest: (testRequest: AnomalyTestRequest) => {
+    console.log("Running anomaly test:", testRequest);
+    return api.post<AnomalyTestResponse>("/agents/anomaly-test", testRequest).then(res => res.data);
   }
 };

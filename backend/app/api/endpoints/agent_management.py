@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Dict, Any, Optional
 import logging
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import json
 from datetime import datetime
 
@@ -65,6 +65,25 @@ class ModelInfo(BaseModel):
     path: str
     size: int
     modified: str
+
+class AnomalyTestRequest(BaseModel):
+    agent_id: str
+    days_back: int = Field(ge=1, le=30, description="Number of days to look back (1-30)")
+    start_date: Optional[str] = Field(None, description="Start date (YYYY-MM-DD). If not provided, uses days_back from current date")
+    end_date: Optional[str] = Field(None, description="End date (YYYY-MM-DD). If not provided, uses current date")
+
+class AnomalyTestResponse(BaseModel):
+    test_id: str
+    agent_id: str
+    agent_name: str
+    status: str
+    start_time: str
+    end_time: str
+    logs_processed: int
+    anomalies_detected: int
+    test_duration: float
+    results: List[Dict[str, Any]]
+    errors: List[str] = []
 
 @router.get("", response_model=List[AgentResponse])
 async def list_agents():
@@ -543,17 +562,18 @@ async def get_analysis_overview():
         
         return {
             "total_agents": total_agents,
-            "active_agents": running_agents,  # Changed from running_agents to active_agents
-            "total_configurations": total_configs,
+            "total_configs": total_configs,
+            "running_agents": running_agents,
             "total_models": total_models,
-            "total_model_size_bytes": total_model_size,
-            "agent_type_distribution": agent_types,
-            "total_analysis_cycles": total_analysis_cycles,
-            "total_logs_processed": total_logs_processed,
-            "total_features_extracted": total_features_extracted,
-            "total_anomalies_detected": total_anomalies_detected,
+            "total_model_size": total_model_size,
+            "agent_types": agent_types,
             "agent_stats": agent_stats,
-            "last_updated": datetime.now().isoformat()
+            "overview_stats": {
+                "total_analysis_cycles": total_analysis_cycles,
+                "total_logs_processed": total_logs_processed,
+                "total_features_extracted": total_features_extracted,
+                "total_anomalies_detected": total_anomalies_detected
+            }
         }
         
     except Exception as e:
@@ -1176,4 +1196,177 @@ def _validate_agent_config(config: Dict[str, Any]) -> Dict[str, Any]:
         'is_valid': len(errors) == 0,
         'errors': errors,
         'warnings': warnings
-    } 
+    }
+
+@router.post("/anomaly-test", response_model=AnomalyTestResponse)
+async def run_anomaly_test(request: AnomalyTestRequest):
+    """Run an anomaly detection test on historical data for a specific agent."""
+    try:
+        from datetime import datetime, timedelta
+        import uuid
+        
+        # Create data service for testing
+        from app.config.config import Config
+        config = Config()
+        data_service = DataService(config)
+        
+        # Initialize the data service
+        await data_service.start()
+        
+        # Validate agent exists
+        agent = agent_registry.get_agent(request.agent_id)
+        if not agent:
+            # Check if agent is configured but not created
+            agent_config = agent_registry.get_agent_config(request.agent_id)
+            if not agent_config:
+                raise HTTPException(status_code=404, detail=f"Agent {request.agent_id} not found")
+            
+            # Create the agent for testing
+            agent = agent_registry.create_agent(request.agent_id, data_service)
+            if not agent:
+                raise HTTPException(status_code=500, detail=f"Failed to create agent {request.agent_id}")
+        
+        # Calculate time range
+        end_time = datetime.now()
+        if request.end_date:
+            try:
+                end_time = datetime.fromisoformat(request.end_date)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_date format. Use YYYY-MM-DD")
+        
+        if request.start_date:
+            try:
+                start_time = datetime.fromisoformat(request.start_date)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid start_date format. Use YYYY-MM-DD")
+        else:
+            start_time = end_time - timedelta(days=request.days_back)
+        
+        # Ensure start_time is before end_time
+        if start_time >= end_time:
+            raise HTTPException(status_code=400, detail="Start time must be before end time")
+        
+        # Generate test ID
+        test_id = str(uuid.uuid4())
+        
+        logger.info(f"Starting anomaly test {test_id} for agent {request.agent_id} from {start_time} to {end_time}")
+        
+        # Get historical logs for the agent's process filters
+        process_filters = getattr(agent, 'process_filters', None)
+        if not process_filters:
+            # Get from config if not set on agent
+            agent_config = agent_registry.get_agent_config(request.agent_id)
+            process_filters = agent_config.get('process_filters', []) if agent_config else None
+        
+        # Handle empty process filters (like LogLevelAgent)
+        if not process_filters or len(process_filters) == 0:
+            # For agents with no process filters, get all logs
+            logs = await data_service.get_logs_by_program(
+                start_time=start_time,
+                end_time=end_time,
+                programs=None  # Get all programs
+            )
+        else:
+            # Get logs from the specified time range for specific programs
+            logs = await data_service.get_logs_by_program(
+                start_time=start_time,
+                end_time=end_time,
+                programs=process_filters
+            )
+        
+        logger.info(f"Retrieved {len(logs)} logs for anomaly test")
+        
+        # Run the agent's analysis on the historical data
+        test_start = datetime.now()
+        anomalies_detected = []
+        
+        try:
+            # Temporarily modify agent's lookback to cover the entire time range
+            original_lookback = getattr(agent, 'lookback_minutes', 5)
+            
+            # Run analysis in chunks to avoid memory issues
+            chunk_size = 1000  # Process 1000 logs at a time
+            total_anomalies = 0
+            analysis_errors = []
+            
+            for i in range(0, len(logs), chunk_size):
+                chunk = logs[i:i + chunk_size]
+                
+                # Run analysis on this chunk
+                if hasattr(agent, '_perform_analysis'):
+                    try:
+                        await agent._perform_analysis(chunk)
+                        
+                        # For rule-based agents, count potential anomalies
+                        if hasattr(agent, 'agent_type') and agent.agent_type == 'rule_based':
+                            chunk_anomalies = len([log for log in chunk if log.get('log_level', '').lower() in ['error', 'critical']])
+                            total_anomalies += chunk_anomalies
+                            
+                            # Add to results
+                            for log in chunk:
+                                if log.get('log_level', '').lower() in ['error', 'critical']:
+                                    anomalies_detected.append({
+                                        'timestamp': log.get('timestamp', ''),
+                                        'type': f"{log.get('log_level', 'unknown')}_log",
+                                        'severity': 3 if log.get('log_level') == 'error' else 4,
+                                        'description': log.get('message', ''),
+                                        'source_log': log
+                                    })
+                    except Exception as e:
+                        analysis_errors.append(f"Chunk {i//chunk_size + 1}: {str(e)}")
+                        logger.warning(f"Error analyzing chunk {i//chunk_size + 1}: {e}")
+                        continue
+            
+            test_duration = (datetime.now() - test_start).total_seconds()
+            
+            # Determine status based on errors
+            if analysis_errors:
+                status = "completed_with_errors"
+                logger.warning(f"Anomaly test completed with {len(analysis_errors)} errors: {total_anomalies} anomalies detected in {test_duration:.2f}s")
+            else:
+                status = "completed"
+                logger.info(f"Anomaly test completed: {total_anomalies} anomalies detected in {test_duration:.2f}s")
+            
+            return AnomalyTestResponse(
+                test_id=test_id,
+                agent_id=request.agent_id,
+                agent_name=getattr(agent, 'agent_name', request.agent_id),
+                status=status,
+                start_time=start_time.isoformat(),
+                end_time=end_time.isoformat(),
+                logs_processed=len(logs),
+                anomalies_detected=total_anomalies,
+                test_duration=test_duration,
+                results=anomalies_detected,
+                errors=analysis_errors
+            )
+            
+        except Exception as e:
+            test_duration = (datetime.now() - test_start).total_seconds()
+            logger.error(f"Error during anomaly test: {e}")
+            
+            return AnomalyTestResponse(
+                test_id=test_id,
+                agent_id=request.agent_id,
+                agent_name=getattr(agent, 'agent_name', request.agent_id),
+                status="error",
+                start_time=start_time.isoformat(),
+                end_time=end_time.isoformat(),
+                logs_processed=len(logs),
+                anomalies_detected=0,
+                test_duration=test_duration,
+                results=[],
+                errors=[f"Test failed: {str(e)}"]
+            )
+        finally:
+            # Clean up data service
+            try:
+                await data_service.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping data service: {e}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error running anomaly test: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to run anomaly test: {str(e)}") 

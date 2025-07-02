@@ -398,11 +398,11 @@ export interface AgentDetailedInfo {
   status: string;
   is_running: boolean;
   capabilities: string[];
-  data_requirements: Record<string, any>;
-  export_considerations: Record<string, any>;
-  configuration: Record<string, any>;
-  model_info?: Record<string, any>;
-  performance_metrics?: Record<string, any>;
+  data_requirements: DataRequirements;
+  export_considerations: ExportConsiderations;
+  performance_metrics: PerformanceMetrics;
+  model_info?: ModelInfo;
+  warnings: string[];
 }
 
 export interface AgentModelRequest {
@@ -511,6 +511,33 @@ export interface ConfigTemplates {
   ml_based: ConfigTemplate;
   rule_based: ConfigTemplate;
   hybrid: ConfigTemplate;
+}
+
+export interface AnomalyTestRequest {
+  agent_id: string;
+  days_back: number;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface AnomalyTestResponse {
+  test_id: string;
+  agent_id: string;
+  agent_name: string;
+  status: string;
+  start_time: string;
+  end_time: string;
+  logs_processed: number;
+  anomalies_detected: number;
+  test_duration: number;
+  results: Array<{
+    timestamp: string;
+    type: string;
+    severity: number;
+    description: string;
+    source_log: any;
+  }>;
+  errors: string[];
 }
 
 // End of types file - DatabaseConfig and DatabaseTestResult are exported above

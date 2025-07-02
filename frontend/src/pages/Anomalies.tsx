@@ -1,20 +1,56 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Table, Badge, Spinner, Alert, Row, Col, Button } from 'react-bootstrap';
-import { FaExclamationTriangle, FaChartBar, FaCogs, FaSync, FaEye, FaFilter } from 'react-icons/fa';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Card, Table, Badge, Spinner, Alert, Row, Col, Button, Form, Modal } from 'react-bootstrap';
+import { FaExclamationTriangle, FaChartBar, FaCogs, FaSync, FaEye, FaFilter, FaPlay, FaHistory, FaFlask } from 'react-icons/fa';
 import { endpoints } from '../services/api';
-import type { Anomaly } from '../services/types';
+import type { Anomaly, Agent, AnomalyTestRequest, AnomalyTestResponse } from '../services/types';
 import TabbedLayout from '../components/common/TabbedLayout';
 import type { TabItem } from '../components/common/types';
+import { useAgents } from '../hooks/useAgents';
+import { toast } from 'react-hot-toast';
 
 const Anomalies: React.FC = () => {
   const [selectedAnomaly, setSelectedAnomaly] = useState<Anomaly | null>(null);
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testForm, setTestForm] = useState<AnomalyTestRequest>({
+    agent_id: '',
+    days_back: 7
+  });
+  const [testResults, setTestResults] = useState<AnomalyTestResponse | null>(null);
 
   const { data: anomalies, isLoading, error, refetch } = useQuery<Anomaly[]>({
     queryKey: ['anomalies'],
     queryFn: () => endpoints.getAnomalies(),
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+
+  const { agents, isLoading: isLoadingAgents } = useAgents();
+  const queryClient = useQueryClient();
+
+  // Anomaly test mutation
+  const runAnomalyTestMutation = useMutation({
+    mutationFn: (testRequest: AnomalyTestRequest) => endpoints.runAnomalyTest(testRequest),
+    onSuccess: (data: AnomalyTestResponse) => {
+      setTestResults(data);
+      toast.success(`Anomaly test completed! Found ${data.anomalies_detected} anomalies.`);
+    },
+    onError: (error: any) => {
+      toast.error(`Anomaly test failed: ${error.message || 'Unknown error'}`);
+    }
+  });
+
+  const handleTestSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    runAnomalyTestMutation.mutate(testForm);
+  };
+
+  const handleTestFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setTestForm(prev => ({
+      ...prev,
+      [name]: name === 'days_back' ? parseInt(value) : value
+    }));
+  };
 
   if (isLoading) {
     return (
@@ -280,31 +316,136 @@ const Anomalies: React.FC = () => {
     </div>
   );
 
-  // Detection Rules Tab Content
-  const DetectionRulesContent = (
+  // Anomaly Test Tab Content
+  const AnomalyTestContent = (
     <div>
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4>Detection Rules</h4>
-        <Button variant="outline-primary" onClick={() => refetch()}>
-          <FaSync className="me-2" />
-          Refresh
+        <h4>Anomaly Test</h4>
+        <Button variant="primary" onClick={() => setShowTestModal(true)}>
+          <FaPlay className="me-2" />
+          Run Test
         </Button>
       </div>
 
       <Alert variant="info">
-        <FaCogs className="me-2" />
-        Detection rules configuration will be implemented in a future update. This will allow you to configure and manage anomaly detection thresholds and rules.
+        <FaFlask className="me-2" />
+        Run anomaly detection tests on historical data to validate agent performance and model accuracy.
       </Alert>
 
       <Card>
         <Card.Body>
           <div className="text-center text-muted py-5">
-            <FaCogs size={48} className="mb-3" />
-            <h5>No Detection Rules</h5>
-            <p>Detection rules will appear here once they are configured.</p>
+            <FaHistory size={48} className="mb-3" />
+            <h5>No Tests Run</h5>
+            <p>Click "Run Test" to start an anomaly detection test on historical data.</p>
           </div>
         </Card.Body>
       </Card>
+
+      {/* Test Results */}
+      {testResults && (
+        <Card className="mt-4">
+          <Card.Header>
+            <h6 className="mb-0">Test Results</h6>
+          </Card.Header>
+          <Card.Body>
+            <div className="row">
+              <div className="col-md-3">
+                <h6 className="text-muted">Agent</h6>
+                <p>{testResults.agent_name}</p>
+              </div>
+                              <div className="col-md-3">
+                  <h6 className="text-muted">Status</h6>
+                  <Badge bg={
+                    testResults.status === 'completed' ? 'success' : 
+                    testResults.status === 'completed_with_errors' ? 'warning' : 
+                    'danger'
+                  }>
+                    {testResults.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              <div className="col-md-3">
+                <h6 className="text-muted">Logs Processed</h6>
+                <p>{testResults.logs_processed.toLocaleString()}</p>
+              </div>
+              <div className="col-md-3">
+                <h6 className="text-muted">Anomalies Found</h6>
+                <p className="text-danger fw-bold">{testResults.anomalies_detected}</p>
+              </div>
+            </div>
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <h6 className="text-muted">Time Range</h6>
+                <p>{new Date(testResults.start_time).toLocaleDateString()} - {new Date(testResults.end_time).toLocaleDateString()}</p>
+              </div>
+              <div className="col-md-6">
+                <h6 className="text-muted">Test Duration</h6>
+                <p>{testResults.test_duration.toFixed(2)} seconds</p>
+              </div>
+            </div>
+            
+            {testResults.errors && testResults.errors.length > 0 && (
+              <div className="mt-3">
+                <h6 className="text-danger">Errors Encountered</h6>
+                <Alert variant="danger">
+                  <ul className="mb-0">
+                    {testResults.errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              </div>
+            )}
+            
+            {testResults.results.length > 0 && (
+              <div className="mt-4">
+                <h6>Detected Anomalies</h6>
+                <Table striped bordered size="sm">
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Type</th>
+                      <th>Severity</th>
+                      <th>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {testResults.results.slice(0, 10).map((result, index) => (
+                      <tr key={index}>
+                        <td>{new Date(result.timestamp).toLocaleString()}</td>
+                        <td>
+                          <Badge bg="primary">{result.type}</Badge>
+                        </td>
+                        <td>
+                          <Badge
+                            bg={
+                              result.severity >= 8 ? 'danger' :
+                              result.severity >= 5 ? 'warning' :
+                              result.severity >= 3 ? 'info' : 'success'
+                            }
+                          >
+                            {result.severity}/10
+                          </Badge>
+                        </td>
+                        <td>
+                          <div className="text-truncate" style={{ maxWidth: '200px' }} title={result.description}>
+                            {result.description}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+                {testResults.results.length > 10 && (
+                  <p className="text-muted text-center mt-2">
+                    Showing first 10 of {testResults.results.length} anomalies
+                  </p>
+                )}
+              </div>
+            )}
+          </Card.Body>
+        </Card>
+      )}
     </div>
   );
 
@@ -322,16 +463,107 @@ const Anomalies: React.FC = () => {
       content: AnomalyAnalysisContent
     },
     {
-      key: 'rules',
-      title: 'Detection Rules',
-      icon: <FaCogs />,
-      content: DetectionRulesContent
+      key: 'test',
+      title: 'Anomaly Test',
+      icon: <FaFlask />,
+      content: AnomalyTestContent
     }
   ];
 
   return (
     <div className="container-fluid">
       <TabbedLayout title="Detected Anomalies" tabs={tabs} />
+      
+      {/* Anomaly Test Modal */}
+      <Modal show={showTestModal} onHide={() => setShowTestModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Run Anomaly Test</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleTestSubmit}>
+          <Modal.Body>
+            <Form.Group className="mb-3">
+              <Form.Label>Select Agent</Form.Label>
+              <Form.Select
+                name="agent_id"
+                value={testForm.agent_id}
+                onChange={handleTestFormChange}
+                required
+              >
+                <option value="">Choose an agent...</option>
+                {agents.map(agent => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name} ({agent.id})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+            
+            <Form.Group className="mb-3">
+              <Form.Label>Time Range</Form.Label>
+              <div className="row">
+                <div className="col-md-6">
+                  <Form.Label className="small">Days Back</Form.Label>
+                  <Form.Select
+                    name="days_back"
+                    value={testForm.days_back}
+                    onChange={handleTestFormChange}
+                  >
+                    <option value={1}>1 day</option>
+                    <option value={3}>3 days</option>
+                    <option value={7}>7 days</option>
+                    <option value={14}>14 days</option>
+                    <option value={30}>30 days</option>
+                  </Form.Select>
+                </div>
+                <div className="col-md-6">
+                  <Form.Label className="small">Or Custom Range</Form.Label>
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      type="date"
+                      name="start_date"
+                      value={testForm.start_date || ''}
+                      onChange={handleTestFormChange}
+                      placeholder="Start date"
+                    />
+                    <Form.Control
+                      type="date"
+                      name="end_date"
+                      value={testForm.end_date || ''}
+                      onChange={handleTestFormChange}
+                      placeholder="End date"
+                    />
+                  </div>
+                </div>
+              </div>
+              <Form.Text className="text-muted">
+                Use "Days Back" for a quick test, or specify custom start/end dates for precise control.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowTestModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="primary" 
+              type="submit"
+              disabled={runAnomalyTestMutation.isPending || !testForm.agent_id}
+            >
+              {runAnomalyTestMutation.isPending ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Running Test...
+                </>
+              ) : (
+                <>
+                  <FaPlay className="me-2" />
+                  Run Test
+                </>
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </div>
   );
 };
