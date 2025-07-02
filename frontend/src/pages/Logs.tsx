@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, Table, Badge, Spinner, Alert, Form, Row, Col, Button, ButtonGroup, Pagination } from 'react-bootstrap';
 import { FaExclamationTriangle, FaFilter, FaDownload, FaSync, FaChartBar, FaHistory } from 'react-icons/fa';
@@ -16,10 +16,56 @@ const Logs: React.FC = () => {
     search: ''
   });
 
+  const [timeRange, setTimeRange] = useState('1_day'); // Default to 1 day
+
   const [pagination, setPagination] = useState({
     currentPage: 1,
     perPage: 25
   });
+
+  // Helper function to calculate date range based on selection
+  const calculateDateRange = (range: string) => {
+    const now = new Date();
+    const endDate = new Date(now);
+    let startDate = new Date(now);
+
+    switch (range) {
+      case '1_day':
+        startDate.setDate(now.getDate() - 1);
+        break;
+      case '1_week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case '1_month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3_months':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6_months':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case '1_year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      case 'all':
+        startDate = new Date(0); // Beginning of time
+        break;
+      default:
+        startDate.setDate(now.getDate() - 1); // Default to 1 day
+    }
+
+    return {
+      startDate: startDate.toISOString().slice(0, 16), // Format for datetime-local
+      endDate: endDate.toISOString().slice(0, 16)
+    };
+  };
+
+  // Update filters when time range changes
+  useEffect(() => {
+    const { startDate, endDate } = calculateDateRange(timeRange);
+    setFilters(prev => ({ ...prev, startDate, endDate }));
+  }, [timeRange]);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['logs', filters, pagination],
@@ -30,6 +76,10 @@ const Logs: React.FC = () => {
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleTimeRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setTimeRange(e.target.value);
   };
 
   const handleSeverityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -68,6 +118,7 @@ const Logs: React.FC = () => {
   };
 
   const clearFilters = () => {
+    setTimeRange('1_day'); // Reset to default
     setFilters({
       startDate: '',
       endDate: '',
@@ -153,24 +204,19 @@ const Logs: React.FC = () => {
             <Row>
               <Col md={3}>
                 <Form.Group className="mb-3">
-                  <Form.Label>Start Date</Form.Label>
-                  <Form.Control
-                    type="datetime-local"
-                    name="startDate"
-                    value={filters.startDate}
-                    onChange={handleFilterChange}
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={3}>
-                <Form.Group className="mb-3">
-                  <Form.Label>End Date</Form.Label>
-                  <Form.Control
-                    type="datetime-local"
-                    name="endDate"
-                    value={filters.endDate}
-                    onChange={handleFilterChange}
-                  />
+                  <Form.Label>Time Range</Form.Label>
+                  <Form.Select
+                    value={timeRange}
+                    onChange={handleTimeRangeChange}
+                  >
+                    <option value="1_day">Last 1 Day</option>
+                    <option value="1_week">Last 1 Week</option>
+                    <option value="1_month">Last 1 Month</option>
+                    <option value="3_months">Last 3 Months</option>
+                    <option value="6_months">Last 6 Months</option>
+                    <option value="1_year">Last 1 Year</option>
+                    <option value="all">All Time</option>
+                  </Form.Select>
                 </Form.Group>
               </Col>
               <Col md={3}>
