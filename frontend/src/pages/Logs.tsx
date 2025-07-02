@@ -378,8 +378,8 @@ const Logs: React.FC = () => {
             <Card.Body>
               <h6 className="text-muted mb-2">Error Rate</h6>
               <h3>
-                {data.total ? 
-                  Math.round((data.logs.filter(log => log.level === 'error').length / data.total) * 100) : 0
+                {data.total && data.statistics?.level_distribution ? 
+                  Math.round((data.statistics.level_distribution.error || 0) / data.total * 100) : 0
                 }%
               </h3>
             </Card.Body>
@@ -390,8 +390,8 @@ const Logs: React.FC = () => {
             <Card.Body>
               <h6 className="text-muted mb-2">Warning Rate</h6>
               <h3>
-                {data.total ? 
-                  Math.round((data.logs.filter(log => log.level === 'warning').length / data.total) * 100) : 0
+                {data.total && data.statistics?.level_distribution ? 
+                  Math.round((data.statistics.level_distribution.warning || 0) / data.total * 100) : 0
                 }%
               </h3>
             </Card.Body>
@@ -401,7 +401,7 @@ const Logs: React.FC = () => {
           <Card>
             <Card.Body>
               <h6 className="text-muted mb-2">Unique Processes</h6>
-              <h3>{new Set(data.logs.map(log => log.process)).size}</h3>
+              <h3>{data.statistics?.process_distribution ? Object.keys(data.statistics.process_distribution).length : 0}</h3>
             </Card.Body>
           </Card>
         </div>
@@ -415,9 +415,10 @@ const Logs: React.FC = () => {
             </Card.Header>
             <Card.Body>
               <div className="d-flex flex-column gap-2">
-                {['error', 'warning', 'info', 'debug'].map(level => {
-                  const count = data.logs.filter(log => log.level === level).length;
+                {['emergency', 'alert', 'critical', 'error', 'warning', 'notice', 'info', 'debug'].map(level => {
+                  const count = data.statistics?.level_distribution?.[level] || 0;
                   const percentage = data.total ? (count / data.total) * 100 : 0;
+                  if (count === 0) return null; // Don't show levels with 0 logs
                   return (
                     <div key={level} className="d-flex justify-content-between align-items-center">
                       <span className="text-capitalize">{level}</span>
@@ -425,10 +426,17 @@ const Logs: React.FC = () => {
                         <div className="progress flex-grow-1" style={{ width: '100px' }}>
                           <div 
                             className="progress-bar" 
-                            style={{ width: `${percentage}%` }}
+                            style={{ 
+                              width: `${percentage}%`,
+                              backgroundColor: 
+                                level === 'error' || level === 'critical' || level === 'emergency' ? '#dc3545' :
+                                level === 'warning' || level === 'alert' ? '#ffc107' :
+                                level === 'info' || level === 'notice' ? '#17a2b8' : '#6c757d'
+                            }}
                           />
                         </div>
                         <small>{count}</small>
+                        <small className="text-muted">({percentage.toFixed(1)}%)</small>
                       </div>
                     </div>
                   );
@@ -440,34 +448,117 @@ const Logs: React.FC = () => {
         <div className="col-md-6">
           <Card>
             <Card.Header>
-              <h6 className="mb-0">Top Processes</h6>
+              <h6 className="mb-0">Process Distribution</h6>
             </Card.Header>
             <Card.Body>
               <div className="d-flex flex-column gap-2">
-                {Array.from(
-                  data.logs.reduce((acc, log) => {
-                    acc.set(log.process, (acc.get(log.process) || 0) + 1);
-                    return acc;
-                  }, new Map<string, number>())
-                )
-                .sort(([,a], [,b]) => b - a)
-                .slice(0, 5)
-                .map(([process, count]) => (
-                  <div key={process} className="d-flex justify-content-between align-items-center">
-                    <span className="text-truncate" style={{ maxWidth: '150px' }} title={process}>
-                      {process}
-                    </span>
-                    <div className="d-flex align-items-center gap-2">
-                      <div className="progress flex-grow-1" style={{ width: '100px' }}>
-                        <div 
-                          className="progress-bar" 
-                          style={{ width: `${(count / data.total!) * 100}%` }}
-                        />
+                {data.statistics?.process_distribution ? 
+                  Object.entries(data.statistics.process_distribution).map(([process, count]) => {
+                    const percentage = data.total ? (count / data.total) * 100 : 0;
+                    return (
+                      <div key={process} className="d-flex justify-content-between align-items-center">
+                        <span className="text-truncate" style={{ maxWidth: '150px' }} title={process}>
+                          {process || 'Unknown'}
+                        </span>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="progress flex-grow-1" style={{ width: '100px' }}>
+                            <div 
+                              className="progress-bar bg-primary" 
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <small>{count}</small>
+                          <small className="text-muted">({percentage.toFixed(1)}%)</small>
+                        </div>
                       </div>
-                      <small>{count}</small>
+                    );
+                  })
+                : (
+                  <div className="text-muted">No process data available</div>
+                )}
+              </div>
+            </Card.Body>
+          </Card>
+        </div>
+      </div>
+
+      {/* Additional Analysis Cards */}
+      <div className="row mt-4">
+        <div className="col-md-6">
+          <Card>
+            <Card.Header>
+              <h6 className="mb-0">Recent Activity</h6>
+            </Card.Header>
+            <Card.Body>
+              <div className="d-flex flex-column gap-2">
+                {data.logs
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .slice(0, 5)
+                  .map((log) => (
+                    <div key={log.id} className="d-flex justify-content-between align-items-center">
+                      <div className="d-flex flex-column">
+                        <small className="text-muted">{new Date(log.timestamp).toLocaleString()}</small>
+                        <span className="text-truncate" style={{ maxWidth: '200px' }} title={log.message}>
+                          {log.message}
+                        </span>
+                      </div>
+                      <Badge
+                        bg={
+                          log.level === 'error' ? 'danger' :
+                          log.level === 'warning' ? 'warning' :
+                          log.level === 'info' ? 'info' :
+                          'secondary'
+                        }
+                      >
+                        {log.level}
+                      </Badge>
                     </div>
-                  </div>
-                ))}
+                  ))}
+              </div>
+            </Card.Body>
+          </Card>
+        </div>
+        <div className="col-md-6">
+          <Card>
+            <Card.Header>
+              <h6 className="mb-0">Summary Statistics</h6>
+            </Card.Header>
+            <Card.Body>
+              <div className="d-flex flex-column gap-3">
+                <div className="d-flex justify-content-between">
+                  <span>Average Logs per Process:</span>
+                  <strong>
+                    {data.total && data.statistics?.process_distribution ? 
+                      (data.total / Object.keys(data.statistics.process_distribution).length).toFixed(1) : '0'
+                    }
+                  </strong>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span>Most Active Process:</span>
+                  <strong>
+                    {data.statistics?.process_distribution ? 
+                      Object.keys(data.statistics.process_distribution)[0] || 'None' : 'None'
+                    }
+                  </strong>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span>Time Range:</span>
+                  <strong>
+                    {data.logs.length > 0 ? 
+                      `${new Date(Math.min(...data.logs.map(l => new Date(l.timestamp).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...data.logs.map(l => new Date(l.timestamp).getTime()))).toLocaleDateString()}`
+                      : 'No data'
+                    }
+                  </strong>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span>Time Range:</span>
+                  <strong>
+                    {data.logs.length > 0 ? 
+                      `${new Date(Math.min(...data.logs.map(l => new Date(l.timestamp).getTime()))).toLocaleDateString()} - ${new Date(Math.max(...data.logs.map(l => new Date(l.timestamp).getTime()))).toLocaleDateString()}`
+                      : 'No data'
+                    }
+                  </strong>
+                </div>
               </div>
             </Card.Body>
           </Card>

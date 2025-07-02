@@ -470,6 +470,22 @@ async def get_logs(
         end_index = start_index + per_page
         paginated_logs = transformed_logs[start_index:end_index]
         
+        # Compute statistics for the entire filtered dataset (not just current page)
+        level_stats = {}
+        process_stats = {}
+        
+        for log in transformed_logs:
+            # Count by log level
+            level = log["level"].lower()
+            level_stats[level] = level_stats.get(level, 0) + 1
+            
+            # Count by process
+            process = log["process"] or "Unknown"
+            process_stats[process] = process_stats.get(process, 0) + 1
+        
+        # Sort process stats by count (descending)
+        sorted_process_stats = dict(sorted(process_stats.items(), key=lambda x: x[1], reverse=True))
+        
         # Get unique programs from the data for filters
         unique_programs = [p for p in set(log["process"] for log in transformed_logs) if p]
         unique_programs.sort()
@@ -477,6 +493,10 @@ async def get_logs(
         return {
             "logs": paginated_logs,
             "total": total_logs,
+            "statistics": {
+                "level_distribution": level_stats,
+                "process_distribution": sorted_process_stats
+            },
             "filters": {
                 "severity": ["emergency", "alert", "critical", "error", "warning", "notice", "info", "debug"],
                 "programs": unique_programs
