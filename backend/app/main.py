@@ -411,17 +411,19 @@ async def get_logs(
 ):
     """Get filtered logs"""
     try:
-        # Handle time range - if not provided, query all logs
+        # Handle time range - if not provided, default to last 24 hours
         start_datetime = None
         end_datetime = None
-        
+        now = datetime.utcnow()
+        if not start_date and not end_date:
+            end_datetime = now
+            start_datetime = now - timedelta(days=1)
         if start_date:
             try:
                 start_datetime = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
             except ValueError as e:
                 logger.error(f"Invalid start date format: {e}")
                 raise HTTPException(status_code=400, detail="Invalid start date format")
-                
         if end_date:
             try:
                 end_datetime = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
